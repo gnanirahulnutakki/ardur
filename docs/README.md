@@ -11,6 +11,8 @@ tighter quickstart are landing in follow-on phases.
 - [Security Model](security-model.md)
 - [Known Limitations](known-limitations.md)
 - [Protocol Roots](protocol-roots.md)
+- [Public Import Plan](public-import-plan.md)
+- [Article Outlines](articles/README.md)
 
 ## Start here
 
