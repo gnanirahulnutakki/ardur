@@ -32,7 +32,7 @@ Examples:
 What did you actually run to verify this works? Be concrete.
 - `pytest python/tests/test_xxx.py` (all green)
 - ran `examples/quickstart` end-to-end and verified receipt chain
-- re-recorded ARDUR-CAP-001, played back to confirm zero `Wolverine` strings
+- re-recorded ARDUR-CAP-001, played back to confirm zero historical-codename strings in terminal output
 For docs PRs: confirm link-check is green and any internal references resolve.
 -->
 
@@ -40,7 +40,7 @@ For docs PRs: confirm link-check is green and any internal references resolve.
 
 - [ ] Link-check CI green
 - [ ] Secret-scan CI green
-- [ ] No `glasswing`, `project.internal`, or stale `Wolverine` references in changed files (Article 06 historical-naming passages and ADR archival notes are exempt — call them out if applicable)
+- [ ] No `glasswing` or `project.internal` references in changed files. References to historical internal codenames are restricted to ADR archival notes, references to already-published external artifact identifiers, and clearly-labelled archival proof artifacts under `artifacts/legacy-era-*/`
 - [ ] Article numbering is sequential, no gaps
 - [ ] 24-hour cool-off re-read complete
-- [ ] Every numeric claim in changed prose traces to an artifact under `artifacts/ardur-era-*/` (or has an explicit "measured under Wolverine runtime, preserved for history" footnote)
+- [ ] Every numeric claim in changed prose traces to an artifact under `artifacts/ardur-era-*/` (or has an explicit "measured under the historical legacy runtime, preserved for lineage" footnote pointing at `artifacts/legacy-era-*/`)
