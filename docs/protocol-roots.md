@@ -20,7 +20,6 @@ Historical implementation and protocol names may appear here for background,
 but they should not lead the repo:
 
 - Ardur: public product name
-- Wolverine: current product codename that still appears in some implementation surfaces
 - VIBAP: current implementation lineage that may still appear in package internals
 - MCEP and related protocol naming: background material, not the public hero
 

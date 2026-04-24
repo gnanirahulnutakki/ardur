@@ -2,43 +2,43 @@
   "schema_version": 1,
   "phase": "phase0_public_shell",
   "public_brand": "Ardur",
-  "implementation_lineage": "Wolverine",
+  "implementation_lineage": "Ardur",
   "included_now": [
     {
-      "id": "WOLV-CAP-001",
+      "id": "ARDUR-CAP-001",
       "title": "Mission declaration and binding",
       "kind": "cast",
       "proof_scope": "framework-live",
       "canonical": true,
-      "lineage_note": "Recording still uses the Wolverine capability namespace",
-      "path": "media/casts/WOLV-CAP-001-mission-declaration.cast"
+      "lineage_note": "Sanitized public recording using the Ardur capability namespace",
+      "path": "media/casts/ARDUR-CAP-001-mission-declaration.cast"
     },
     {
-      "id": "WOLV-CAP-002",
+      "id": "ARDUR-CAP-002",
       "title": "Tool allow and deny enforcement",
       "kind": "cast",
       "proof_scope": "framework-live",
       "canonical": true,
-      "lineage_note": "Recording still uses the Wolverine capability namespace",
-      "path": "media/casts/WOLV-CAP-002-tool-policy.cast"
+      "lineage_note": "Sanitized public recording using the Ardur capability namespace",
+      "path": "media/casts/ARDUR-CAP-002-tool-policy.cast"
     },
     {
-      "id": "WOLV-CAP-003",
+      "id": "ARDUR-CAP-003",
       "title": "Resource scope enforcement",
       "kind": "cast",
       "proof_scope": "framework-live",
       "canonical": true,
-      "lineage_note": "Recording still uses the Wolverine capability namespace",
-      "path": "media/casts/WOLV-CAP-003-resource-scope.cast"
+      "lineage_note": "Sanitized public recording using the Ardur capability namespace",
+      "path": "media/casts/ARDUR-CAP-003-resource-scope.cast"
     },
     {
-      "id": "WOLV-CAP-014",
+      "id": "ARDUR-CAP-014",
       "title": "Active revocation",
       "kind": "cast",
       "proof_scope": "foundation",
       "canonical": true,
-      "lineage_note": "Recording still uses the Wolverine capability namespace",
-      "path": "media/casts/WOLV-CAP-014-active-revocation.cast"
+      "lineage_note": "Sanitized public recording using the Ardur capability namespace",
+      "path": "media/casts/ARDUR-CAP-014-active-revocation.cast"
     }
   ],
   "next_candidates": [

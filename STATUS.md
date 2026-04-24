@@ -10,7 +10,6 @@
 
 ## In Progress
 
-- public brand transition from `Wolverine` to `Ardur`
 - curated fresh-history code lift into the separate public repo
 - first public quickstart that matches the exported repo paths exactly
 - public verifier and proof tooling packaging
@@ -21,7 +20,8 @@
 - finish moving curated code into the public repo layout
 - keep every public claim mapped to a real verifier path or artifact
 - replace or re-render legacy media that still carries internal path or repo-layout assumptions
-- phase down the `Wolverine` codename in public-facing implementation surfaces
+- keep `VIBAP`, `MCEP`, and related protocol names only where they describe
+  real artifacts, specifications, or protocol lineage
 - decide which framework surfaces stay first-screen and which stay secondary
 
 ## Not Public Yet

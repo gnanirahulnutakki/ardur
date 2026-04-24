@@ -17,7 +17,8 @@ Add the first code-bearing public drop:
 - curated Python runtime and CLI surfaces
 - selected examples
 - public-safe proof and verifier entry points
-- explicit note that some implementation namespaces still say `Wolverine`
+- explicit naming boundaries for `Ardur`, `VIBAP`, `MCEP`, and related
+  protocol surfaces
 
 ## Phase 2
 
@@ -34,7 +35,8 @@ Expand the repo carefully:
 - more framework examples
 - more deployment and operator material
 - tighter packaging and installation paths
-- planned deprecation path from `Wolverine` implementation names to `Ardur`
+- planned cleanup path for public product namespaces while preserving protocol
+  names where they remain technically accurate
 
 ## What Will Stay Out
 

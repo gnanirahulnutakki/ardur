@@ -41,9 +41,10 @@ That is more distinctive than competing on "guardrails" alone.
 
 For this Phase 0 public shell, `Ardur` is the public name.
 
-The current implementation lineage still uses `Wolverine` in parts of the code,
-CLI, capability IDs, and recordings. That transition is operational, not
-conceptual.
+`VIBAP`, `MCEP`, and related protocol names remain useful where they identify
+the implementation lineage, evidence model, or protocol research roots. The
+public repo should preserve those names when they are technically meaningful
+and avoid obsolete product codenames in public-facing copy.
 
 ## Why This Repo Starts Thin
 

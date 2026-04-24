@@ -39,14 +39,13 @@ The next repo drops will add:
 - public verifier and proof commands
 - a tighter quickstart and framework story
 
-## Transition Note
+## Naming Note
 
 `Ardur` is the public product name.
 
-Some current implementation surfaces still use the `Wolverine` codename in
-CLIs, capability IDs, env vars, and example recordings. That is intentional for
-now. The public brand is moving first; the deeper code and namespace rename can
-follow once the exported repo shape is stable.
+Some implementation and protocol surfaces still use `VIBAP`, `MCEP`, and
+related protocol names. Those names are part of the technical lineage and are
+kept where they describe actual artifacts, specifications, or protocol roots.
 
 ## Honest Note
 
