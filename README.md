@@ -2,12 +2,17 @@
 
 Ardur is the runtime governance and evidence layer for AI agents.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Phase](https://img.shields.io/badge/phase-0%20%E2%80%94%20public%20shell-blue)](STATUS.md)
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/gnanirahulnutakki/ardur/discussions)
+[![Articles](https://img.shields.io/badge/docs-articles-9cf)](docs/articles/README.md)
+
 This public repo is opening in phases. It starts with the product intent,
 research-informed positioning, current status, and selected example recordings.
 Curated code, runnable examples, and broader proof surfaces are landing next.
 More is coming soon, but the repo starts narrow on purpose.
 
-[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Docs](docs/README.md)
+[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md)
 
 ## Why Ardur
 
@@ -20,6 +25,15 @@ Ardur is being built to do all three:
 - bind agents to a declared mission
 - enforce runtime boundaries over tools, resources, budgets, and delegation
 - emit evidence that can be checked instead of argued about
+
+Concretely:
+
+- **Public by default.** Every public claim ties to a verifier path, an artifact, a re-runnable test, or an explicit limitation note. No claims float free of evidence.
+- **Composable with what already exists.** Built on SPIFFE for workload identity, Biscuit for first-party-attenuation credentials, Cedar for policy, and on the AAT and EAT IETF drafts for token semantics. We didn't reinvent the substrate.
+- **Cryptographically bound, not trust-by-convention.** Mission credentials are signed by an issuer key, holder-bound to a SPIFFE SVID, and produce signed receipts chain-hashed to the previous one. Tampering breaks the chain.
+- **Delegation that narrows, never widens.** Child sessions get strictly narrower authority than their parent — fewer tools, smaller resource scope, smaller budget. Enforced by credential structure, not by policy convention.
+- **Honest about what it doesn't do.** Scope-level governance can't catch semantic misuse — if an allowed tool is used on an allowed resource for the wrong reason, that's a different layer's job. We say so out loud.
+- **MIT licensed, paper-backed.** The research foundation (the Silence Theorem, the protocol formalism, the benchmark methodology) is open and being prepared for public publication. The repo opens before the paper as a phased shell, not a gated product.
 
 ## What Is Public Today
 
@@ -38,6 +52,20 @@ The next repo drops will add:
 - first runnable public examples
 - public verifier and proof commands
 - a tighter quickstart and framework story
+
+## Integrations
+
+Ardur sits between an AI agent and the tools it calls — so the integration story is which agent frameworks, model providers, policy engines, and identity systems Ardur plugs into.
+
+| Layer                | Today (publicly installable) | Phase 1 (curated lift in progress) | Phase 2 (validated privately, public SDK pending) |
+|----------------------|------------------------------|-------------------------------------|---------------------------------------------------|
+| **Agent framework**  | none yet                     | Claude Code hook · OpenAI Agents SDK · Google ADK | LangChain · LangGraph · AutoGen                   |
+| **Model provider**   | n/a                          | provider-agnostic via tool boundary | local Ollama tested in private demos              |
+| **Policy engine**    | none yet                     | Cedar (built-in) · forbid-rules     | OPA · Biscuit datalog                             |
+| **Identity**         | none yet                     | SPIFFE / SPIRE                      | OIDC bridges                                      |
+| **Receipts sink**    | none yet                     | local JSON · stdout                 | OTel emitters · S3 / WORM offload                 |
+
+If you'd use an integration that isn't listed, file an [integration request](https://github.com/gnanirahulnutakki/ardur/issues/new?template=integration_request.yml) — it's the strongest signal we have for prioritisation.
 
 ## Naming Note
 
