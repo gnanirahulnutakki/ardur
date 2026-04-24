@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "phase": "phase0_public_shell",
+  "public_brand": "Ardur",
+  "implementation_lineage": "Wolverine",
+  "included_now": [
+    {
+      "id": "WOLV-CAP-001",
+      "title": "Mission declaration and binding",
+      "kind": "cast",
+      "proof_scope": "framework-live",
+      "canonical": true,
+      "lineage_note": "Recording still uses the Wolverine capability namespace",
+      "path": "media/casts/WOLV-CAP-001-mission-declaration.cast"
+    },
+    {
+      "id": "WOLV-CAP-002",
+      "title": "Tool allow and deny enforcement",
+      "kind": "cast",
+      "proof_scope": "framework-live",
+      "canonical": true,
+      "lineage_note": "Recording still uses the Wolverine capability namespace",
+      "path": "media/casts/WOLV-CAP-002-tool-policy.cast"
+    },
+    {
+      "id": "WOLV-CAP-003",
+      "title": "Resource scope enforcement",
+      "kind": "cast",
+      "proof_scope": "framework-live",
+      "canonical": true,
+      "lineage_note": "Recording still uses the Wolverine capability namespace",
+      "path": "media/casts/WOLV-CAP-003-resource-scope.cast"
+    },
+    {
+      "id": "WOLV-CAP-014",
+      "title": "Active revocation",
+      "kind": "cast",
+      "proof_scope": "foundation",
+      "canonical": true,
+      "lineage_note": "Recording still uses the Wolverine capability namespace",
+      "path": "media/casts/WOLV-CAP-014-active-revocation.cast"
+    }
+  ],
+  "next_candidates": [
+    {
+      "title": "Claude Code hook walkthrough",
+      "kind": "rendered_video",
+      "status": "coming_soon"
+    },
+    {
+      "title": "OpenAI Agents SDK example",
+      "kind": "rendered_video",
+      "status": "coming_soon"
+    },
+    {
+      "title": "Google ADK example",
+      "kind": "rendered_video",
+      "status": "coming_soon"
+    }
+  ]
+}
