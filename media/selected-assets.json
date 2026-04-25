@@ -3,6 +3,9 @@
   "phase": "phase0_public_shell",
   "asset_class": "archival_walkthrough",
   "asset_class_note": "These recordings are archival walkthroughs from before the public code lift. The rerunnable proof path lands with Phase 1 — see MEDIA.md.",
+  "field_semantics": {
+    "canonical": "Uniqueness marker: 'this is THE archival recording for the named capability'. Does NOT mean 'rerunnable proof' — that's controlled by asset_class. There is at most one canonical=true cast per capability id."
+  },
   "public_brand": "Ardur",
   "implementation_lineage": "Ardur",
   "included_now": [
