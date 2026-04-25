@@ -202,8 +202,16 @@ and maps them to the minimum profile at which each rule applies:
 
 ## 7. Conformance Test Vector Index
 
-Test vectors are stored in `docs/spec/conformance/` using the JSONL format
-described in `docs/spec/conformance/README.md`.
+> **Public-import note (2026-04-25):** The original v0.1 spec was authored
+> when both this document and its companion fixtures lived under
+> `docs/spec/` in the private research repo. Public migration relocates
+> the document to `docs/specs/`. The conformance fixture directory has
+> not yet been imported; the references below describe the private
+> layout and will be updated to public paths under `docs/specs/conformance/`
+> once the fixtures land.
+
+Test vectors are stored in `docs/spec/conformance/` (private layout) using
+the JSONL format described in `docs/spec/conformance/README.md`.
 
 Each test vector specifies:
 

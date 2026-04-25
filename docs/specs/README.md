@@ -1,6 +1,8 @@
 # MCEP Specifications (v0.1)
 
-This directory carries the v0.1 specification documents for Ardur's protocol layer, MCEP (Mission-bound Cryptographic Evidence Protocol). v0.1 is a pre-release series — the specs describe the intended protocol shape; the public code that implements them is being curated in phases per [docs/public-import-plan.md](../public-import-plan.md).
+This directory carries the v0.1 specification documents for Ardur's protocol layer, MCEP (Mission-Controlled Execution Protocol). v0.1 is a pre-release series — the specs describe the intended protocol shape; the public code that implements them is being curated in phases per [docs/public-import-plan.md](../public-import-plan.md).
+
+The MCEP acronym was expanded as "Mission-bound Cryptographic Evidence Protocol" in earlier learn-MCEP teaching material; the formal v0.1 specs use "Mission-Controlled Execution Protocol" and that is the canonical expansion going forward. Articles and other public prose follow the spec form.
 
 **Public-surface import caveat.** The migrated specs were authored in a private context and may reference implementation source paths (e.g. `vibap-prototype/vibap/passport.py`), private session artifacts (e.g. `docs/session-2026-04-XX/...`), or internal review trails that have not yet landed in this public repo. Treat such references as pointers to future work — the underlying code lands alongside the Phase 1 import per the [public import plan](../public-import-plan.md). Contributors cannot verify those referenced artifacts from the public tree today. Same caveat as the [decisions index](../decisions/README.md).
 

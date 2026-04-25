@@ -33,16 +33,21 @@ This document uses the key words **MUST**, **MUST NOT**, **REQUIRED**,
 
 ## 2. Companion Artifacts
 
-This contract composes with the following companion specifications:
+This contract composes with the following companion specifications. The
+paths below reflect the private research repo's `docs/spec/` layout where
+the v0.1 series was authored. In the public ardur repo, migrated specs
+live under `docs/specs/`; pending companion specs are listed by name in
+[`docs/specs/README.md`](../specs/README.md) until they migrate.
 
 - **A.1 / Mission Declaration**:
-  `docs/spec/mission-declaration-v0.1.md`
+  `docs/spec/mission-declaration-v0.1.md` (pending public migration)
 - **A.2 / Delegation Grant profile**:
-  `docs/spec/delegation-grant-profile-v0.1.md` when published; until then,
-  the contract assumes the AAT-based DG shape described in
-  `docs/session-2026-04-14/06-briefs-issued/A2-dg-profile-aat.md`
+  `docs/spec/delegation-grant-profile-v0.1.md` (migrated — see
+  [`./delegation-grant-profile-v0.1.md`](./delegation-grant-profile-v0.1.md));
+  references to `docs/session-2026-04-14/...` source briefs are private
+  research material that has not been imported.
 - **A.3 / Execution Receipt**:
-  `docs/spec/execution-receipt-v0.1.md`
+  `docs/spec/execution-receipt-v0.1.md` (pending public migration)
 
 The verifier MUST treat those companion documents as authoritative for the
 shapes of MD, DG, and ER.

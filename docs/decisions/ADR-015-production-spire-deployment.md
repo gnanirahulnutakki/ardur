@@ -134,8 +134,10 @@ Rationale:
   identity layer version.
 - Keeping the Kubernetes design on the same SPIRE version avoids a “paper says
   one thing, manifests say another” review trap.
-- The SPIFFE site currently publishes the install guidance for SPIRE v1.14.2,
-  so this pin still aligns with current upstream documentation.
+- The SPIFFE upstream install guidance was published for SPIRE v1.14.2 at
+  the time this ADR was written (2026-04-19). Upstream has since moved to
+  v1.14.5 (verified 2026-04-25). The pin is intentional and locked to the
+  version this design was reviewed against; raising it is a separate ADR.
 
 ### 7. Use disk-based upstream authority and disk key management on the server
 
