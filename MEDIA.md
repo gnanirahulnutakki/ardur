@@ -10,19 +10,21 @@ broader walkthroughs are prepared later.
 ## Included In This Pack
 
 - `media/casts/ARDUR-CAP-001-mission-declaration.cast`
-  Mission declaration and binding. Canonical proof cast. `framework-live`
+  Mission declaration and binding. Archival walkthrough cast. `framework-live`
 - `media/casts/ARDUR-CAP-002-tool-policy.cast`
-  Tool allow and deny enforcement. Canonical proof cast. `framework-live`
+  Tool allow and deny enforcement. Archival walkthrough cast. `framework-live`
 - `media/casts/ARDUR-CAP-003-resource-scope.cast`
-  Resource scope enforcement. Canonical proof cast. `framework-live`
+  Resource scope enforcement. Archival walkthrough cast. `framework-live`
 - `media/casts/ARDUR-CAP-014-active-revocation.cast`
-  Active revocation. Canonical proof cast. `foundation`
+  Active revocation. Archival walkthrough cast. `foundation`
 
 ## Notes
 
-- These files are sanitized copies of canonical proof recordings from the
+- These files are sanitized copies of walkthrough recordings from the
   current Ardur implementation lineage.
-- They are starter media assets, not the whole proof story.
+- They are starter media assets, not the whole proof story. The word
+  "proof" is reserved here for media that lands after the code lift and
+  carries a rerunnable verifier path — see the archival-status note below.
 - Historical live-governance-demo recordings should not be treated as current
   canonical proof.
 - Selected recordings should use Ardur public naming in terminal output,

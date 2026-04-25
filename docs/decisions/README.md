@@ -4,6 +4,8 @@ ADRs document load-bearing design decisions behind Ardur's runtime, protocol, an
 
 ADRs are migrated from the private research repo with the two-pass cleanup applied (sensitive-reference scrub, then historical-codename rename). Decision dates reflect when the decision was originally made; the migration preserves chronology even though the public repo is newer.
 
+**Public-surface import caveat.** Each ADR body was written in a private context and may reference implementation symbols (e.g., `passport.verify_passport`, `GovernanceProxy._load_verified_session`), internal review artifacts (e.g., "PR #10", "finding #3 from the 2026-04-21 review"), or helper scripts (`install_hook.sh`) that live in the private research repo and have not yet landed in this public repo. When you see such a reference, treat it as a pointer to future work: the underlying code and the issue/PR history land alongside the Phase 1 code lift per [`docs/public-import-plan.md`](../public-import-plan.md). Contributors cannot verify those referenced artifacts from the public tree today.
+
 ## Index
 
 | # | Title | Status | Date |
