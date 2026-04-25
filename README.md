@@ -26,14 +26,14 @@ Ardur is being built to do all three:
 - enforce runtime boundaries over tools, resources, budgets, and delegation
 - emit evidence that can be checked instead of argued about
 
-Concretely:
+Concretely — these are the design principles the repo is being built to meet, not guarantees the Phase 0 shell already delivers:
 
-- **Public by default.** Every public claim ties to a verifier path, an artifact, a re-runnable test, or an explicit limitation note. No claims float free of evidence.
-- **Composable with what already exists.** Built on SPIFFE for workload identity, Biscuit for first-party-attenuation credentials, Cedar for policy, and on the AAT and EAT IETF drafts for token semantics. We didn't reinvent the substrate.
-- **Cryptographically bound, not trust-by-convention.** Mission credentials are signed by an issuer key, holder-bound to a SPIFFE SVID, and produce signed receipts chain-hashed to the previous one. Tampering breaks the chain.
-- **Delegation that narrows, never widens.** Child sessions get strictly narrower authority than their parent — fewer tools, smaller resource scope, smaller budget. Enforced by credential structure, not by policy convention.
+- **Public-by-default as a working principle.** The aim is that every public claim ties to a verifier path, an artifact, a re-runnable test, or an explicit limitation note. The code-bearing runtime lands in phases per the [public import plan](docs/public-import-plan.md) — until it does, claims that depend on the runtime say so explicitly.
+- **Composable with what already exists.** Designed around SPIFFE for workload identity, Biscuit for first-party-attenuation credentials, Cedar for policy, and on the AAT and EAT IETF drafts for token semantics. We didn't reinvent the substrate.
+- **Cryptographically bound by design.** Mission credentials are designed to be signed by an issuer key, holder-bound to a SPIFFE SVID, and produce signed receipts chain-hashed to the previous one. The design is documented in the [ADRs](docs/decisions/README.md); the public code that implements it is being curated in phases.
+- **Delegation that narrows, never widens.** Child sessions get strictly narrower authority than their parent — fewer tools, smaller resource scope, smaller budget. The narrowing discipline is formalised in [ADR-017](docs/decisions/ADR-017-biscuit-attenuation-narrowing-semantics.md).
 - **Honest about what it doesn't do.** Scope-level governance can't catch semantic misuse — if an allowed tool is used on an allowed resource for the wrong reason, that's a different layer's job. We say so out loud.
-- **MIT licensed, paper-backed.** The research foundation (the Silence Theorem, the protocol formalism, the benchmark methodology) is open and being prepared for public publication. The repo opens before the paper as a phased shell, not a gated product.
+- **MIT licensed.** The research foundation (the Silence Theorem, the protocol formalism, the benchmark methodology) will be linked from this repo when the paper's public identifier is assigned. Articles in this repo paraphrase the research in original prose; they do not reproduce paper content.
 
 ## What Is Public Today
 

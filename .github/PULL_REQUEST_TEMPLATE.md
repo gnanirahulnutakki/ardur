@@ -38,9 +38,9 @@ For docs PRs: confirm link-check is green and any internal references resolve.
 
 ## Graduation gates (for `dev → main` PRs only)
 
-- [ ] Link-check CI green
-- [ ] Secret-scan CI green
-- [ ] No `glasswing` or `project.internal` references in changed files. References to historical internal codenames are restricted to ADR archival notes, references to already-published external artifact identifiers, and clearly-labelled archival proof artifacts under `artifacts/legacy-era-*/`
-- [ ] Article numbering is sequential, no gaps
-- [ ] 24-hour cool-off re-read complete
-- [ ] Every numeric claim in changed prose traces to an artifact under `artifacts/ardur-era-*/` (or has an explicit "measured under the historical legacy runtime, preserved for lineage" footnote pointing at `artifacts/legacy-era-*/`)
+- [ ] **Link-check CI green.**
+- [ ] **Secret-scan CI green (gitleaks).**
+- [ ] **Forbidden-term gate green.** No `glasswing` or `project.internal` in changed files. If a changed file carries a historical internal codename in an unavoidable archival context (a preserved artifact that would lose provenance if rewritten), call it out in the PR body under "Changes" and get explicit maintainer approval below before merging — the blanket "exceptions" carve-out has been retired.
+- [ ] **Article numbering sequential on `main`.** Outline-only entries on `dev` don't count as gaps.
+- [ ] **24-hour cool-off re-read complete.**
+- [ ] **Numeric claims trace to artifacts.** Every cited number in changed prose resolves to a path under `artifacts/ardur-era-*/`. Archival exception: an explicit "measured under the historical legacy runtime, preserved for lineage" footnote pointing at `artifacts/legacy-era-*/`.

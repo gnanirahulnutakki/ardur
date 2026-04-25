@@ -29,6 +29,21 @@ broader walkthroughs are prepared later.
   capability IDs, and artifact paths.
 - Rendered preview assets and broader framework walkthroughs are still coming.
 
+### Archival status — not re-runnable from this repo today
+
+These casts capture terminal sessions executed against the private runtime
+before the public code lift. Internally they reference commands, scripts,
+and artifact paths (`docs/scripts/run_live_core_capability_proof.py`,
+`docs/proof/*`, `examples/live-governance/*`) that have **not** yet been
+imported into this public repo. Treat them as **archival recordings**, not
+as "run these yourself" reproducers.
+
+The re-runnable proof path lands alongside the Phase 1 code lift per
+[docs/public-import-plan.md](docs/public-import-plan.md). When the scripts
+and artifact paths referenced in these casts are public, the casts will be
+re-recorded against the renamed Ardur runtime and this caveat will be
+removed.
+
 ## Suggested Next Media Drops
 
 - a rendered public-safe walkthrough for the live governance flow
