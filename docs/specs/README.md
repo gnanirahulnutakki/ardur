@@ -10,9 +10,9 @@ The MCEP acronym was expanded as "Mission-bound Cryptographic Evidence Protocol"
 
 | Spec | Status | Notes |
 |------|--------|-------|
-| [Conformance Profiles](./conformance-profiles-v0.1.md) | **migrated** | Clean verbatim copy |
-| [Delegation Grant (DG) Profile of AAT](./delegation-grant-profile-v0.1.md) | **migrated** | Clean verbatim copy |
-| [Verifier Contract](./verifier-contract-v0.1.md) | **migrated** | Clean verbatim copy |
+| [Conformance Profiles](./conformance-profiles-v0.1.md) | **migrated** | Public-import annotated (private `docs/spec/` references kept; public-tree mapping note at top) |
+| [Delegation Grant (DG) Profile of AAT](./delegation-grant-profile-v0.1.md) | **migrated** | Public-import annotated |
+| [Verifier Contract](./verifier-contract-v0.1.md) | **migrated** | Public-import annotated |
 | Mission Declaration (MD) | _pending_ | Requires protocol-level rename decision (JWT media types + URL identifiers); see below |
 | Execution Receipt (ER) | _pending_ | Same as above |
 | Execution Receipt EAT/CWT Profile | _pending_ | Same as above |

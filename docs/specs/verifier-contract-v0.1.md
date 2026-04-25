@@ -1,5 +1,12 @@
 # Verifier Contract v0.1
 
+> **Public-import note.** This document was authored against the private
+> research repo's `docs/spec/` layout. In the public ardur tree, migrated specs
+> live under `docs/specs/`. Any `docs/spec/...` path reference in the body of
+> this document refers to the original private layout; the public-tree mapping
+> is in [`docs/specs/README.md`](./README.md). Some companion specs (Mission
+> Declaration, Execution Receipt) have not yet been imported.
+
 ## 1. Scope
 
 This document defines the **stateful tri-state verifier contract** for the

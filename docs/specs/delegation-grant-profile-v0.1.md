@@ -1,5 +1,15 @@
 # Delegation Grant (DG) Profile of Attenuating Authorization Tokens (AAT) v0.1
 
+> **Public-import note.** This document was authored against the private
+> research repo's `docs/spec/` layout. In the public ardur tree, migrated specs
+> live under `docs/specs/`. Any `docs/spec/...` path reference in the body of
+> this document refers to the original private layout; the public-tree mapping
+> is in [`docs/specs/README.md`](./README.md). Some companion specs have not
+> yet been imported. References to private implementation source paths
+> (e.g. `vibap-prototype/vibap/passport.py`) point at the private research
+> repo; the corresponding public Python package lands with Phase 1 per
+> [`docs/public-import-plan.md`](../public-import-plan.md).
+
 ## Status
 
 This document defines version `v0.1` of the Delegation Grant (DG) profile for
