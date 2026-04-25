@@ -14,6 +14,7 @@ tighter quickstart are landing in follow-on phases.
 - [Public Import Plan](public-import-plan.md)
 - [Article Outlines](articles/README.md)
 - [Architecture Decision Records](decisions/README.md)
+- [MCEP Specifications (v0.1)](specs/README.md)
 
 ## Start here
 
