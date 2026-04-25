@@ -2,6 +2,8 @@
 
 This directory carries the v0.1 specification documents for Ardur's protocol layer, MCEP (Mission-bound Cryptographic Evidence Protocol). v0.1 is a pre-release series — the specs describe the intended protocol shape; the public code that implements them is being curated in phases per [docs/public-import-plan.md](../public-import-plan.md).
 
+**Public-surface import caveat.** The migrated specs were authored in a private context and may reference implementation source paths (e.g. `vibap-prototype/vibap/passport.py`), private session artifacts (e.g. `docs/session-2026-04-XX/...`), or internal review trails that have not yet landed in this public repo. Treat such references as pointers to future work — the underlying code lands alongside the Phase 1 import per the [public import plan](../public-import-plan.md). Contributors cannot verify those referenced artifacts from the public tree today. Same caveat as the [decisions index](../decisions/README.md).
+
 ## Migration status
 
 | Spec | Status | Notes |
@@ -23,14 +25,16 @@ The decision — rename identifiers in v0.1 (clean break, assume no published ar
 
 ## Reading order for first-timers
 
-1. [Mission Declaration (MD)](./mission-declaration-v0.1.md) _(pending)_ — the signed scope envelope the agent starts with
+Pending specs are listed by name only — they're not yet linkable from this repo. They land once the protocol-rename decision is made.
+
+1. **Mission Declaration (MD)** _(pending)_ — the signed scope envelope the agent starts with
 2. [Delegation Grant (DG) Profile](./delegation-grant-profile-v0.1.md) — how child agents get strictly narrower authority
-3. [Execution Receipt (ER)](./execution-receipt-v0.1.md) _(pending)_ — the signed per-tool-call decision record
-4. [Execution Receipt EAT/CWT Profile](./execution-receipt-eat-profile-v0.1.md) _(pending)_ — RFC 9711 binding for ER carriage
+3. **Execution Receipt (ER)** _(pending)_ — the signed per-tool-call decision record
+4. **Execution Receipt EAT/CWT Profile** _(pending)_ — RFC 9711 binding for ER carriage
 5. [Verifier Contract](./verifier-contract-v0.1.md) — what a conforming verifier must do
 6. [Conformance Profiles](./conformance-profiles-v0.1.md) — tiered conformance matrix (Delegation-Core, MIC-State, MIC-Evidence, IDM Extension)
-7. [Revocation Model](./revocation-v0.1.md) _(pending)_ — layered revocation across delegation, session, credential, and transparency-log layers
-8. [IDM Extension Profile](./idm-extension-v0.1.md) _(pending)_ — Intent-Declaration-Manifest experimental profile
+7. **Revocation Model** _(pending)_ — layered revocation across delegation, session, credential, and transparency-log layers
+8. **IDM Extension Profile** _(pending)_ — Intent-Declaration-Manifest experimental profile
 
 ## Relationship to adjacent standards
 

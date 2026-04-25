@@ -42,7 +42,7 @@ This Phase 0 repo shell includes:
 - the product thesis and launch direction
 - a short research-informed positioning summary
 - current status and what is still being resolved
-- selected terminal recordings from canonical proof paths
+- selected archival terminal recordings (rerunnable proof path lands with Phase 1 — see [MEDIA.md](MEDIA.md))
 
 ## What Is Coming Next
 

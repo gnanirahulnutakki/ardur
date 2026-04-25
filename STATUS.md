@@ -5,7 +5,7 @@
 - the product category and public intent are defined
 - the main repo wedge is narrowed to runtime governance plus verifiable evidence
 - the public-facing brand can move to `Ardur` immediately
-- selected canonical proof recordings are ready as starter public media
+- selected archival walkthrough recordings are ready as starter public media (the rerunnable proof path lands with Phase 1 — see `MEDIA.md`)
 - the launch direction is documented without shipping the full internal docs tree
 
 ## In Progress

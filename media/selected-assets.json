@@ -1,6 +1,8 @@
 {
   "schema_version": 1,
   "phase": "phase0_public_shell",
+  "asset_class": "archival_walkthrough",
+  "asset_class_note": "These recordings are archival walkthroughs from before the public code lift. The rerunnable proof path lands with Phase 1 — see MEDIA.md.",
   "public_brand": "Ardur",
   "implementation_lineage": "Ardur",
   "included_now": [
