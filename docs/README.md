@@ -12,6 +12,7 @@ tighter quickstart are landing in follow-on phases.
 - [Known Limitations](known-limitations.md)
 - [Protocol Roots](protocol-roots.md)
 - [Public Import Plan](public-import-plan.md)
+- [Testing](TESTING.md)
 - [Article Outlines](articles/README.md)
 - [Architecture Decision Records](decisions/README.md)
 - [MCEP Specifications (v0.1)](specs/README.md)
