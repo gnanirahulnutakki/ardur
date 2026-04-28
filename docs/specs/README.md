@@ -10,33 +10,40 @@ The MCEP acronym was expanded as "Mission-bound Cryptographic Evidence Protocol"
 
 | Spec | Status | Notes |
 |------|--------|-------|
-| [Conformance Profiles](./conformance-profiles-v0.1.md) | **migrated** | Public-import annotated (private `docs/spec/` references kept; public-tree mapping note at top) |
+| [Conformance Profiles](./conformance-profiles-v0.1.md) | **migrated** | Public-import annotated |
 | [Delegation Grant (DG) Profile of AAT](./delegation-grant-profile-v0.1.md) | **migrated** | Public-import annotated |
 | [Verifier Contract](./verifier-contract-v0.1.md) | **migrated** | Public-import annotated |
-| Mission Declaration (MD) | _pending_ | Requires protocol-level rename decision (JWT media types + URL identifiers); see below |
-| Execution Receipt (ER) | _pending_ | Same as above |
-| Execution Receipt EAT/CWT Profile | _pending_ | Same as above |
-| IDM Extension Profile | _pending_ | Same as above |
-| Revocation Model | _pending_ | Same as above |
+| [Mission Declaration (MD)](./mission-declaration-v0.1.md) | **migrated** | Public-import annotated; clean-break protocol rename applied (`application/ardur.md+jwt`, `https://ardur.dev/...`) |
+| [Execution Receipt (ER)](./execution-receipt-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied (`application/ardur.er+jwt`) |
+| [Execution Receipt EAT/CWT Profile](./execution-receipt-eat-profile-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied |
+| [IDM Extension Profile](./idm-extension-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied (`application/ardur.idm+jwt`) |
+| [Revocation Model](./revocation-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied |
+| [Mission Declaration schema](./mission-declaration-v0.1.schema.json) | **migrated** | JSON Schema; `$id` rebased to ardur.dev |
+| [Execution Receipt schema](./execution-receipt-v0.1.schema.json) | **migrated** | JSON Schema; `$id` rebased to ardur.dev |
 
-## Why some specs are pending
+## Protocol identifier rename (clean break, applied 2026-04-27)
 
-The migrated specs above carry no references to historical internal codenames. The specs still under review reference protocol-level identifiers (JWT media types like `application/<name>.er+jwt`, `$id` URIs like `https://<name>.io/...`) that embed a legacy name. Renaming these identifiers is a protocol-versioning decision, not just a text substitution: any receipt, passport, or attestation that was produced under the v0.1-as-written identifiers would no longer verify under a rewritten spec.
+The v0.1 specs originally embedded a legacy product/project name in their JWT media types (`application/<legacy>.er+jwt`) and `$id` URIs (`https://<legacy>.io/...`). The rename decision: **clean break**, no dual-type support. New canonical identifiers in this public series:
 
-The decision — rename identifiers in v0.1 (clean break, assume no published artifacts), or bump to v0.2 with dual-type support for backward compatibility — is tracked in the private Phase 1 execution hand-off. The pending specs migrate once that decision lands.
+| Identifier kind | Old | New |
+|---|---|---|
+| Mission Declaration JWT type | `application/<legacy>.md+jwt` | `application/ardur.md+jwt` |
+| Execution Receipt JWT type | `application/<legacy>.er+jwt` | `application/ardur.er+jwt` |
+| IDM Extension JWT type | `application/<legacy>.idm+jwt` | `application/ardur.idm+jwt` |
+| Schema `$id` URI base | `https://<legacy>.io/spec/...` | `https://ardur.dev/spec/...` |
+
+The clean-break rationale: there are no v0.1 receipts, passports, or attestations in third-party hands — all empirical artifacts under this series stay private (the paper, internal benchmarks). Backward-compat dual-type would have added implementation complexity for zero observed callers. If receipts in the wild appear later, a v0.2 with dual-type support is the right answer at that point.
 
 ## Reading order for first-timers
 
-Pending specs are listed by name only — they're not yet linkable from this repo. They land once the protocol-rename decision is made.
-
-1. **Mission Declaration (MD)** _(pending)_ — the signed scope envelope the agent starts with
+1. [Mission Declaration (MD)](./mission-declaration-v0.1.md) — the signed scope envelope the agent starts with
 2. [Delegation Grant (DG) Profile](./delegation-grant-profile-v0.1.md) — how child agents get strictly narrower authority
-3. **Execution Receipt (ER)** _(pending)_ — the signed per-tool-call decision record
-4. **Execution Receipt EAT/CWT Profile** _(pending)_ — RFC 9711 binding for ER carriage
+3. [Execution Receipt (ER)](./execution-receipt-v0.1.md) — the signed per-tool-call decision record
+4. [Execution Receipt EAT/CWT Profile](./execution-receipt-eat-profile-v0.1.md) — RFC 9711 binding for ER carriage
 5. [Verifier Contract](./verifier-contract-v0.1.md) — what a conforming verifier must do
 6. [Conformance Profiles](./conformance-profiles-v0.1.md) — tiered conformance matrix (Delegation-Core, MIC-State, MIC-Evidence, IDM Extension)
-7. **Revocation Model** _(pending)_ — layered revocation across delegation, session, credential, and transparency-log layers
-8. **IDM Extension Profile** _(pending)_ — Intent-Declaration-Manifest experimental profile
+7. [Revocation Model](./revocation-v0.1.md) — layered revocation across delegation, session, credential, and transparency-log layers
+8. [IDM Extension Profile](./idm-extension-v0.1.md) — Intent-Declaration-Manifest experimental profile
 
 ## Relationship to adjacent standards
 

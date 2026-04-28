@@ -1,0 +1,252 @@
+# IDM Extension Profile v0.1
+
+> **Public-import note.** This document was authored against the private research repo's `docs/spec/` layout. In the public ardur tree, migrated specs live under `docs/specs/`. Any `docs/spec/...` path reference in the body refers to the original private layout; the public-tree mapping is in [`docs/specs/README.md`](./README.md).
+
+## 1. Scope
+
+This document defines the **Pre-Execution Intent Declaration Message (IDM)**
+extension profile for the Ardur runtime-governance protocol.
+
+IDM is an **optional extension** above the **MIC-Evidence** conformance profile.
+It specifies a signed, pre-execution forecast of intended tool invocations that
+enables a verifier to detect **plan-vs-execution drift** after a delegated
+subtask completes.
+
+IDM is **not required for base conformance**. A deployment that does not
+implement IDM remains conformant so long as it satisfies the requirements of its
+advertised base profile (Delegation-Core, MIC-State, or MIC-Evidence).
+
+This document uses the key words **MUST**, **MUST NOT**, **SHOULD**,
+**SHOULD NOT**, and **MAY** as described in BCP 14 (RFC 2119 / RFC 8174).
+
+## 2. Relationship to MIC-Evidence and the Opacity Reframe
+
+The Silence Theorem (see Workstream C.1 / `docs/paper/sections-3-4-formal-model-theorem.md`)
+establishes that Mission-Intent Compliance (MIC) is a hyperproperty over
+projected traces, and that projection-induced information loss makes sound and
+complete monitoring impossible in the general case. The tri-state verifier
+operationalizes this limit: when the observable projection lacks information
+required for a compliance verdict, the only honest result is
+`insufficient_evidence`.
+
+IDM does **not** eliminate this impossibility. It is a **gray-box augmentation**
+of the projection: by declaring intent *before* execution, the agent supplies
+additional semantic signal that the verifier can compare against the observed
+step sequence. Where the declared plan and the observed trace diverge, the
+verifier gains evidence of a violation that a purely scope-only projection might
+miss. Where the agent accurately follows its declared intent, the verifier gains
+confidence that the trace is consistent with the mission.
+
+IDM is therefore a **measurable experiment**, not a protocol requirement. Its
+value is empirical: it improves detection of certain semantic-drift violations
+at the cost of requiring agents to forecast intent and verifiers to store and
+compare plans.
+
+## 3. Intent Message Format
+
+An IDM is a JWS-signed JWT. It MUST be emitted **before** the first step of the
+delegated subtask it describes. It MUST be signed by the **leaf delegation key**
+bound to the active grant (`cnf.jwk` in AAT terminology).
+
+### 3.1 Required Claims
+
+| Claim | Type | Meaning |
+|---|---|---|
+| `iss` | string | Identity of the agent or sub-agent issuing the intent. |
+| `sub` | string | Same semantics as AAT `sub`; the subject principal. |
+| `iat` | NumericDate | Time at which the intent was issued. |
+| `exp` | NumericDate | Time after which the intent MUST NOT be accepted for drift comparison. SHOULD be ≤ the governing grant expiration. |
+| `jti` | string | Unique intent identifier. |
+| `grant_id` | string | The AAT `jti` of the delegation grant that authorizes this subtask. |
+| `forecast_steps` | array | Ordered sequence of planned steps (see §3.3). |
+
+### 3.2 Optional Claims
+
+| Claim | Type | Meaning |
+|---|---|---|
+| `forecast_duration_s` | number | Estimated wall-clock duration of the subtask, in seconds. |
+| `forecast_budget_consumption` | object | Per-effect-class predicted consumption (see §3.4). |
+| `parent_intent_id` | string or `null` | If this intent refines a broader parent intent, the parent `jti`. Otherwise `null`. |
+
+### 3.3 `forecast_steps` Element
+
+Each element in `forecast_steps` is an object with the following REQUIRED
+members:
+
+| Member | Type | Meaning |
+|---|---|---|
+| `tool` | string | Tool, API, or capability the agent intends to invoke. |
+| `action_class` | enum | High-level action family: `search`, `read`, `write`, `query`, `delegate`, `send`, `summarize`, or `observe`. |
+| `target` | string | Normalized target of the intended invocation after projection. |
+| `expected_effect_class` | enum | Predicted side-effect family: `none`, `internal_write`, `external_send`, or `state_change`. |
+
+The order of elements in `forecast_steps` is **semantically significant**.
+Reordering constitutes a drift signal unless the verifier policy explicitly
+treats the steps as order-independent.
+
+### 3.4 `forecast_budget_consumption`
+
+When present, this claim MUST be an object whose keys are `side_effect_class`
+values and whose values are non-negative integers representing the predicted
+number of invocations in each effect class.
+
+The sum of predicted values need not equal the length of `forecast_steps` if
+the agent is uncertain about effect classification, but a verifier MAY flag a
+large mismatch as a low-confidence intent.
+
+### 3.5 Signature Requirements
+
+- The IDM JWT MUST be signed with the private key corresponding to the leaf
+  AAT's `cnf.jwk`.
+- The protected header MUST set `alg` to `ES256`.
+- The protected header SHOULD set `typ` to `application/ardur.idm+jwt`.
+- Verifiers MUST reject an IDM whose signature does not verify against the
+  `cnf.jwk` of the active grant identified by `grant_id`.
+
+## 4. Verifier Delta Comparison
+
+After the subtask completes (or after every evaluated step, at verifier
+option), the verifier computes a **drift delta** between the IDM forecast and
+the observed execution trace.
+
+### 4.1 Inputs
+
+1. The IDM JWT (validated and signature-verified).
+2. The ordered sequence of Execution Receipts (ERs) emitted for the subtask.
+3. The governing MD and DG.
+4. Local thresholds configured by the deployment.
+
+### 4.2 Drift Metrics
+
+The verifier MUST compute at least the following four metrics:
+
+| Metric | Definition |
+|---|---|
+| **Step-count delta** | `\|actual_steps\| - \|forecast_steps\|` |
+| **Ordering delta** | Levenshtein (or longest-common-subsequence) distance between the ordered `tool`+`action_class` sequences of the forecast and the actual trace. |
+| **Per-step scope equality** | For each observed step, whether `{tool, action_class, target}` is element-wise equal to the corresponding forecast step. Steps beyond the forecast length are treated as out-of-scope additions. |
+| **Budget delta** | Per-effect-class difference: `actual_consumed - forecast_budget_consumption[class]`. |
+
+### 4.3 Threshold and Verdict
+
+A verifier MAY apply deployment-specific thresholds to each metric. If **any**
+metric exceeds its threshold, the verifier MUST emit a `violation` verdict with
+denial reason `plan_execution_drift`.
+
+If the trace is shorter than the forecast (negative step-count delta), the
+verifier MUST treat the missing steps as a drift signal unless the MD policy
+explicitly permits early termination.
+
+If no IDM was emitted for a subtask and the deployment advertises the IDM
+extension profile, the verifier MUST return `insufficient_evidence` for that
+subtask, because the projection expected by the profile is incomplete.
+
+### 4.4 Receipt Annotation
+
+When an IDM is present and evaluated, the verifier SHOULD include the following
+optional claims in the ER for the final step of the subtask:
+
+- `idm_intent_id`: the IDM `jti`
+- `idm_drift_score`: an aggregated drift score (0.0 = perfect match, 1.0 =
+  maximal drift) computed from the metrics in §4.2
+- `idm_verdict`: `matched` or `drift_detected`
+
+These annotations are evidence-level metadata; they do not replace the tri-state
+`verdict` of the ER itself.
+
+## 5. Composition with MIC-Evidence
+
+A deployment MUST satisfy **all** requirements of the MIC-Evidence profile
+before it can advertise the IDM extension.
+
+The conformance profile matrix (see Workstream A.5,
+`docs/spec/conformance-profiles-v0.1.md`) lists the IDM extension separately:
+
+| Profile | Position |
+|---|---|
+| Delegation-Core | Base |
+| MIC-State | Base |
+| MIC-Evidence | Base |
+| IDM | **Extension above MIC-Evidence** |
+
+An implementation MUST NOT claim IDM conformance unless it also passes the full
+MIC-Evidence test vectors. IDM does not relax any MIC-Evidence requirement, nor
+does it substitute for hidden-hop detection, budget conservation, or typed
+projection honesty.
+
+## 6. Empirical Evaluation Hook (E.7)
+
+IDM's status as an extension is provisional on measurable empirical payoff. The
+protocol maintainers will evaluate IDM against a controlled drift-detection
+benchmark (Workstream E.7).
+
+### 6.1 Benchmark Design
+
+- **Arm A**: MIC-Evidence profile alone.
+- **Arm B**: MIC-Evidence profile + IDM extension.
+- **Task**: 50 agent sessions with mission drift injected at random steps.
+- **Metric**: Detection rate of drift-injected sessions (true positives) and
+  false-positive rate on clean sessions.
+
+### 6.2 Decision Criterion
+
+| Condition | Outcome |
+|---|---|
+| Δ ≥ 10 percentage points in detection rate (Arm B vs Arm A), with no significant increase in false positives | **Promote** IDM to a core profile or merge into a future revision of MIC-Evidence. |
+| 0 ≤ Δ < 10 percentage points | **Keep as extension**. The primitive has value but does not justify base-requirement status. |
+| Δ < 0 percentage points (IDM harms detection) | **Kill** the extension. Remove the spec in a future revision. |
+
+This criterion is load-bearing. The spec will be honestly revisited after the
+benchmark completes, regardless of whether the result favors the extension.
+
+## 7. Security Considerations
+
+### 7.1 IDM Is Not a Panacea
+
+An attacker that controls the leaf agent can forge a malicious intent message
+that matches the attack trace perfectly, causing the verifier to see zero drift.
+IDM is therefore **not an integrity control**; it is a **plan-binding signal**
+that helps honest agents demonstrate compliance and helps verifiers detect
+*unintentional* or *opportunistic* drift. It does not stop an actively malicious
+agent from lying about its intent.
+
+### 7.2 Projection Augmentation, Not Replacement
+
+Even with perfect intent forecasting, the verifier still observes only the
+projected trace. IDM augments the information available to the monitor but does
+not remove the fundamental limits formalized by the Silence Theorem. Verifiers
+MUST continue to emit `insufficient_evidence` when the projection (including the
+IDM) does not provide enough information for a compliance verdict.
+
+### 7.3 Storage and Replay
+
+IDMs are pre-execution artifacts. Verifiers MUST retain them for at least as
+long as the corresponding subtask ERs are retained, because drift comparison
+happens after execution. The IDM JWT MUST be integrity-protected before storage
+and MUST be bound to the same `grant_id` at replay time to prevent
+intent-laundering across grants.
+
+## 8. Privacy Considerations
+
+Intent declarations may reveal mission strategy or internal reasoning. Deployers
+SHOULD apply the same confidentiality controls to stored IDMs as they apply to
+MDs and ERs. IDMs SHOULD NOT be sent to untrusted third parties unless the
+contained forecast steps are already public.
+
+## 9. IANA Considerations
+
+This document makes no IANA registration requests. If IDM is promoted to a core
+profile in a future revision, the `application/ardur.idm+jwt` media type
+SHOULD be registered.
+
+## 10. References
+
+- Workstream A.5 / `docs/spec/conformance-profiles-v0.1.md` — Conformance profile
+  matrix.
+- Workstream A.7 / `PLAN.md` — IDM task definition and dependency graph.
+- Workstream C.1 / `docs/paper/sections-3-4-formal-model-theorem.md` — Silence
+  Theorem and opacity reframe.
+- Workstream E.7 / `PLAN.md` — IDM empirical evaluation specification.
+- `docs/session-2026-04-14/05-cpo-call-prep/unified-steps-final.md` §2.1 — Sharp
+  decision placing IDM as extension, not core.
+- `protocol-direction-kimi.md` — Original IDM proposal and 12-week blueprint.
