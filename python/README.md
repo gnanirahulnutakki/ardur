@@ -43,11 +43,11 @@ python/
 ## What's NOT here yet
 
 - **Live LLM tests** (semantic-judge, behavioral-fingerprint lanes) — require API keys; default test runs use stub LLMs. Live runs require explicit env vars (`ARDUR_SEMANTIC_JUDGE=anthropic` + `ANTHROPIC_API_KEY`).
-- **Corpus-heavy benchmark tests** (AgentDojo, InjectAgent, R-Judge, STAC, telemetry-ablation) — these stay in the private research repo. The cleaner subset that backs public claims is what's curated here.
+- **Corpus-heavy benchmark tests** (AgentDojo, InjectAgent, R-Judge, STAC, telemetry-ablation) — these stay in the private research tree. The cleaner subset that backs public claims is what's curated here.
 
 ## Status
 
-Phase 1 of the lift wave — file-level migration with end-to-end Wolverine/Radiantic → Ardur rename pass applied. Protocol-identifier rename is **clean break** (per `docs/specs/README.md` "Protocol identifier rename" section): no backward-compat dual-type for v0.1 receipts/passports/attestations.
+Phase 1 of the lift wave — public Python runtime files and curated tests are now in this repository with the Ardur public name applied. Protocol-identifier rename is **clean break** (per `docs/specs/README.md` "Protocol identifier rename" section): no backward-compat dual-type for v0.1 receipts/passports/attestations.
 
 Docker images (`rahulnutakki/ardur-demo:lang`, `:autogen`) and re-recorded asciinema casts are pending — those need interactive maintainer hands-on (Docker Hub creds + asciinema record). See `/Users/nutakki/.claude/plans/ardur-phase1-artifacts/phase1-execution-handoff.md` for the hand-off brief.
 

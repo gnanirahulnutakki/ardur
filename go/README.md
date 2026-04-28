@@ -38,7 +38,7 @@ go test -race ./...
 | `cmd/governor` | The governance proxy server |
 | `cmd/cli` | Command-line tool (issue, verify, demo) |
 | `cmd/operator` | Kubernetes operator (reconciles `AgentPassport` CRs) |
-| `cmd/benchmark*` | Benchmark harnesses (private fixtures stay in radiantic) |
+| `cmd/benchmark*` | Benchmark harnesses (private fixtures stay in the internal research tree) |
 | `cmd/specvalidate` | Mission-declaration schema validator |
 | `cmd/webhook` | Admission webhook for K8s |
 | `spec/mission-governance/v0alpha1` | JSON schemas (declaration, decision, event, finding, session) |
@@ -46,17 +46,17 @@ go test -race ./...
 ## What's NOT here
 
 - **EDR connector** — `cmd/edr_*` and the `edr-connector` Go module stay private (CrowdStrike Falcon API integration with vendor-license context that hasn't been cleared for public release).
-- **Live benchmark fixtures** — heavy corpora (AgentDojo, InjecAgent, R-Judge, STAC) remain in the radiantic research tree; reproducible smoke benchmarks land in a future Phase 7 commit.
+- **Live benchmark fixtures** — heavy corpora (AgentDojo, InjecAgent, R-Judge, STAC) remain in the internal research tree; reproducible smoke benchmarks land in a future Phase 7 commit.
 
 ## Status
 
-Phase 5 of the lift wave — file-level migration with the Wolverine/Radiantic → Ardur rename pass applied across:
+Phase 5 of the lift wave — Go runtime and operator files are now in this repository with the Ardur public name applied across:
 
-- Module path: `github.com/gnanirahulnutakki/radiantic` → `github.com/gnanirahulnutakki/ardur/go`
-- Schema URIs: `https://radiantic.io/...` → `https://ardur.dev/...`
-- API GroupName: `vibap.radiantic.io` → `vibap.ardur.dev`
-- SPIFFE trust domain: `radiantic.io` → `ardur.dev`
-- Image refs in tests: `ghcr.io/radiantic/...` → `ghcr.io/ardur/...`
+- Module path: `github.com/gnanirahulnutakki/ardur/go`
+- Schema URIs: `https://ardur.dev/...`
+- API GroupName: `vibap.ardur.dev`
+- SPIFFE trust domain: `ardur.dev`
+- Image refs in tests: `ghcr.io/ardur/...`
 - All docstring/comment references rebranded.
 
 `go mod tidy` and `go build ./...` have NOT been run from this lift commit (no Go toolchain available in the lift environment). A maintainer running `go mod tidy && go build ./...` from a clean checkout is the verification gate. CodeQL CI will pick up the Go tree on the next push and run static analysis automatically.

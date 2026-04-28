@@ -31,7 +31,7 @@ This exercises the core protocol surface — mission compilation, passport issua
 
 ## Why stubs
 
-Per-framework adapter work is real engineering: each framework has its own tool-call interface, its own session-state model, and its own integration points where Ardur's governance proxy attaches. Lifting the adapters from the private research repo with the Wolverine/Radiantic → Ardur rename pass plus the protocol-rename clean break needs careful pass per framework. The stub READMEs document the intended shape so a contributor can pick up any one of them and complete the lift in isolation.
+Per-framework adapter work is real engineering: each framework has its own tool-call interface, its own session-state model, and its own integration points where Ardur's governance proxy attaches. Lifting the adapters from the private working tree into the public Ardur repository needs a careful pass per framework, including public-name cleanup and the protocol-identifier clean break. The stub READMEs document the intended shape so a contributor can pick up any one of them and complete the lift in isolation.
 
 ## Testing the examples (after Phase 3 lift completes)
 

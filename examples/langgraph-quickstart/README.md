@@ -45,7 +45,7 @@ cd langgraph-quickstart
 
 ## Source for the lift
 
-Adapter code lives in the private research repo at `vibap-prototype/demos/LangGraph/`. The lift requires the same Wolverine/Radiantic → Ardur rename pass as the rest of the runtime (clean break, no backward-compat dual-type — see `docs/specs/README.md` "Protocol identifier rename" section).
+Adapter code is still being lifted from the internal working tree. The public version must keep the Ardur name, preserve protocol identifiers such as VIBAP, and follow the clean-break protocol-identifier rule in `docs/specs/README.md`.
 
 ## What this example does NOT cover
 
