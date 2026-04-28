@@ -1,10 +1,10 @@
 # Testing — what runs against this repo
 
-The runtime code that produces signed receipts hasn't been imported into the public ardur tree yet. Until [Phase 1 of the public-import plan](public-import-plan.md) lands the Python runtime under `python/vibap/`, the only "tests" this repo has are CI workflows that catch the mistakes that a content-mostly repo can actually make. This page documents what runs today and what will run after each public-import phase.
+The public tree now includes curated Python and Go runtime imports under `python/` and `go/`. The current GitHub Actions set still covers repository hygiene first: secrets, old-name leakage, links, structured-file parsing, and CodeQL. Dedicated Python and Go test workflows are still pending, so do not claim full runtime CI coverage until those workflows land and pass.
 
 The structure mirrors how testing works in the private research repo: structured CI for what's safely automatable, plus an explicit "before claiming tests pass" discipline for what isn't.
 
-## What runs today (Phase 0 — content-mostly repo)
+## What runs today
 
 Three GitHub Actions workflows, all gated on push to `dev`/`main` and on every pull request.
 
@@ -22,21 +22,19 @@ Three GitHub Actions workflows, all gated on push to `dev`/`main` and on every p
 - Runs on PRs touching `**/*.md` and weekly via cron. Uses `lycheeverse/lychee-action@v2.8.0` (commit-pinned).
 - Excludes two URL patterns that are known to 404 for an unauthenticated checker: the GitHub Discussions tab (404 until Discussions is enabled in repo settings) and `security/advisories/new` (requires sign-in). Both are part of our intended feedback surface; the excludes are temporary and documented inline in the workflow.
 
-### `validate-formats` — JSON, YAML, Markdown-table parsers
+### `validate-formats` — JSON and YAML parsers
 
 [`/.github/workflows/validate-formats.yml`](../.github/workflows/validate-formats.yml)
 
 - **JSON job**: every `.json` file (excluding `.git`, `.claude`, `artifacts/`) parses with `python3 -c "import json; json.load(...)"`.
 - **YAML job**: every `.yml`/`.yaml` file parses with PyYAML's `safe_load_all` (handles multi-document YAML).
-- **Markdown-tables job**: every Markdown table where the header row's pipe count differs from the separator row's pipe count fails. Catches the most common table-typo bug.
-
-This workflow exists because a misplaced comma in `media/selected-assets.json` or a stray indent in an issue-template YAML would otherwise sit broken silently.
+This workflow exists because a misplaced comma in a JSON schema or a stray indent in an issue-template YAML would otherwise sit broken silently. A Markdown-table heuristic was prototyped and removed because the false-positive rate was too high; use a real Markdown parser before adding that gate back.
 
 ### `codeql` — CodeQL static analysis
 
 [`/.github/workflows/codeql.yml`](../.github/workflows/codeql.yml)
 
-- A pre-flight job (`detect-languages`) checks whether `python/` or `go/` carries any source files. While the repo is content-only at Phase 0, the matrix is empty and the analyse job is skipped — the workflow records as a clean run with no alerts. Once Phase 1 imports Python and Phase 5 imports Go, the matrix populates automatically and analysis fires per-language.
+- A pre-flight job (`detect-languages`) checks whether `python/` or `go/` carries source files. With the current dev tree, the matrix detects Python and Go and runs analysis per language.
 - Pinned to `github/codeql-action@ce64ddcb` (commit-pinned; `v3` is an annotated tag whose tag-object is `865f5f5c...` and whose underlying commit is `ce64ddcb...`). Same pin discipline as the rest of the workflow set.
 - Pairs with the `code_quality` ruleset rule on `main`: that rule reads from GitHub's code-scanning alerts table, so it passes vacuously while the matrix is empty and substantively once code lands. The CI job name (`codeql`) is intentionally **not** in the required-status-checks list — the ruleset already gates merges via the alerts mechanism.
 
@@ -45,21 +43,23 @@ This workflow exists because a misplaced comma in `media/selected-assets.json` o
 Honest list, so the gap is visible:
 
 - No content-fact verification (article claims, ADR cross-references) — caught only by review rounds and the cool-off re-read in the `dev → main` PR template.
-- No Markdown lint beyond table-pipe counts — `markdownlint` adds noise we don't want yet.
+- No Markdown lint — `markdownlint` adds noise we don't want yet, and the earlier table-pipe heuristic was removed.
 - No YAML link-check (the issue-template `config.yml` URLs are not under `**/*.md`).
 - No spelling.
+- No dedicated Python pytest workflow yet.
+- No dedicated Go build/test workflow yet.
 - No external link-check on YAML or `.cast` files.
 
-## What runs after Phase 1 (Python runtime imported)
+## Pending Python CI
 
-Phase 1 imports `vibap-prototype/vibap/` → `python/vibap/` per the [public-import plan](public-import-plan.md). When that lands:
+The Python runtime is now present under `python/vibap/`, but the dedicated workflow has not landed yet. The intended `python-ci.yml` gate is:
 
 ### Python suite
 
 A new `python-ci.yml` workflow will join the set:
 
 ```yaml
-# Phase 1 sketch — actual file lands with the code
+# Intended gate — workflow still pending
 on:
   push:
     branches: [main, dev]
@@ -96,7 +96,7 @@ jobs:
         run: make reproduce
 ```
 
-### Local development setup (Phase 1 onwards)
+### Local development setup
 
 The discipline lifts directly from the private research repo's `TESTING.md`:
 
@@ -116,14 +116,14 @@ python3.13 -m venv .venv
 make reproduce
 ```
 
-### Module-specific gotchas (carry-over from private research)
+### Module-specific gotchas
 
 - **`test_mission_binding.py`**: one xfail (`test_tampered_md_returns_chain_invalid`) due to module-level `urllib.request.urlopen` state leak — runs green in isolation. CI invokes it as a separate `pytest` call.
 - **`test_biscuit_passport.py`**: requires `biscuit-python==0.4.0`. ABI breaks on 0.5+ and on Python 3.14.
 - **Live LLM tests**: tests under the semantic-judge / behavioral-fingerprint lanes need API access. Default test runs use null-judge stubs; live runs require explicit env vars (`ARDUR_SEMANTIC_JUDGE=anthropic` + `ANTHROPIC_API_KEY`).
 - **Mark `pytest.mark.<name>`**: every custom mark must be registered in `conftest.py` so `pytest -W error` doesn't blow up. The private repo had unregistered `spiffe_mock` warnings; we don't carry that forward.
 
-### Coverage targets (Phase 1 onwards)
+### Coverage targets
 
 | Surface | Minimum coverage | Source of bar |
 |---------|------------------|---------------|
@@ -133,9 +133,9 @@ make reproduce
 
 Coverage runs against the renamed Ardur runtime only; legacy-era results are archived under `artifacts/legacy-era-*/` for lineage but never count for gates.
 
-## What runs after Phase 5 (Go runtime imported)
+## Pending Go CI
 
-A `go-ci.yml` mirrors the private source repo pattern:
+The Go runtime and operator files are now present under `go/`, but the dedicated workflow has not landed yet. The intended `go-ci.yml` gate is:
 
 - `go mod verify`
 - `go build ./...`
@@ -155,7 +155,7 @@ Same SHA-pinning discipline as the rest of the workflows. Annotated tags get pee
 
 ## Before claiming "tests pass"
 
-For Phase 0 (today): a pre-commit local sweep is enough — `python3 -c 'import json; json.load(...)'` over `media/selected-assets.json`, `python3 -c 'import yaml; yaml.safe_load_all(...)'` over the workflow YAMLs, plus the forbidden-term grep. The exact `grep` invocation lives in [`/.github/workflows/secret-scan.yml`](../.github/workflows/secret-scan.yml); copy the include list, exclude list, and pattern string from there to run it locally:
+For docs/config-only changes: run a pre-commit local sweep — JSON parse over all `.json` files, YAML parse over all `.yml` / `.yaml` files, plus the forbidden-term grep. The exact `grep` invocation lives in [`/.github/workflows/secret-scan.yml`](../.github/workflows/secret-scan.yml); copy the include list, exclude list, and pattern string from there to run it locally:
 
 ```bash
 # substitute <PATTERN> with the literal regex from secret-scan.yml's
@@ -172,12 +172,13 @@ grep -RInE \
   '<PATTERN>' .
 ```
 
-For Phase 1 onwards (after Python runtime lands):
+For runtime changes:
 - Exit code 0 on the full pytest suite
+- Exit code 0 on the relevant Go build/test command when touching `go/`
 - Known-failing / known-collecting-error count has not grown
 - No `xfail` flipped to pass-or-fail without an explicit reason
 - The pytest summary line (`N passed, M skipped, K xfailed`) pasted into the commit body so a reviewer can see the delta vs the known baseline without re-running
 
 ## Why this page exists
 
-Public security-software repos that fail their own CI on the first PR every time train contributors not to trust the gates. The current state — three workflows, three useful checks, no-ops nowhere — is intentional. New CI jobs join the set when the corresponding code does, not as placeholders.
+Public security-software repos that fail their own CI on the first PR every time train contributors not to trust the gates. The current state is intentionally conservative: repository hygiene checks and CodeQL are live, while runtime build/test gates need to land as real workflows rather than placeholders.
