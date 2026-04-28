@@ -54,7 +54,7 @@ This is the case the [Tool Response Provenance](../specs/conformance-profiles-v0
 
 ## Why this isn't a research project
 
-The reviewer's framing implies a worry that Ardur's hook model collapses on real LLM traffic. The honest answer: the three responses above were the result of running the protocol against actual LLM-driven agents (LangChain, LangGraph, AutoGen) with real models (Claude, GPT-4o, Llama, Mistral) over a 324-run benchmark matrix. The pre-action descriptor was complete enough for evaluation in the majority of calls. The cases where it wasn't drove the design of the tri-state verdict and the post-action attestation split.
+The reviewer's framing implies a worry that Ardur's hook model collapses on real LLM traffic. The honest answer: the three responses above were the result of running the protocol against actual LLM-driven agents (LangChain, LangGraph, AutoGen) with a multi-model benchmark matrix that mixed major frontier-model providers and an open-weight local model. The pre-action descriptor was complete enough for evaluation in the majority of calls. The cases where it wasn't drove the design of the tri-state verdict and the post-action attestation split.
 
 The benchmark numbers from that matrix back the claim quantitatively. They live in the private research tree right now; they re-run publicly under Phase 7 of the lift, with the matrix output landing under `artifacts/ardur-era-*/matrix-324/`. Until those numbers are public, this document is the qualitative version of the answer.
 

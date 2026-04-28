@@ -2,7 +2,8 @@
 
 Phase 1a of the PHASE-5-PLUS-BACKLOG A1 spike. Defines the
 ``SemanticJudge`` Protocol, an ``AnthropicJudge`` implementation backed by
-Claude Sonnet 4.5, and a ``NullJudge`` no-op default.
+the Anthropic API (model id chosen at construction time), and a
+``NullJudge`` no-op default.
 
 The judge runs *after* the structural governance decision and observes the
 tool call. It returns an independent three-way verdict
@@ -14,7 +15,7 @@ attached to the signed receipt as a ``semantic_review`` field so post-hoc
 F1 analysis can score judge-augmented predictions against the AgentDojo
 ground-truth corpus.
 
-Injection defense (kimi peer-review Finding 6.2, 2026-04-17): the mission
+Injection defense (external peer-review Finding 6.2, 2026-04-17): the mission
 text is treated as UNTRUSTED data. It is wrapped in
 ``<MISSION_DATA>...</MISSION_DATA>`` delimiters and the system prompt
 explicitly instructs the model to evaluate the content rather than follow
@@ -149,7 +150,7 @@ class NullJudge:
 
 
 # --------------------------------------------------------------------------
-# AnthropicJudge — Claude Sonnet 4.5 backed
+# AnthropicJudge — Anthropic-API backed (model id supplied at construction)
 # --------------------------------------------------------------------------
 
 
@@ -208,7 +209,11 @@ Return your JSON verdict now."""
 
 
 class AnthropicJudge:
-    """Claude Sonnet 4.5-backed semantic judge.
+    """Semantic judge backed by the Anthropic API.
+
+    The model id is supplied at construction time via the ``model``
+    parameter or via the ``ANTHROPIC_MODEL`` env var. No model id is
+    hard-coded in this module.
 
     Env-gated: construction requires ``ARDUR_SEMANTIC_JUDGE=anthropic``.
     This prevents accidental API calls when the judge is enabled at import
@@ -222,11 +227,19 @@ class AnthropicJudge:
     def __init__(
         self,
         *,
-        model: str = "claude-sonnet-4-5",
+        model: str | None = None,
         api_key: str | None = None,
         max_tokens: int = 200,
         timeout_s: float = 10.0,
     ) -> None:
+        resolved_model = model or os.environ.get("ANTHROPIC_MODEL", "")
+        if not resolved_model:
+            raise RuntimeError(
+                "AnthropicJudge requires a model id. Pass model=... or set "
+                "the ANTHROPIC_MODEL env var. Model ids are intentionally "
+                "not hard-coded in this module."
+            )
+        self._resolved_model = resolved_model
         current = os.environ.get(ENV_GATE)
         if current != ENV_GATE_VALUE_ANTHROPIC:
             raise RuntimeError(

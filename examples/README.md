@@ -10,7 +10,7 @@ Working examples of Ardur governing AI agents across the major frameworks. Some 
 | [langchain-quickstart/](langchain-quickstart/) | placeholder | `python/` editable install + LangChain + Ollama |
 | [langgraph-quickstart/](langgraph-quickstart/) | placeholder | `python/` editable install + LangGraph + Ollama |
 | [autogen-quickstart/](autogen-quickstart/) | placeholder | `python/` editable install + AutoGen v0.4+ + Ollama |
-| [claude-code-hook/](claude-code-hook/) | placeholder | `python/` editable install + Claude Code CLI |
+| [claude-code-hook/](claude-code-hook/) | placeholder | `python/` editable install + a frontier-LLM coding-agent CLI |
 | [openai-agents-sdk/](openai-agents-sdk/) | placeholder | `python/` editable install + OpenAI Agents SDK + OpenAI API key |
 | [google-adk/](google-adk/) | placeholder | `python/` editable install + Google ADK + Google AI API key |
 
@@ -31,7 +31,7 @@ That exercises the core protocol surface end-to-end — mission compilation, pas
 
 ## Why placeholders instead of one big drop
 
-Each framework has its own tool-call interface, its own session-state model, and its own integration point where Ardur's governance proxy attaches. LangChain tool callbacks look nothing like AutoGen's `FunctionTool` registration; LangGraph's state graph wants the verifier wrapped around node transitions; Claude Code wires in via the hook lifecycle, not a Python import. Lifting these as one monolithic commit would conflate unrelated breakage. Per-framework directories let each adapter land, get reviewed, and run CI on its own.
+Each framework has its own tool-call interface, its own session-state model, and its own integration point where Ardur's governance proxy attaches. LangChain tool callbacks look nothing like AutoGen's `FunctionTool` registration; LangGraph's state graph wants the verifier wrapped around node transitions; the coding-agent CLI integration wires in via a hook lifecycle, not a Python import. Lifting these as one monolithic commit would conflate unrelated breakage. Per-framework directories let each adapter land, get reviewed, and run CI on its own.
 
 ## CI for examples
 

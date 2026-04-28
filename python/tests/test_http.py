@@ -210,7 +210,7 @@ class TestHTTPDelegate:
             max_duration_s=300,
         )
         parent_token = issue_passport(parent_mission, private_key, ttl_s=300)
-        # Parent session must be started before delegation (Phase 2e / gemini F3)
+        # Parent session must be started before delegation (Phase 2e / external-review-G F3)
         _post(base + "/session/start", {"token": parent_token})
         status, body = _post(
             base + "/delegate",
@@ -528,7 +528,7 @@ class TestHTTPSessionEnd:
 
 
 class TestDelegateRequiresActiveParentSession:
-    """Regression test for gemini F3: /delegate previously fell back to the
+    """Regression test for external-review-G F3: /delegate previously fell back to the
     parent's ceiling if the parent session wasn't in the in-memory dict.
     Now it must refuse unless there's a persisted session for the parent jti."""
 

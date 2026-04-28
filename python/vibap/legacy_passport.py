@@ -90,7 +90,7 @@ def _normalize_cwd(value: str | None) -> str | None:
         return None
     if not stripped.startswith("/"):
         raise ValueError(f"cwd must be an absolute path (start with '/'), got {value!r}")
-    # Phase-3.1a C-3 (codex F3 + SF-P3-04): reject any ``..`` segment
+    # Phase-3.1a C-3 (external-review-X F3 + SF-P3-04): reject any ``..`` segment
     # BEFORE calling posixpath.normpath. normpath silently collapses
     # ``/workspace/../etc`` → ``/etc``, which would let a passport claim
     # an arbitrary absolute anchor via a single ``..`` the issuer didn't
@@ -161,7 +161,7 @@ class MissionPassport:
         # can never be issued. Empty string → None; relative → ValueError.
         self.cwd = _normalize_cwd(self.cwd)
 
-    # Phase-3.1b M-3 (gemini F6): canonical set of keys this constructor
+    # Phase-3.1b M-3 (external-review-G F6): canonical set of keys this constructor
     # understands. Anything outside this set is a typo (e.g. `resourc_scope`
     # missing the `e`) that previously was silently dropped, causing the
     # mistyped field to default (often to an empty list = unrestricted).
@@ -187,7 +187,7 @@ class MissionPassport:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "MissionPassport":
-        # Phase-3.1b M-3 (gemini F6): reject unknown fields so a typo
+        # Phase-3.1b M-3 (external-review-G F6): reject unknown fields so a typo
         # like `resourc_scope` (missing `e`) surfaces at construction
         # time instead of silently producing an unrestricted passport.
         # The canonical key set is `_KNOWN_FIELDS`; anything else is a

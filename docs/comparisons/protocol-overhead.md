@@ -34,7 +34,7 @@ The pieces Ardur adds to a tool call's wall-clock:
 
 Methodology:
 
-1. Run a stable mission on a stable LLM (we'll use Llama 3.1 8B local for reproducibility — no API rate-limiting, no provider variance).
+1. Run a stable mission on a stable LLM (use a local open-weight model for reproducibility — no API rate-limiting, no provider variance).
 2. Measure tool-call wall-clock with and without the Ardur proxy in path.
 3. Report median, p95, p99 of (proxy-on minus proxy-off) per call.
 
@@ -80,7 +80,7 @@ Reproducibility is the load-bearing claim. A reader who doesn't trust our number
 Two reasons we're not pulling internal numbers into the public docs today:
 
 1. **The internal numbers were measured under the pre-Ardur runtime name.** Re-running them under the renamed Ardur runtime is part of Phase 2 of the lift. Until that re-run lands, citing the old numbers in public would be the same overclaim trap that we've been avoiding everywhere else: "Ardur block rate: X" with results from a runtime that wasn't called Ardur. Phase 2 closes that gap.
-2. **The internal numbers haven't passed adversarial review.** The codex review rounds we've been running on doc/spec changes work for prose. The benchmark numbers need a different review discipline — at minimum a re-run by an independent reviewer who didn't author the test harness. That review process happens alongside the public re-run.
+2. **The internal numbers haven't passed adversarial review.** The external-review-X review rounds we've been running on doc/spec changes work for prose. The benchmark numbers need a different review discipline — at minimum a re-run by an independent reviewer who didn't author the test harness. That review process happens alongside the public re-run.
 
 So the trade-off is: published-now-with-caveats vs published-when-honest. We're choosing honest.
 

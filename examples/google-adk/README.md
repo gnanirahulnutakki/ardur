@@ -17,7 +17,7 @@ ADK's `LlmAgent` builds tools from plain Python callables and resolves their sch
 
 - `python/` editable install (this repo, `pip install -e ../python`; CLI is `ardur`, module imports are `vibap`)
 - `google-adk ^0.1.0`
-- LLM access: Google AI Studio API key (Gemini); Vertex AI works too if `GOOGLE_GENAI_USE_VERTEXAI=true`
+- LLM access: Google AI Studio API key (model id supplied via env var, see ADK docs); Vertex AI works too if `GOOGLE_GENAI_USE_VERTEXAI=true`
 - Optional: Docker for the recorded asciinema flow
 
 ADK shares a transitive dependency tree with `google-cloud-*` libraries, and `protobuf` version skew has bitten this combination in the past. A clean venv is the path of least resistance.

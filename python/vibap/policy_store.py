@@ -23,7 +23,7 @@ expects, plus `InMemoryPolicyStore` for tests and demos.
 
 Previously the live-governance demo mutated `session.passport_claims
 ["additional_policies"]` AFTER session start, which was called out in
-the 2026-04-17 codex review:
+the 2026-04-17 external-review-X review:
 
 > additional_policies are being injected by mutating live session state
 > after session start ... the Cedar/forbid_rules layer is neither
