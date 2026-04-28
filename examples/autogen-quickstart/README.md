@@ -1,9 +1,5 @@
 # AutoGen + Ardur quickstart
 
-Placeholder. The adapter code lives in the private research repo and is being imported with the public-name cleanup applied; this directory describes what lands when that import finishes.
-
-## What this example will demonstrate
-
 An AutoGen agent (v0.4+ architecture, `autogen-agentchat`) making tool calls through Ardur's governance proxy. The agent runs under an Ardur-issued mission credential, calls a small set of tools (read, write, summarize), and Ardur:
 
 1. Issues a Mission Declaration signed by the local issuer key
@@ -13,46 +9,69 @@ An AutoGen agent (v0.4+ architecture, `autogen-agentchat`) making tool calls thr
 
 AutoGen 0.4 is a ground-up rewrite from 0.2, so this adapter only targets the new event-driven runtime. The proxy attaches at the `FunctionTool` boundary inside `AssistantAgent`, before the tool's own pydantic validation runs — that ordering matters because mission violations should short-circuit before argument parsing reports a different error.
 
-## Dependencies
-
-- `python/` editable install (this repo, `pip install -e ../python`; CLI is `ardur`, module imports are `vibap`)
-- `autogen-agentchat ^0.4.0`
-- `autogen-core` (transitive, but worth pinning if you hit version skew)
-- LLM access: local Ollama or OpenAI
-- Optional: Docker for the recorded asciinema flow
-
-A heads-up for whoever lifts this: AutoGen's `protobuf` dependency has historically conflicted with other Google libraries (notably `google-cloud-*`) by pinning incompatible majors. If you're testing in a venv that already has GCP libs installed, use a fresh venv or expect to pin `protobuf>=4.25,<5` manually.
-
-## File layout (when imported)
+## File layout
 
 ```
 autogen-quickstart/
 ├── README.md              # this file
-├── run.sh                 # one-line runner
-├── src/
-│   ├── agent.py           # AssistantAgent + tool registration
-│   └── tools.py           # tool stubs (read, write, summarize)
-├── mission.json           # the Mission Declaration the agent runs under
-└── expected-receipt.json  # what a clean run produces, for diff-testing
+├── Dockerfile             # for the rahulnutakki/ardur-demo:autogen image
+└── demo.py                # the AutoGen agent + scenarios entrypoint
 ```
 
-## Run (when available)
+`demo.py` imports framework-agnostic helpers from [`examples/_shared/demo_scenes.py`](../_shared/demo_scenes.py) — provider selection, SVID fetch, Biscuit issuance, governed-session setup, receipt-chain verification, end-of-session attestation. The split keeps each per-framework demo small.
+
+## Dependencies
+
+- Python 3.13+
+- `python/` editable install (this repo, `pip install -e ../../python[dev]`; the CLI is `ardur`, module imports are `vibap`)
+- `autogen-agentchat ^0.4.0` plus `autogen-core` (transitive)
+- `autogen-ext[ollama,openai,anthropic]` for the multi-provider matrix
+- LLM access: local Ollama, an OpenAI-compatible gateway, or an Anthropic API key
+- Optional: Docker for the recorded asciinema flow (`rahulnutakki/ardur-demo:autogen`)
+
+**Heads-up:** AutoGen's `protobuf` pin (~=5.29) conflicts with `spiffe-python`'s transitive >=6 requirement. The Docker image works around this by using the official `spire-agent` CLI (production sidecar-fetch pattern) instead of the Python SPIFFE client. For local runs, use a fresh venv and either pin `protobuf<6` or skip the Python SPIFFE workload-API path.
+
+## Running locally
 
 ```bash
-cd autogen-quickstart
-./run.sh
-# Output:
-#   - mission compiled
-#   - agent started with passport
-#   - tool calls + per-call verdicts
-#   - session attestation printed at exit
+# 1. Install the runtime
+cd ../../python && pip install -e '.[dev]'
+
+# 2. Pick a provider + model id
+export ARDUR_PROVIDER=ollama
+export OLLAMA_MODEL='<your local model tag>'
+
+# 3. Run the demo from this directory
+cd ../examples/autogen-quickstart
+PYTHONPATH=../_shared python demo.py
 ```
+
+`ARDUR_PROVIDER` selects the backend. The matching `*_MODEL` env var is required — no model identifiers are hard-coded in `demo_scenes.py` per the project rule (see [CONTRIBUTING.md](../../CONTRIBUTING.md)).
+
+## Building the Docker image
+
+The `Dockerfile` builds from the ardur repo root (the COPY paths assume that build context):
+
+```bash
+cd ../..   # back to ardur repo root
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    -f examples/autogen-quickstart/Dockerfile \
+    -t rahulnutakki/ardur-demo:autogen \
+    --push .
+```
+
+The image stages the official `ghcr.io/spiffe/spire-agent:1.14.2` binary, installs the AutoGen 0.4 stack, and copies `python/vibap`, the `_shared` helpers, and this directory's `demo.py` into `/app/`. As with the LangChain image: no model identifiers, no API keys are baked in.
+
+### Recorded-asciinema safety note
+
+When recording demos, NEVER pass provider keys via `docker run -e KEY=VAL`. asciinema captures the subprocess command line, which leaks the key into any `.cast` file. Use `--env-file ./.env` instead.
 
 ## Out of scope for this example
 
 - Multi-agent group chat (`SelectorGroupChat`, `RoundRobinGroupChat`) — single-agent flow only. Group chat receipts need turn-attribution semantics that aren't settled yet.
-- Real-cluster SPIRE deployment — the example uses local file-based identity.
+- Real-cluster SPIRE deployment — the example uses the in-image `spire-agent` against a local SPIRE server. Cluster identity comes later under `deploy/k8s/spire/`.
 - Live LLM provider failover — single provider per run.
 - Multi-tenant key isolation — single issuer key.
 
-The protocol-only flow is in `examples/missions/`.
+The protocol-only flow is in [`examples/missions/`](../missions/).

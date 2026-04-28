@@ -205,7 +205,7 @@ _URL_SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.\-]*://", re.IGNORECASE)
 _WINDOWS_DRIVE_RE = re.compile(r"^([A-Za-z]):([\\/].*)?$")
 _WINDOWS_UNC_RE = re.compile(r"^\\\\[^\\]+\\")
 
-# Phase-3.1a C-4 + Phase-3.2 R2-01 (codex F4 / gemini round-2): the set of
+# Phase-3.1a C-4 + Phase-3.2 R2-01 (external-review-X F4 / external-review-G round-2): the set of
 # codepoints that render as a slash but are not ASCII ``/``. Without folding
 # these on input, a value like ``／etc／passwd`` (FULLWIDTH SOLIDUS, U+FF0F)
 # or ``⁄etc⁄passwd`` (FRACTION SLASH, U+2044) is not matched by
@@ -296,7 +296,7 @@ _DEFAULT_PATH_HINTS = frozenset({
     "location", "object_key", "cwd", "directory", "dir",
     "target", "resource",
     "command", "script", "cmd", "file_path",
-    # Phase-3.1b M-1 (gemini F1): `pattern` was previously a PATH hint,
+    # Phase-3.1b M-1 (external-review-G F1): `pattern` was previously a PATH hint,
     # but grep / ripgrep / find / SQL LIKE wrappers all use `pattern`
     # for a REGEX / GLOB / LIKE expression, not a filesystem path.
     # Treating it as a path produced false-DENYs on in-memory-only
@@ -389,7 +389,7 @@ def _sanitize_value(value: str) -> tuple[str, str | None]:
     # 2. NFC Unicode normalization.
     value = unicodedata.normalize("NFC", value)
 
-    # 2a. Phase-3.1a C-4 + Phase-3.2 R2-01 (codex F4 / gemini round-2): fold
+    # 2a. Phase-3.1a C-4 + Phase-3.2 R2-01 (external-review-X F4 / external-review-G round-2): fold
     #     Unicode slash-like variants to ASCII ``/``. NFC (Layer 2) preserves
     #     these codepoints as distinct from ``/``. NFKC would fold U+FF0F only
     #     — empirically verified that U+29F8, U+2215, and U+2044 stay put —
@@ -764,7 +764,7 @@ def _iter_resource_values(
     Depth- and count-bounded. Recurses through dicts/lists/tuples.
     Non-string scalars (int/float/bool/None) are never yielded.
 
-    Phase-3.1a C-2 changes (cursor F2/F3 + codex F1/F2 + SF-P3-02/03):
+    Phase-3.1a C-2 changes (cursor F2/F3 + external-review-X F1/F2 + SF-P3-02/03):
 
     - **Budget decrement only on yield.** The budget counts RESOURCE-LIKE
       strings, not every string scanned. Pre-3.1a, a non-resource string
@@ -891,7 +891,7 @@ def _check_resource_scope(
         return True, ""
     patterns = [p for p in resource_scope if isinstance(p, str) and p]
     if not patterns:
-        # Phase-3.1b M-2 (gemini F4): scope WAS declared but every entry
+        # Phase-3.1b M-2 (external-review-G F4): scope WAS declared but every entry
         # was invalid (None / non-string / empty string). Pre-3.1b this
         # silently devolved to "unrestricted" — the same PERMIT path as
         # "no scope declared" — so a passport with
@@ -952,7 +952,7 @@ def _check_resource_scope(
         if cwd_err is None and cwd_normalized.startswith("/"):
             cwd_anchor = cwd_normalized
 
-    # Phase-3.1a C-2 (cursor F2/F3 + codex F1/F2 + SF-P3-02/03): pass an
+    # Phase-3.1a C-2 (cursor F2/F3 + external-review-X F1/F2 + SF-P3-02/03): pass an
     # out-parameter to the iterator so we can detect DoS-bound exhaustion
     # (depth > MAX_DEPTH or budget <= 0) and FAIL CLOSED. Pre-3.1a, the
     # iterator silently returned early on exhaustion, so a deeply-nested
@@ -1465,7 +1465,7 @@ class GovernanceSession:
             # policy_decisions. compose_decisions() handles the deny-wins
             # semantics when given the full list. Removing the short-circuit
             # costs ~ms per additional backend but preserves the audit contract.
-            # (Phase 3 gemini review CRITICAL #1, 2026-04-17.)
+            # (Phase 3 external-review-G review CRITICAL #1, 2026-04-17.)
             for spec in additional:
                 backend_name = str(spec.get("backend", "?"))
                 policy_label = str(spec.get("label", ""))
@@ -2336,7 +2336,7 @@ class GovernanceProxy:
                         self._seen_kb_nonces.popitem(last=False)
         jti = str(claims["jti"])
 
-        # Passport replay defense (codex audit C-1): reject re-use of a jti
+        # Passport replay defense (external-review-X audit C-1): reject re-use of a jti
         # that already has a live or persisted session. A passport is a
         # single-use credential — once started, it can't be restarted to
         # reset the budget. Use /issue to mint a fresh passport instead.
@@ -2661,7 +2661,7 @@ class GovernanceProxy:
 
         # Resolve additional_policies from the authoritative PolicyStore
         # (if one is configured). This is the server-state-not-credential-
-        # state point codex flagged in the 2026-04-17 review: policies
+        # state point external-review-X flagged in the 2026-04-17 review: policies
         # are loaded at session start, keyed by mission_id, BEFORE the
         # session is cached — so downstream check_and_record sees
         # authoritative policy every call. A caller who got a session
@@ -3440,7 +3440,7 @@ class GovernanceProxy:
             # re-presentation.
             needs_edge_migration = bool(token_hashes) and not lineage_edges
             if needs_edge_migration:
-                # 2026-04-21 PR-#13 gemini + augment ("High"): the
+                # 2026-04-21 PR-#13 external-review-G + augment ("High"): the
                 # prior ``setdefault(jti, (None, None))`` fallback
                 # silently promoted every token_hash jti whose session
                 # couldn't be reconstructed to a ROOT lineage edge.

@@ -56,7 +56,7 @@ def _expected_event_backends(
     native_decision: PolicyDecision,
     extra_decisions: list[PolicyDecision],
 ) -> list[str]:
-    """Post Phase-3 gemini-CRITICAL fix (2026-04-17): the proxy no longer
+    """Post Phase-3 external-review-G-CRITICAL fix (2026-04-17): the proxy no longer
     short-circuits on first Deny. Every registered backend is evaluated
     on every call so the receipt audit trail is complete; deny-wins
     semantics are handled internally by compose_decisions."""

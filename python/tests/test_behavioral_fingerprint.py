@@ -30,6 +30,19 @@ from vibap.behavioral_fingerprint import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _anthropic_model_for_tests(monkeypatch):
+    """Auto-set ANTHROPIC_MODEL for every test in this module.
+
+    AnthropicChallenger requires a model id at construction time (no
+    hard-coded default). Tests don't actually call the real API — they
+    inject a mock client — but the constructor still needs *some* model
+    id to satisfy the contract. Tests that want to assert the
+    no-model-id failure path explicitly delenv inside their own scope.
+    """
+    monkeypatch.setenv("ANTHROPIC_MODEL", "test-model-id")
+
+
 # --------------------------------------------------------------------------
 # Protocol / runtime-checkable
 # --------------------------------------------------------------------------
@@ -156,9 +169,18 @@ def test_anthropic_challenger_refuses_wrong_env_value(monkeypatch) -> None:
 
 def test_anthropic_challenger_accepts_activation_value(monkeypatch) -> None:
     monkeypatch.setenv("ARDUR_BEHAVIORAL_FINGERPRINT", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_MODEL", "test-model-id")
     c = AnthropicChallenger(anthropic_client=Mock())
-    assert c.model == "claude-sonnet-4-5"
+    # Model id comes from the env var; no specific model name is hard-coded.
+    assert c.model == "test-model-id"
     assert len(c._version) == 12  # sha256[:12]
+
+
+def test_anthropic_challenger_requires_model_id(monkeypatch) -> None:
+    monkeypatch.setenv("ARDUR_BEHAVIORAL_FINGERPRINT", "anthropic")
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    with pytest.raises(RuntimeError, match="requires a model id"):
+        AnthropicChallenger(anthropic_client=Mock())
 
 
 # --------------------------------------------------------------------------

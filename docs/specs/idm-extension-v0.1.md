@@ -249,4 +249,4 @@ SHOULD be registered.
 - Workstream E.7 / `PLAN.md` — IDM empirical evaluation specification.
 - `docs/session-2026-04-14/05-cpo-call-prep/unified-steps-final.md` §2.1 — Sharp
   decision placing IDM as extension, not core.
-- `protocol-direction-kimi.md` — Original IDM proposal and 12-week blueprint.
+- `protocol-direction-analysis.md` — Original IDM proposal and 12-week blueprint.

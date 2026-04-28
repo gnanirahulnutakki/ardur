@@ -32,6 +32,40 @@ We especially welcome contributions that improve:
 - Do not land docs that market a capability more strongly than the evidence
   allows.
 
+## No specific LLM model names in public surfaces
+
+Public-facing artifacts in this repository must not name specific LLM
+products or model identifiers. This applies to docs, READMEs, comments,
+docstrings, commit messages, PR descriptions, recorded media metadata,
+and any test fixture or default-parameter literal that would surface a
+model id when read.
+
+The rule exists for two reasons. First, model identifiers churn fast and
+hard-coded names age the public surface visibly within months. Second,
+benchmarks and adapters that name a specific model imply we recommend or
+endorse it; we don't, and the protocol is meant to be model-agnostic.
+
+In practice:
+
+- Use generic phrasing: "a frontier LLM provider", "an open-weight local
+  model", "the LLM under test", "a major model family".
+- For configurable defaults, source the model id from an environment
+  variable (e.g. `ANTHROPIC_MODEL`, `OPENAI_MODEL`) or require the
+  caller to pass it explicitly. Don't ship a hard-coded literal.
+- For attribution of review findings, use opaque codes (e.g.
+  "external-review-G F6", "external review round 2") rather than naming
+  the reviewing tool.
+- For framework-name references, frameworks (LangChain, AutoGen, etc.)
+  are fine — they're libraries, not LLM models. Vendor names without a
+  model identifier (Anthropic, OpenAI, Google) are acceptable when the
+  context is "API provider" rather than "specific model".
+
+The CI `secret-scan` workflow includes a model-name gate that blocks
+PRs containing common model-id patterns. If you have a legitimate need
+to name a model in a private context (e.g. an internal benchmark log
+that lives in a gitignored path), keep that material out of tracked
+files entirely.
+
 ## Current public repo note
 
 This repo is opening in phases. Until the curated runtime code lands here, many

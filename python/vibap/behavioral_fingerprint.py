@@ -35,8 +35,8 @@ Three design points keep this honest:
    attacker sees only ``sha256(response)``, not the response text.
 
 2. **Temperature-zero semantic canaries, not output-exact.** We ask for
-   short categorical answers (1-2 words) where benign Claude produces
-   one answer deterministically and a jailbroken model produces
+   short categorical answers (1-2 words) where a benign frontier model
+   produces one answer deterministically and a jailbroken model produces
    something else. E.g., the canonical refusal word, a specific word
    count, a classification outcome.
 
@@ -188,7 +188,11 @@ class NullChallenger:
 
 
 class AnthropicChallenger:
-    """Challenger backed by the Anthropic API (claude-sonnet-4-5 default).
+    """Challenger backed by the Anthropic API.
+
+    The model id is supplied at construction time via the ``model``
+    parameter or via the ``ANTHROPIC_MODEL`` env var. No model id is
+    hard-coded in this class.
 
     Activated only when ``ARDUR_BEHAVIORAL_FINGERPRINT=anthropic``.
     Constructing one without that env var raises to prevent accidental
@@ -200,16 +204,22 @@ class AnthropicChallenger:
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-5",
+        model: str | None = None,
         timeout_s: float = 10.0,
         anthropic_client: Any = None,
     ) -> None:
+        resolved_model = model or os.environ.get("ANTHROPIC_MODEL", "")
+        if not resolved_model:
+            raise RuntimeError(
+                "AnthropicChallenger requires a model id. Pass model=... or "
+                "set the ANTHROPIC_MODEL env var."
+            )
         if os.environ.get(self.ENV_FLAG) != self.ACTIVATION_VALUE:
             raise RuntimeError(
                 f"{self.ENV_FLAG} must equal {self.ACTIVATION_VALUE!r} to "
                 f"construct AnthropicChallenger (got {os.environ.get(self.ENV_FLAG)!r})"
             )
-        self.model = model
+        self.model = resolved_model
         self.timeout_s = float(timeout_s)
         self._client = anthropic_client  # injected in tests; lazily built in prod
         self._version = self._compute_version()

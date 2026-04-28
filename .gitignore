@@ -1,6 +1,22 @@
 .DS_Store
 .venv/
 .ardur/
+.vibap/
 .claude/
 __pycache__/
 *.pyc
+
+# Python packaging side-effects from `pip install -e .`
+*.egg-info/
+
+# Go build artifacts when binaries land in the repo root rather than $GOBIN.
+go/authority
+go/governor
+go/operator
+go/webhook
+go/cli
+go/benchmark_live
+go/benchmark_sparse
+go/cedar-benchmark-wrapper
+go/specvalidate
+go/benchcheck

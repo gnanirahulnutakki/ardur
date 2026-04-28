@@ -1,9 +1,5 @@
 # LangChain + Ardur quickstart
 
-Placeholder. The adapter code lives in the private research repo and is being imported with the public-name cleanup applied; this directory describes what lands when that import finishes.
-
-## What this example will demonstrate
-
 A LangChain agent making tool calls through Ardur's governance proxy. The agent runs under an Ardur-issued mission credential, calls a small set of tools (read, write, summarize), and Ardur:
 
 1. Issues a Mission Declaration signed by the local issuer key
@@ -13,46 +9,65 @@ A LangChain agent making tool calls through Ardur's governance proxy. The agent 
 
 The integration point is the LangChain tool callback layer — the proxy wraps `BaseTool.invoke` so verification runs before the underlying tool body, and receipts emit on both success and exception paths.
 
-## Dependencies
-
-- `python/` editable install (this repo, `pip install -e ../python`; CLI is `ardur`, module imports are `vibap`)
-- `langchain ^0.3.0`
-- LLM access: local Ollama via `OllamaChat`
-- Optional: Docker for the recorded asciinema flow
-
-LangChain 0.3 split out `langchain-core`; the adapter pins `langchain-core ^0.3` directly to avoid surprises when a future `langchain` minor pulls in something incompatible.
-
-## File layout (when imported)
+## File layout
 
 ```
 langchain-quickstart/
 ├── README.md              # this file
-├── run.sh                 # one-line runner
-├── src/
-│   ├── agent.py           # the agent definition
-│   └── tools.py           # tool stubs (read, write, summarize)
-├── mission.json           # the Mission Declaration the agent runs under
-└── expected-receipt.json  # what a clean run produces, for diff-testing
+├── Dockerfile             # for the rahulnutakki/ardur-demo:lang image
+└── demo.py                # the LangChain agent + scenarios entrypoint
 ```
 
-## Run (when available)
+`demo.py` imports framework-agnostic helpers from [`examples/_shared/demo_scenes.py`](../_shared/demo_scenes.py) — provider selection, SVID fetch, Biscuit issuance, governed-session setup, receipt-chain verification, end-of-session attestation. The split keeps each per-framework demo small.
+
+## Dependencies
+
+- Python 3.13+
+- `python/` editable install (this repo, `pip install -e ../../python[dev]`; the CLI is `ardur`, module imports are `vibap`)
+- `langchain ^0.3.0` plus `langchain-core ^0.3.0`, `langchain-ollama`, `langchain-openai`, `langchain-anthropic`, `langgraph`
+- LLM access: any provider that LangChain supports — local Ollama, an OpenAI-compatible gateway, an Anthropic API key, etc.
+- Optional: Docker for the recorded asciinema flow (`rahulnutakki/ardur-demo:lang`)
+
+## Running locally
 
 ```bash
-cd langchain-quickstart
-./run.sh
-# Output:
-#   - mission compiled
-#   - agent started with passport
-#   - tool calls + per-call verdicts
-#   - session attestation printed at exit
+# 1. Install the runtime
+cd ../../python && pip install -e '.[dev]'
+
+# 2. Pick a provider + model id
+export ARDUR_PROVIDER=ollama
+export OLLAMA_MODEL='<your local model tag>'
+
+# 3. Run the demo from this directory
+cd ../examples/langchain-quickstart
+PYTHONPATH=../_shared python demo.py
 ```
 
-`expected-receipt.json` is byte-comparable against the real receipt minus the timestamp and signature fields, which makes it cheap to regression-test the adapter with `diff` in CI.
+`ARDUR_PROVIDER` selects the backend (`ollama` / `openai` / `anthropic`). The matching `*_MODEL` env var is required and tells the demo which model id to drive — no model identifiers are hard-coded in `demo_scenes.py` per the project rule (see [CONTRIBUTING.md](../../CONTRIBUTING.md)). For an OpenAI-compatible gateway, set `OPENAI_BASE_URL` alongside `OPENAI_API_KEY`.
+
+## Building the Docker image
+
+The `Dockerfile` is designed to build from the ardur repo root so the COPY paths resolve cleanly:
+
+```bash
+cd ../..   # back to ardur repo root
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    -f examples/langchain-quickstart/Dockerfile \
+    -t rahulnutakki/ardur-demo:lang \
+    --push .
+```
+
+The image installs the LangChain stack and copies `python/vibap`, the `_shared` helpers, and this directory's `demo.py` into `/app/`. No secrets and no model identifiers are baked in; supply them at run time via `--env-file` (preferred — see the cast-recording note below) or per-invocation `-e` flags.
+
+### Recorded-asciinema safety note
+
+When recording demos, NEVER pass provider keys via `docker run -e KEY=VAL` — asciinema captures the subprocess command line, which leaks the key into any `.cast` file produced. Use `--env-file ./.env` instead. This is the discipline that produced the 2026-04-20 leak audit; the recording pipeline at `media/casts/` already honours it.
 
 ## Out of scope for this example
 
-- Real-cluster SPIRE deployment — the example uses local file-based identity. Cluster identity comes later.
+- Real-cluster SPIRE deployment — the example uses local file-based identity (the `bringup.sh` helper in `_shared` brings up a local SPIRE on Docker). Cluster identity comes later under `deploy/k8s/spire/`.
 - Live LLM provider failover — single provider per run.
 - Multi-tenant key isolation — single issuer key.
 
-If you want any of the above, look at `examples/missions/` for the protocol-only flow and combine it with your own deployment patterns.
+If you want any of the above, look at [`examples/missions/`](../missions/) for the protocol-only flow and combine it with the deployment material under [`deploy/k8s/spire/`](../../deploy/k8s/spire/).

@@ -195,7 +195,7 @@ class TestTTLClamping:
 
 
 class TestBudgetNarrowing:
-    """Regression tests for codex audit C-2 / feature-dev BUG-02:
+    """Regression tests for external-review-X audit C-2 / feature-dev BUG-02:
     child must NOT inherit the parent's full budget."""
 
     def test_child_budget_capped_at_parent_remaining(self, private_key, public_key):
@@ -281,7 +281,7 @@ class TestBudgetNarrowing:
 
 
 class TestResourceScopeNarrowing:
-    """Regression tests for gemini audit 2.2: child resource_scope was copied
+    """Regression tests for external-review-G audit 2.2: child resource_scope was copied
     verbatim (never intersected). Now child can request narrower scope."""
 
     def test_child_scope_subset_accepted(self, private_key, public_key):
