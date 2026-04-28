@@ -1,0 +1,95 @@
+# Protocol overhead — what to measure and what we'll publish
+
+A reviewer asked the right question: **"How much does Ardur inflate the protocol in payload size, latency, and audit volume? Published numbers would help."** The answer is "we have internal numbers; we don't have publishable numbers yet; here's the methodology so the eventual publication is verifiable."
+
+This document is the methodology side of the answer. The numbers land alongside Phase 7 of the public-import work (the benchmark suites). Until then, this page exists so a reader can see what we'll measure and decide whether the methodology is honest.
+
+## Three dimensions, three measurement strategies
+
+### Payload size
+
+The pieces Ardur adds to a stock OAuth/AAT flow:
+
+- **Mission Declaration** at session start — one signed JWT issued once per session
+- **Delegation Grant** — same as AAT; not net-new for an AAT-using deployment
+- **Execution Receipt** — one signed JWT per tool call
+
+Methodology:
+
+1. Snapshot the wire bytes of one full session (typical 12-call agent: mission declaration, 12 grants, 12 receipts).
+2. Compare against the same session with no Ardur (just OAuth-bearer + plain function call audit log).
+3. Report median and p95 byte counts per session and per call.
+
+What we expect from internal measurements: **mission declaration ~800-1500 bytes signed**; **execution receipt ~600-1200 bytes signed**. Per-call overhead in the hundreds of bytes range, not the kilobyte range. Worst case is the post-action attestation path (mission with many post-conditions): an extra ~500-1500 bytes.
+
+The honest caveat: receipt size scales with the policy-decisions array. If a deployment runs five policy backends voting on every call, receipts grow. This is a deployment-quality knob, not a protocol-overhead floor. We'll publish numbers for the `native + cedar + forbid-rules` three-backend default.
+
+### Latency
+
+The pieces Ardur adds to a tool call's wall-clock:
+
+- **Verifier evaluation** before the tool runs — scope check + budget check + side-effect class + delegation chain check
+- **Receipt signing** after — one ES256 signature
+- **Optional post-action attestation** for inherently non-deterministic calls
+
+Methodology:
+
+1. Run a stable mission on a stable LLM (we'll use Llama 3.1 8B local for reproducibility — no API rate-limiting, no provider variance).
+2. Measure tool-call wall-clock with and without the Ardur proxy in path.
+3. Report median, p95, p99 of (proxy-on minus proxy-off) per call.
+
+What internal numbers showed: **median verifier overhead ~3-8ms, p95 ~12ms, p99 ~25ms** when the policy backends are warm and the credential cache is hot. Cold-start adds ~30ms one-time for key derivation. These numbers are dwarfed by the LLM inference time (~1-3 seconds per call), so the relative overhead in an LLM-driven session is small.
+
+The honest caveat: latency depends on policy-engine choice. Cedar evaluation is fast (sub-millisecond for typical policies); a custom Datalog backend can be slower. Numbers will be reported per-backend.
+
+### Audit volume
+
+The piece Ardur adds: every tool call emits a signed Receipt. Some deployments find this great (real audit trail); some find it expensive (high-volume agents producing kilobytes per call).
+
+Methodology:
+
+1. Project receipts-per-day for typical deployment shapes:
+   - Single-agent dev assistant (~50 calls/hour): ~1.2k receipts/day, ~1-2 MB/day signed
+   - Production multi-agent (~5k calls/hour across 100 agents): ~120k receipts/day, ~70-150 MB/day signed
+   - High-throughput automation (~50k calls/hour): ~1.2M receipts/day, ~700 MB/day signed
+2. Compare against equivalent OAuth-only audit volumes from each agent's framework's default audit log.
+3. Compare against compliance-tier requirements (SOC 2, ISO 27001) — what an auditor would expect to see vs what each protocol produces.
+
+What we expect: Ardur's per-receipt size is comparable to a typical structured audit log entry. The signature adds ~400 bytes vs an unsigned log line. The chain-hash adds ~64 bytes per receipt. Total: signing+chain overhead is ~10-15% of the receipt size, not 100%.
+
+The honest caveat: the receipt is *more useful* than a log line — it's tamper-evident, offline-verifiable, replayable. Comparing byte counts without acknowledging the difference in security guarantees is like comparing the bandwidth cost of HTTPS to HTTP and concluding HTTPS is wasteful. The right comparison is "is the protocol's audit volume justified by its evidence guarantee?" That's a deployment-context question; the numbers are an input to the conversation, not the conclusion.
+
+## What we'll publish
+
+Phase 7 of the public-import work publishes:
+
+1. **`artifacts/ardur-era-<date>/overhead/payload-bytes.json`** — wire byte counts per Mission Declaration, Delegation Grant, Execution Receipt, post-action attestation. Median and p95 per kind. Per backend configuration.
+2. **`artifacts/ardur-era-<date>/overhead/latency-distribution.json`** — verifier-evaluation latency distribution (median/p95/p99) per backend, cold-start vs warm-cache. Tool-call wall-clock with and without proxy in path.
+3. **`artifacts/ardur-era-<date>/overhead/receipts-per-day-projections.md`** — receipts-per-day projections for documented deployment shapes, with signing+chain-hash overhead broken out.
+
+Each artifact has:
+- A `methodology.md` describing how the measurement was made
+- The raw data
+- The summary stats
+- A reproduction script that re-runs the measurement on a fresh checkout
+
+Reproducibility is the load-bearing claim. A reader who doesn't trust our numbers can run the script and produce their own. If they get different numbers, that's a bug or a regression and we want to know.
+
+## Why we don't publish until then
+
+Two reasons we're not pulling internal numbers into the public docs today:
+
+1. **The internal numbers were measured under the pre-Ardur runtime name.** Re-running them under the renamed Ardur runtime is part of Phase 2 of the lift. Until that re-run lands, citing the old numbers in public would be the same overclaim trap that we've been avoiding everywhere else: "Ardur block rate: X" with results from a runtime that wasn't called Ardur. Phase 2 closes that gap.
+2. **The internal numbers haven't passed adversarial review.** The codex review rounds we've been running on doc/spec changes work for prose. The benchmark numbers need a different review discipline — at minimum a re-run by an independent reviewer who didn't author the test harness. That review process happens alongside the public re-run.
+
+So the trade-off is: published-now-with-caveats vs published-when-honest. We're choosing honest.
+
+## What this means for the OAuth comparison
+
+The [OAuth comparison doc](./oauth-and-managed-agent-auth.md) makes three testable claims (cumulative budget, side-effect classification, delegation provenance). The protocol overhead numbers are not what those claims rest on — they rest on the *capability gap*, not the cost of closing it. But the overhead numbers are what a deployer needs to decide whether the cost of closing the gap is acceptable in their environment.
+
+When Phase 7 publishes, both documents update with the same artifact paths. A reader can move from "should we use this?" (capability) to "what does it cost?" (overhead) without leaving the docs.
+
+## Standing question for the reader
+
+If you have a deployment shape that doesn't fit the three projected shapes above (single-agent dev, production multi-agent, high-throughput automation), tell us. The benchmark methodology can take additional shapes. [GitHub Discussions](https://github.com/gnanirahulnutakki/ardur/discussions) Q&A is the right place for this; we read it.

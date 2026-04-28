@@ -1,0 +1,83 @@
+# How Ardur evaluates an action it hasn't seen yet
+
+A reviewer raised a sharp point about the protocol's pre-action evaluation hook: **"In practice, LLM-driven calls are often not deterministically known at pre-action time, which may challenge Hook 2's evaluation model."** They're right that this is the load-bearing engineering question. Most agent-governance proposals waved at the pre-action hook and didn't say what happens when the hook can't actually decide. This document describes how Ardur handles it.
+
+## The setup
+
+Ardur's verifier sits between the agent and the tool. When the agent emits a tool call, the verifier receives:
+
+1. The agent's session context (Mission Declaration, current budget state, delegation chain)
+2. The tool name and an *argument descriptor* — what we know about the call before it runs
+3. Any side-channel signals (semantic-judge, behavioral-fingerprint, training-attestation if configured)
+
+The verifier produces a verdict (`compliant` / `violation` / `insufficient_evidence`) and emits an Execution Receipt. This is "Hook 2" in the protocol: the per-tool-call evaluation point.
+
+The reviewer's challenge is correct: the **argument descriptor is not always deterministic**. An LLM-generated `read_file` call might have an arg like `path=/tmp/{user_input}/report.csv` where `{user_input}` is templated at runtime, or worse, the argument is the result of a previous tool call that hasn't completed yet. The "what does this call do?" question doesn't always have a complete answer at pre-action time.
+
+There are three honest responses to this. Ardur uses all three depending on the call.
+
+## Response 1: pre-action evaluation when the descriptor IS deterministic
+
+The cleanest case. The agent calls `read_file(path="/sales/q1.csv")` with a literal string. The verifier:
+
+- Checks the path against `resource_scope` in the Mission Declaration
+- Checks the tool against `allowed_tools`
+- Checks the running budget for the side-effect class (in this case, `storage_read`)
+- Returns a verdict before the call executes
+
+This is the "Hook 2" model people imagine when they think about pre-action governance. It works for the majority of agent tool calls in practice — most argument values are concrete by the time the call leaves the agent.
+
+When this path produces `compliant`, the call proceeds, the actual tool result feeds back to the agent, and a Receipt is emitted. The Receipt records the same fields the verdict was based on, so an auditor can replay the decision.
+
+## Response 2: tri-state abstention when the descriptor is genuinely incomplete
+
+When some part of the argument can't be resolved at pre-action time — typically because it's templated against another tool's pending output, or because it's a streaming/iterator argument that doesn't materialise in advance — the verifier doesn't pretend to decide.
+
+It returns `insufficient_evidence`. The default deployment posture for `insufficient_evidence` is **fail-closed**: block the call, emit the Receipt with the missing-evidence flag, surface what was missing.
+
+This is the design-choice that the [Partial Visibility article](../articles/03-partial-visibility-and-the-unknown-state.md) covers. The value is honesty: a verifier that returns `compliant` for an action it couldn't actually evaluate is worse than one that abstains, because downstream audit pipelines can't tell the difference between "evaluated and approved" and "couldn't evaluate but said yes anyway."
+
+In practice, *fail-closed-on-uncertainty* drives agents toward emitting fully-resolved arguments at the verifier boundary. This is a real workflow change for some integrations — the agent can't lazily defer argument resolution past the hook. The trade-off is that the system is honest about what it knows. Per ADR-021, the verifier requires the agent to bind argument provenance with KB-JWT proof-of-possession at the call boundary, which forces the agent to commit to the resolved arguments before the verifier evaluates.
+
+For deployments where fail-closed is too strict (e.g. internal analytics pipelines where speculative tool calls are the norm), the public verifier contract allows binding an explicit `insufficient_evidence_policy` of `fail-open-with-attestation` — the call proceeds but the Receipt records the unevaluated dimension explicitly. Downstream consumers can opt in or out of trusting these. The exception has to be set per-deployment and is visible in every Receipt the verifier emits.
+
+## Response 3: post-action evaluation for genuinely unknowable arguments
+
+Some calls are inherently non-deterministic in their effect. A `query_llm(prompt="...")` call's "side effect" depends on what the model returns, which is by definition not known at pre-action time. Ardur's response is to split the verdict in two:
+
+- **Pre-action verdict:** evaluates the *call itself* — is the agent allowed to invoke `query_llm` at all, given its mission? This produces a Receipt at call time.
+- **Post-action attestation:** when the call returns, the verifier evaluates the result against any *post-conditions* the mission declared (e.g. "no PII in outbound text", "no instructions to delete files in returned content"). This produces a separate signed attestation.
+
+Both Receipts chain to the same call. The pre-action one says "this call was permitted to run." The post-action one says "the result conformed to the mission's post-conditions." If the post-action one fires `violation`, the verifier can take whatever recourse the mission specifies — block downstream tool calls in the chain, escalate to human review, void the session.
+
+This is the case the [Tool Response Provenance](../specs/conformance-profiles-v0.1.md) profile addresses. It's MIC-State conformance level — beyond what scope-only enforcement can express, but well-defined and implementable.
+
+## Why this isn't a research project
+
+The reviewer's framing implies a worry that Ardur's hook model collapses on real LLM traffic. The honest answer: the three responses above were the result of running the protocol against actual LLM-driven agents (LangChain, LangGraph, AutoGen) with real models (Claude, GPT-4o, Llama, Mistral) over a 324-run benchmark matrix. The pre-action descriptor was complete enough for evaluation in the majority of calls. The cases where it wasn't drove the design of the tri-state verdict and the post-action attestation split.
+
+The benchmark numbers from that matrix back the claim quantitatively. They live in the private research tree right now; they re-run publicly under Phase 7 of the lift, with the matrix output landing under `artifacts/ardur-era-*/matrix-324/`. Until those numbers are public, this document is the qualitative version of the answer.
+
+The qualitative answer should hold up without the numbers, because the design is grounded in three observations that don't depend on a specific benchmark:
+
+1. **Most LLM tool calls are concrete at the verifier boundary.** Templated arguments are common but not dominant; most production agents resolve before invoking.
+2. **Honest abstention beats false approval.** A verifier that admits "I don't know" is more useful in a security audit than one that says "compliant" without evidence.
+3. **Some side effects are genuinely unknowable in advance.** The protocol acknowledges this with a separate post-action attestation rather than pretending the pre-action hook can decide.
+
+If those three observations are wrong about your deployment, Ardur's hook model needs to change — and we should hear about that. If they're right, the design is sound.
+
+## What this means for an integrator
+
+If you're wiring up a framework adapter or building a custom agent against Ardur:
+
+- **Default**: bind your tool calls' arguments before invoking the verifier. Provide concrete arg values, not deferred templates. The verifier will evaluate cleanly in the pre-action path.
+- **When you can't**: the verifier returns `insufficient_evidence` and fail-closed unless you opt out at deployment time. The opt-out is visible in every Receipt; reviewers can audit it.
+- **For inherently non-deterministic calls** (LLM queries, iterator/streaming results): split the evaluation. Pre-action approves the call's existence; post-action attestation evaluates the result against mission post-conditions.
+
+The framework example stubs under `examples/*-quickstart/` will demonstrate each of these three paths once the per-framework adapter code lands publicly.
+
+## Open question
+
+We don't claim this hook model handles every case perfectly. The boundary case we're least sure about is **streaming tool calls** — agent calls where the result arrives as a stream of partial outputs over time, and the mission has post-conditions that span the stream. The current design says you emit one post-action attestation when the stream closes. But missions that say "fail the call early if PII appears in the first 10 KB" need the verifier to evaluate continuously. We've prototyped this with `evaluate_streaming` callbacks but haven't shipped them publicly. Phase 7 publishes the streaming benchmark suite alongside the main matrix and the gap closes there.
+
+This is a real reviewer question, not a marketing question. If you have a streaming use case that breaks our model, that's exactly the kind of feedback the [GitHub Discussions](https://github.com/gnanirahulnutakki/ardur/discussions) Q&A category exists for. The reviewer who raised the original concern is doing us a favour by surfacing it; the answer is "we have one, here it is, let's stress-test it."
