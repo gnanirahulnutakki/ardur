@@ -20,11 +20,11 @@ permissions:
 
 jobs:
   # Pre-flight: detect whether the tree currently has any languages
-  # CodeQL can analyse. The public ardur tree is content-only at
-  # Phase 0; Python lands in `python/` at Phase 1, Go in `go/` at
-  # Phase 5. Without this guard, `codeql-action/init` fails on
-  # "no supported languages found", which blocks merges via the
-  # `code_quality` ruleset rule.
+  # CodeQL can analyse. The repo opened before code landed, and this
+  # guard still keeps the workflow valid if language directories are
+  # temporarily absent in a future branch. Without it,
+  # `codeql-action/init` fails on "no supported languages found",
+  # which blocks merges via the `code_quality` ruleset rule.
   detect-languages:
     runs-on: ubuntu-latest
     outputs:

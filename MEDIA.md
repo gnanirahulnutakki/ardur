@@ -1,7 +1,6 @@
 # Media
 
-This Phase 0 shell includes a small set of starter recordings for the public
-repo.
+This repo includes a small set of starter recordings for the public surface.
 
 These are terminal recordings in asciinema `.cast` format. They are useful for
 showing the product direction now, while rendered GIF or MP4 versions and
@@ -40,11 +39,10 @@ and artifact paths (`docs/scripts/run_live_core_capability_proof.py`,
 imported into this public repo. Treat them as **archival recordings**, not
 as "run these yourself" reproducers.
 
-The re-runnable proof path lands alongside the Phase 1 code lift per
-[docs/public-import-plan.md](docs/public-import-plan.md). When the scripts
-and artifact paths referenced in these casts are public, the casts will be
-re-recorded against the renamed Ardur runtime and this caveat will be
-removed.
+The re-runnable proof path lands after the public runtime imports have stable
+verifier commands and artifact paths. When the scripts and artifact paths
+referenced in these casts are public, the casts will be re-recorded against the
+renamed Ardur runtime and this caveat will be removed.
 
 ## Suggested Next Media Drops
 

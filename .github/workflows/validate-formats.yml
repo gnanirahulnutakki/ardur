@@ -3,9 +3,8 @@ name: validate-formats
 # Runs on every push and PR. Validates that the small set of structured
 # files in the repo today actually parse — covers the gap between
 # "secret-scan + link-check" and "we have real code with real tests."
-# When Phase 1 lands the Python runtime, a separate python-ci.yml will
-# join this set; this workflow does NOT pretend to be a substitute for
-# that.
+# Dedicated runtime workflows should join this set for Python and Go;
+# this workflow does NOT pretend to be a substitute for those tests.
 #
 # No untrusted GitHub event inputs are interpolated into run blocks;
 # all paths come from `find` inside the runner.

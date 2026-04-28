@@ -37,25 +37,30 @@ The public wedge is narrower than the internal monorepo story:
 
 That is more distinctive than competing on "guardrails" alone.
 
-## Naming Transition
+## Naming Boundary
 
-For this Phase 0 public shell, `Ardur` is the public name.
+`Ardur` is the public product and repo name.
 
 `VIBAP`, `MCEP`, and related protocol names remain useful where they identify
 the implementation lineage, evidence model, or protocol research roots. The
 public repo should preserve those names when they are technically meaningful
 and avoid obsolete product codenames in public-facing copy.
 
-## Why This Repo Starts Thin
+## Why This Repo Opens In Phases
 
-This Phase 0 shell exists so the public repo can start now without pretending
-the full exported codebase has already landed.
+This repo opens in phases so the public surface stays understandable and
+truthful while code, deployment material, proof artifacts, and examples are
+curated into the public layout.
 
-The repo opens with:
+The repo now includes:
 
 - intent
 - status
 - roadmap
+- public v0.1 specs
+- curated Python and Go runtime imports
+- mission examples and framework example stubs
 - selected recordings
 
-Then it grows into the fuller code-bearing product repo in later drops.
+The remaining work is packaging, end-to-end proof paths, runnable framework
+examples, and deployment validation.

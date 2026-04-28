@@ -1,26 +1,29 @@
 # Roadmap
 
-## Phase 0
+## Public Foundation
 
-Open the public repo with:
+Already present:
 
 - README and product intent
 - research-informed positioning
 - current status and known gaps
 - selected example recordings
 - `Ardur` as the public-facing product name
+- public v0.1 specs
+- curated Python and Go runtime imports
+- mission examples and framework stubs
 
-## Phase 1
+## Runtime Verification
 
-Add the first code-bearing public drop:
+Next hardening work:
 
-- curated Python runtime and CLI surfaces
-- selected examples
-- public-safe proof and verifier entry points
+- dedicated Python and Go CI
+- local quickstart that matches exported repo paths exactly
+- public-safe proof and verifier entry points with stable artifact paths
 - explicit naming boundaries for `Ardur`, `VIBAP`, `MCEP`, and related
   protocol surfaces
 
-## Phase 2
+## Proof Story
 
 Strengthen the public proof story:
 
@@ -28,7 +31,7 @@ Strengthen the public proof story:
 - public artifact paths
 - broader proof-backed capability coverage
 
-## Phase 3
+## Expansion
 
 Expand the repo carefully:
 

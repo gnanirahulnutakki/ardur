@@ -39,5 +39,5 @@ dependencies:
     repository: "https://spiffe.github.io/helm-charts-hardened"
     condition: spire.enabled
     # Optional: operators with an existing SPIRE deployment should
-    # set spire.enabled=false and point ardur at their SVID
+    # set spire.enabled=false and point Ardur at their SVID
     # workload API socket via .Values.spire.socketPath.

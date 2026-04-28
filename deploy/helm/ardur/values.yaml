@@ -1,4 +1,4 @@
-# Default values for ardur chart.
+# Default values for the Ardur chart.
 # This is a skeleton — real components are scaffolded but not
 # production-ready. See templates/README.md for what's stubbed.
 
@@ -15,7 +15,7 @@ global:
 
 # -----------------------------------------------------------------
 # SPIRE dependency — set enabled=false if the cluster already runs
-# SPIRE and you want ardur to attach via workload API.
+# SPIRE and you want Ardur to attach via workload API.
 # -----------------------------------------------------------------
 
 spire:
