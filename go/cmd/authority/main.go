@@ -222,7 +222,10 @@ func (a *authority) handleSign(w http.ResponseWriter, r *http.Request) {
 	count := a.signCount
 	a.mu.Unlock()
 
-	log.Printf("[Sign] agent=%s policy_hash=%s count=%d tee=%s",
+	// %q quotes and escapes control characters in user-supplied values
+	// to prevent log-injection via newline/CR/etc. in agent_id or
+	// policy_hash. CodeQL go/log-injection recognises %q as a sanitizer.
+	log.Printf("[Sign] agent=%q policy_hash=%q count=%d tee=%s",
 		req.AgentID, req.PolicyHash, count, a.attestation.Technology)
 
 	resp := signResponse{
