@@ -1,0 +1,361 @@
+# MCEP Conformance Profiles v0.1
+
+> **Public-import note.** This document was authored against the private
+> research repo's `docs/spec/` layout. In the public ardur tree, migrated specs
+> live under `docs/specs/`. Any `docs/spec/...` path reference in the body of
+> this document refers to the original private layout; the public-tree mapping
+> is in [`docs/specs/README.md`](./README.md). Some companion specs have not
+> yet been imported.
+
+## Status
+
+This document defines version `v0.1` of the conformance profile matrix for
+the MCEP (Mission-Controlled Execution Protocol) runtime-governance protocol.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+"OPTIONAL" in this document are to be interpreted as described in RFC 2119
+and RFC 8174 when, and only when, they appear in all capitals.
+
+## 1. Introduction
+
+MCEP defines a layered conformance model so that vendors and deployments claim
+specific capabilities rather than a monolithic "compliant / not-compliant"
+binary. Each profile is a strict superset of the one below it.
+
+This document is the authoritative, independently linkable reference for the
+conformance matrix. It extracts and formalizes the embedded conformance
+language from:
+
+- A.1 / Mission Declaration (`docs/spec/mission-declaration-v0.1.md` §8.16,
+  §10.3, Appendix A.4)
+- A.3 / Execution Receipt (`docs/spec/execution-receipt-v0.1.md` §5)
+- A.4 / Verifier Contract (`docs/spec/verifier-contract-v0.1.md` §6.2, §9)
+
+## 2. Profile Hierarchy
+
+The MCEP v0.1 conformance model defines three profiles and one optional
+extension, ordered from weakest to strongest:
+
+```text
+Delegation-Core  ⊂  MIC-State  ⊂  MIC-Evidence  (+IDM extension)
+```
+
+A deployment claiming profile level N MUST satisfy all requirements of every
+profile below N.
+
+The `conformance_profile` claim in the MD (A.1 §8.16) MUST be set to one of:
+
+1. `Delegation-Core`
+2. `MIC-State`
+3. `MIC-Evidence`
+
+The IDM extension (A.7) is not a standalone profile value. It is an optional
+capability layer on top of `MIC-Evidence`.
+
+## 3. Profile Definitions
+
+### 3.1. Delegation-Core
+
+**Purpose**: Minimum viable delegation governance — signed policy envelope,
+capability attenuation, cascading revocation, and basic receipt emission.
+
+**Requirements**:
+
+1. The verifier MUST validate the MD signature (A.1 §5).
+2. The verifier MUST validate the DG chain per AAT §7 and the DG profile
+   (A.2 §4).
+3. The verifier MUST resolve `mission_ref` and verify mission binding
+   (A.2 §3.3).
+4. The verifier MUST evaluate `delegation_policy` attenuation rules
+   (A.1 §8.12).
+5. The verifier MUST check revocation status via `revocation_ref`
+   (A.1 §8.18; A.6 §3).
+6. The verifier MUST apply cascading revocation to descendant grants
+   (A.6 §4).
+7. The verifier MUST emit a linked Execution Receipt (A.3) for every
+   evaluated step. Receipt `parent_receipt_id` MUST chain correctly.
+8. The verifier MUST use the tri-state verdict codomain: `compliant`,
+   `violation`, `insufficient_evidence` (A.4 §4).
+
+### 3.2. MIC-State
+
+**Purpose**: Stateful lineage-budget accounting and typed-projection
+enforcement on top of Delegation-Core.
+
+**Requirements** (in addition to all Delegation-Core requirements):
+
+1. The verifier MUST maintain per-lineage `LineageState` keyed by
+   `root_mission_id` (A.4 §5).
+2. The verifier MUST initialize budget ceilings from
+   `MD.lineage_budgets.per_effect_class` (A.4 §5.5).
+3. The verifier MUST track `consumed_budget` and `reserved_budget` per
+   effect class (`read`, `write`, `network`, `exec`, `external_send`)
+   (A.4 §5.4).
+4. The verifier MUST enforce budget conservation: cumulative consumption
+   MUST NOT exceed the MD ceiling for any effect class (A.4 §9.4).
+5. The verifier MUST enforce sibling-budget conservation in lineage state. It
+   MAY use `reserved_budget_share` as an audit serialization, but MUST NOT make
+   conservation depend on that claim being present (A.2 §6.3).
+6. The verifier MUST enforce `required_telemetry` field presence: if any
+   field named in `MD.required_telemetry` is missing or malformed, the
+   verifier MUST return `insufficient_evidence` (A.4 §6.1).
+7. The verifier MUST verify `observed_manifest_digest` against
+   `MD.tool_manifest_digest` (A.4 §9.6).
+8. The verifier MUST verify envelope signature validity (A.4 §9.5).
+9. The verifier MUST normalize observed side-effect classes into the MD
+   budget-bucket namespace deterministically (A.4 §6.5).
+10. Child DG reservations MUST be recorded in verifier/application lineage
+    state. Child DGs MAY carry `reserved_budget_share` for audit replay
+    (A.2 §6.2).
+
+### 3.3. MIC-Evidence
+
+**Purpose**: Receipt completeness sufficient to fail closed on missing or
+hidden evidence, on top of MIC-State.
+
+**Requirements** (in addition to all MIC-State requirements):
+
+1. The verifier MUST detect hidden hops: if a child action cannot be linked
+   to its parent edge in the delegation graph, the verifier MUST return
+   `insufficient_evidence` (A.4 §9.1).
+2. The verifier MUST track `last_seen_receipts` per grant and detect
+   missing linked receipts (A.4 §5.7).
+3. Every delegation edge MUST produce a downstream ER visible to the
+   verifier. Missing downstream receipts MUST trigger
+   `insufficient_evidence`.
+4. `receipt_policy.level` MUST NOT be `minimal` (A.1 §8.16).
+5. The verifier MUST track `delegation_graph` and maintain a DAG over
+   observed grants (A.4 §5.3).
+6. If `ObservedEvent.visibility` is not `full`, the verifier MUST return
+   `insufficient_evidence`.
+
+## 4. Required Telemetry per Profile
+
+The following table lists the `ObservedEvent` fields (A.4 §6.2) required at
+each profile level. A field marked "REQUIRED" MUST be present and well-typed
+for the verifier to return `compliant`. A field marked "—" is not required
+by that profile but MAY be present.
+
+| Field | Delegation-Core | MIC-State | MIC-Evidence |
+|---|---|---|---|
+| `event_id` | REQUIRED | REQUIRED | REQUIRED |
+| `session_id` | REQUIRED | REQUIRED | REQUIRED |
+| `timestamp` | REQUIRED | REQUIRED | REQUIRED |
+| `actor` | REQUIRED | REQUIRED | REQUIRED |
+| `grant_id` | REQUIRED | REQUIRED | REQUIRED |
+| `tool_name` | REQUIRED | REQUIRED | REQUIRED |
+| `action_class` | REQUIRED | REQUIRED | REQUIRED |
+| `target` | REQUIRED | REQUIRED | REQUIRED |
+| `resource_family` | REQUIRED | REQUIRED | REQUIRED |
+| `side_effect_class` | REQUIRED | REQUIRED | REQUIRED |
+| `budget_delta` | — | REQUIRED | REQUIRED |
+| `visibility` | — | REQUIRED | REQUIRED |
+| `parent_event_id` | — | REQUIRED | REQUIRED |
+| `delegation_from` | — | REQUIRED | REQUIRED |
+| `delegation_to` | — | REQUIRED | REQUIRED |
+| `content_class` | — | REQUIRED | REQUIRED |
+| `content_provenance` | — | REQUIRED | REQUIRED |
+| `sensitivity` | — | REQUIRED | REQUIRED |
+| `instruction_bearing` | — | REQUIRED | REQUIRED |
+| `summary` | — | REQUIRED | REQUIRED |
+| `confidence_hint` | — | RECOMMENDED | RECOMMENDED |
+| `envelope_signature_valid` | — | REQUIRED | REQUIRED |
+| `observed_manifest_digest` | — | REQUIRED | REQUIRED |
+| `parent_receipt_id` | — | — | REQUIRED |
+| `downstream_receipt_ids` | — | — | REQUIRED |
+
+For the IDM extension, the following additional ER annotations are REQUIRED:
+
+| ER Annotation | IDM Extension |
+|---|---|
+| `idm_intent_id` | REQUIRED |
+| `idm_drift_score` | REQUIRED |
+| `idm_verdict` | REQUIRED |
+
+## 5. Operational Modes per Profile
+
+Each profile supports both `enforce` and `attest` modes (A.4 §7). The mode
+affects gating behavior, not verdict calculation.
+
+| Profile | `enforce` | `attest` |
+|---|---|---|
+| Delegation-Core | Block on `violation`. Permit on `compliant`. `insufficient_evidence` follows deployment-local `insufficient_evidence_policy`. | Always permit. Emit ER with actual verdict. |
+| MIC-State | Same as Delegation-Core, plus budget-overspend and manifest-drift violations are blocking. | Same as Delegation-Core, plus budget and manifest verdicts are recorded. |
+| MIC-Evidence | Same as MIC-State, plus hidden-hop and missing-receipt trigger `insufficient_evidence` which follows `insufficient_evidence_policy`. | Same as MIC-State, plus evidence gaps are recorded. |
+| IDM extension | Same as MIC-Evidence, plus `plan_execution_drift` violations are blocking. | Same as MIC-Evidence, plus drift verdicts are recorded. |
+
+In `enforce` mode, the `insufficient_evidence_policy` binding MUST be
+documented explicitly by the deployment (A.4 §7.2).
+
+## 6. Fail-Closed Rule Summary
+
+The following table collects the normative fail-closed rules from A.4 §9
+and maps them to the minimum profile at which each rule applies:
+
+| Condition | Verdict | Public denial reason | Audit-only internal code | Minimum profile |
+|---|---|---|---|---|
+| Hidden hop detected | `insufficient_evidence` | `insufficient_evidence` | `telemetry_missing` | MIC-Evidence |
+| Missing required telemetry | `insufficient_evidence` | `insufficient_evidence` | `telemetry_missing` | MIC-State |
+| Cascading revocation | `violation` | `revoked` | `revoked` | Delegation-Core |
+| Budget over-reserve or overspend | `violation` | `budget_exhausted` | `budget_exhausted` | MIC-State |
+| Envelope signature invalid | `violation` | `policy_denied` | `envelope_tampered` | MIC-State |
+| Manifest digest mismatch | `violation` | `policy_denied` | `manifest_drift` | MIC-State |
+| DG chain invalid | `violation` | `chain_invalid` | `chain_invalid` | Delegation-Core |
+| Memory integrity failure | `violation` | `policy_denied` | `memory_integrity_failure` | MIC-State |
+| Probing rate exceeded | `violation` | `policy_denied` | `probing_rate_exceeded` | MIC-State |
+| Approval fatigue threshold | `violation` | `policy_denied` | `approval_fatigue_threshold` | MIC-State |
+| Plan-execution drift | `violation` | `policy_denied` | `plan_execution_drift` | IDM extension |
+
+## 7. Conformance Test Vector Index
+
+> **Public-import note (2026-04-25):** The original v0.1 spec was authored
+> when both this document and its companion fixtures lived under
+> `docs/spec/` in the private research repo. Public migration relocates
+> the document to `docs/specs/`. The conformance fixture directory has
+> not yet been imported; the references below describe the private
+> layout and will be updated to public paths under `docs/specs/conformance/`
+> once the fixtures land.
+
+Test vectors are stored in `docs/spec/conformance/` (private layout) using
+the JSONL format described in `docs/spec/conformance/README.md`.
+
+Each test vector specifies:
+
+1. `profile` — the conformance profile under test;
+2. `test_id` — stable identifier;
+3. `description` — human-readable description;
+4. `inputs` — MD, DG, ObservedEvent, and LineageState fragments;
+5. `expected_verdict` — one of `compliant`, `violation`,
+   `insufficient_evidence`; and
+6. `expected_public_denial_reason` — when verdict is not `compliant`.
+
+### 7.1. Delegation-Core Vectors
+
+| Test ID | Description | Expected |
+|---|---|---|
+| `DC-01` | Valid delegation chain, all Delegation-Core fields present | `compliant` |
+| `DC-02` | MD signature invalid | `violation` / `policy_denied` |
+| `DC-03` | DG `mission_ref` missing | `violation` / `chain_invalid` |
+| `DC-04` | DG `mission_ref` differs from parent | `violation` / `chain_invalid` |
+| `DC-05` | MD revoked via Token Status List | `violation` / `revoked` |
+| `DC-06` | Ancestor grant revoked, cascading to descendant | `violation` / `revoked` |
+| `DC-07` | Receipt `parent_receipt_id` chain broken | `insufficient_evidence` / `insufficient_evidence` |
+
+### 7.2. MIC-State Vectors
+
+| Test ID | Description | Expected |
+|---|---|---|
+| `MS-01` | Budget consumption within ceiling | `compliant` |
+| `MS-02` | Budget consumption exceeds ceiling | `violation` / `budget_exhausted` |
+| `MS-03` | Sibling over-reserve exceeds parent share | `violation` / `budget_exhausted` |
+| `MS-04` | Required telemetry field missing | `insufficient_evidence` / `insufficient_evidence` |
+| `MS-05` | Manifest digest mismatch | `violation` / `policy_denied` |
+| `MS-06` | Envelope signature invalid | `violation` / `policy_denied` |
+| `MS-07` | Side-effect class normalization ambiguity | `insufficient_evidence` / `insufficient_evidence` |
+
+### 7.3. MIC-Evidence Vectors
+
+| Test ID | Description | Expected |
+|---|---|---|
+| `ME-01` | Full evidence chain, all receipts linked | `compliant` |
+| `ME-02` | Hidden hop: child action with no parent edge | `insufficient_evidence` / `insufficient_evidence` |
+| `ME-03` | Missing downstream receipt after delegation | `insufficient_evidence` / `insufficient_evidence` |
+| `ME-04` | Visibility = `partial` | `insufficient_evidence` / `insufficient_evidence` |
+| `ME-05` | Visibility = `hidden` | `insufficient_evidence` / `insufficient_evidence` |
+
+### 7.4. IDM Extension Vectors
+
+| Test ID | Description | Expected |
+|---|---|---|
+| `IDM-01` | IDM present, no drift | `compliant` |
+| `IDM-02` | IDM present, step-count drift exceeds threshold | `violation` / `policy_denied` |
+| `IDM-03` | IDM present, ordering drift exceeds threshold | `violation` / `policy_denied` |
+| `IDM-04` | IDM absent but MD advertises extension | `insufficient_evidence` / `insufficient_evidence` |
+
+## 8. Security Considerations
+
+### 8.1. Profile Downgrade
+
+An attacker who can modify `MD.conformance_profile` can weaken the verifier's
+evidence requirements. The MD signature (A.1 §5) is the primary defense.
+
+Verifiers MUST verify the MD signature before reading `conformance_profile`.
+
+### 8.2. Profile Mismatch Across Lineage
+
+A child DG MUST NOT claim a weaker conformance profile than the mission root
+(A.1 §8.12.3, rule `profile_nonweakening`). If a verifier observes a child
+operating under a weaker profile than the MD declares, it MUST return
+`violation` with `public_denial_reason = "chain_invalid"`.
+
+### 8.3. Incomplete Evidence vs. Malice
+
+`insufficient_evidence` is an honesty outcome. It does not prove malicious
+intent. Deployments MUST NOT automatically escalate `insufficient_evidence`
+to `violation` without additional forensic analysis.
+
+### 8.4. Sandbox Isolation and Profile Relationship
+
+Sandbox isolation (Appendix A) is a deployment-layer defense. It does not
+substitute for protocol-layer conformance checks. A deployment that uses
+gVisor but skips budget accounting MUST NOT claim MIC-State conformance.
+
+## Appendix A. Deployment Guidance (Non-Normative)
+
+This appendix provides non-normative guidance for container-isolation
+strategies applicable to MCP-server and tool-plugin deployments.
+
+### A.1. Isolation Recommendations
+
+| Isolation Technology | Overhead | Threat Model | Recommended Profile |
+|---|---|---|---|
+| gVisor (runsc) | Low (~5–15% syscall overhead) | Kernel-attack surface reduction | MIC-State or higher |
+| Kata Containers | Medium (~50–100 ms cold start) | Full VM-level isolation per container | MIC-Evidence |
+| Firecracker microVM | Low (~125 ms cold start) | Lightweight VM with minimal device model | MIC-Evidence |
+| Native container (runc) | Minimal | Namespace + cgroup isolation only | Delegation-Core |
+
+### A.2. MCP Server Isolation
+
+When deploying MCP servers as tool providers:
+
+1. Each MCP server instance SHOULD run in its own isolation boundary.
+2. The MCP server's tool manifest MUST be bound to the MD via
+   `tool_manifest_digest` (A.1 §8.17).
+3. Network egress from the MCP server SHOULD be restricted to the
+   destinations permitted by `MD.resource_policies` and
+   `MD.effect_policies`.
+4. For MIC-Evidence deployments, the isolation boundary SHOULD provide
+   kernel-level syscall observability (e.g., Tetragon, Falco) to support
+   full visibility telemetry.
+
+### A.3. Tool-Plugin Isolation
+
+When deploying tool plugins within an agent runtime:
+
+1. Each plugin SHOULD execute in a sandboxed subprocess or WASM module.
+2. The plugin's resource access MUST be mediated by the agent runtime's
+   policy engine.
+3. For MIC-State or higher, the runtime MUST track per-plugin budget
+   consumption and report it as part of the `ObservedEvent`.
+
+## 9. References
+
+### 9.1. Normative References
+
+1. RFC 2119
+2. RFC 8174
+3. `docs/spec/mission-declaration-v0.1.md` — Mission Declaration (A.1)
+4. `docs/spec/delegation-grant-profile-v0.1.md` — Delegation Grant profile
+   (A.2)
+5. `docs/spec/execution-receipt-v0.1.md` — Execution Receipt (A.3)
+6. `docs/spec/verifier-contract-v0.1.md` — Verifier Contract (A.4)
+7. `docs/spec/revocation-v0.1.md` — Revocation Model (A.6)
+8. `docs/spec/idm-extension-v0.1.md` — IDM Extension Profile (A.7)
+9. `draft-niyikiza-oauth-attenuating-agent-tokens-00` — Attenuating
+   Authorization Tokens (AAT)
+
+### 9.2. Informative References
+
+1. `docs/session-2026-04-14/05-cpo-call-prep/unified-steps-final.md` §4.5
+2. `docs/session-2026-04-14/09-execution-plan/PLAN.md` §A.5, §D.7

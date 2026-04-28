@@ -1,0 +1,64 @@
+name: validate-formats
+
+# Runs on every push and PR. Validates that the small set of structured
+# files in the repo today actually parse — covers the gap between
+# "secret-scan + link-check" and "we have real code with real tests."
+# Dedicated runtime workflows should join this set for Python and Go;
+# this workflow does NOT pretend to be a substitute for those tests.
+#
+# No untrusted GitHub event inputs are interpolated into run blocks;
+# all paths come from `find` inside the runner.
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  json:
+    name: JSON
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Validate every JSON file
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r -d '' f; do
+            if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" 2>/dev/null; then
+              echo "::error file=$f::invalid JSON"
+              fail=1
+            fi
+          done < <(find . -path ./.git -prune -o -path ./.claude -prune -o -path ./artifacts -prune -o -name '*.json' -print0)
+          exit "$fail"
+
+  yaml:
+    name: YAML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Validate every YAML file
+        run: |
+          set -euo pipefail
+          # Use Python's PyYAML — already on the runner; no extra install.
+          fail=0
+          while IFS= read -r -d '' f; do
+            if ! python3 -c "import yaml,sys; list(yaml.safe_load_all(open(sys.argv[1])))" "$f" 2>/dev/null; then
+              echo "::error file=$f::invalid YAML"
+              fail=1
+            fi
+          done < <(find . -path ./.git -prune -o -path ./.claude -prune -o -path ./artifacts -prune -o \( -name '*.yml' -o -name '*.yaml' \) -print0)
+          exit "$fail"
+
+  # NOTE: a markdown-table sanity job was prototyped here but pulled —
+  # the heuristic ("header has |, next line is only |/-/:/space") false-
+  # positived on legitimate tables every time the separator row contained
+  # an extra space or a stripped trailing pipe. The signal-to-noise ratio
+  # was too low to justify the gate. If we want this back, use a real
+  # Markdown parser (mdformat, remark) rather than a pipe-count heuristic.

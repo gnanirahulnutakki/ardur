@@ -1,0 +1,116 @@
+# Ardur vs OAuth (and the managed-agent-auth direction)
+
+**Status:** Working comparison. Will gain links and quantitative numbers as Phase 7 benchmark data lands. The technical claims here should hold without those numbers; the numbers are how we'd prove the claims to a reader who, reasonably, doesn't take a maintainer's word for it.
+
+A reviewer pushed back recently with the question every credibility-conscious project gets asked: **"OAuth is already deployed everywhere and being extended for agents. Why isn't OAuth-plus-extensions enough?"** Cloudflare's [managed OAuth for Access](https://blog.cloudflare.com/managed-oauth-for-access/) is the canonical example of where the OAuth-extension direction is going for agents.
+
+This document is the honest answer. Short version: **Ardur and OAuth solve adjacent, complementary problems. Ardur composes with OAuth; it doesn't replace it. The space between them is where mission-level governance lives.**
+
+## The boundary in one paragraph
+
+OAuth is a *delegated authorization* protocol: a user (or another principal) grants an application a scoped token to act on their behalf against a resource server. The token's scopes are decided at issuance and the resource server is the one that enforces them at request time. That's exactly what most application-to-application auth needs.
+
+MCEP, the protocol Ardur implements, is a *mission-bound runtime governance* protocol. It assumes the agent already has a way to authenticate (often OAuth or SPIFFE) and asks a different question: **for the lifetime of this autonomous session, can we prove the agent stayed inside the mission its principal authorised, including across cumulative budgets, side-effect categories, and delegation chains?** That's not a re-enforcement of the OAuth scope; it's evidence about the trace.
+
+OAuth's scope check answers "does this principal have permission to perform this action right now?" MCEP's verdict answers "did the agent's complete behaviour match the mission, including dimensions OAuth scopes can't see?" Both questions matter. They're different questions.
+
+## What OAuth (and OAuth-for-agents) already covers well
+
+Read the Cloudflare post and the surrounding direction. They're solving real problems:
+
+- **Agent identity.** A capability for an agent to authenticate as itself, with first-class identity provider integration. Without this, every other agent-auth conversation is built on sand.
+- **Token issuance to autonomous code.** Replacing static API keys baked into agent configs with rotated, revocable tokens. Strict improvement over the status quo.
+- **Per-resource scope enforcement.** "This token can read GitHub Issues but not push to repos." Resource servers know how to enforce this; OAuth scopes carry it.
+- **Token attenuation in flight.** Newer drafts (AAT, transaction tokens) let intermediaries narrow a token before forwarding. This is genuinely cool work — Ardur uses [AAT](https://datatracker.ietf.org/doc/draft-niyikiza-oauth-attenuating-agent-tokens/) directly as the wire format for our Delegation Grant.
+
+If your agent only does one or two tool calls per session, OAuth + AAT is probably enough governance for you. The cost is low, the tooling is mature, and the existing enterprise IDP integration is real value you don't get for free anywhere else.
+
+## Where OAuth's model gets thin for autonomous agents
+
+Three dimensions OAuth's per-request scope check does not see, regardless of how the scopes are encoded:
+
+**1. Cumulative budgets.** A mission says "send at most three emails this session." Token scopes can authorise *whether* the agent can call `send_email`. They don't track *how many times*. The resource server stays stateless — that's a feature for OAuth, since per-token state across requests would defeat the loose-coupling goal. But "at most three" requires per-session state that lives somewhere.
+
+OAuth-extension drafts have been quietly running into this. Some attempt to express budgets as scope claims, but the resource server still needs to know the running count. Either you give every resource server access to a shared session store (re-introducing the centralisation OAuth was trying to avoid), or you put the verifier somewhere else. Putting the verifier somewhere else is what MCEP does.
+
+**2. Side-effect class.** Two `read_file("/sales/q1.csv")` calls look identical at the OAuth layer. They have the same scope, the same resource, the same client. One reads the file into agent memory for analysis; the other reads it and ships the bytes to an external endpoint. The OAuth scope check can permit both or deny both. It cannot distinguish them, because the side effect of an action isn't part of the scope tuple.
+
+A mission that says "no exfiltration" needs a verifier that can see what actually happened with the bytes. OAuth doesn't expose that visibility, and the resource server might not either — it served the file; what happened next is downstream.
+
+**3. Delegation topology.** When an agent delegates a sub-task to another agent, OAuth-AAT can attenuate the token cleanly: the child's token is provably a narrower subset of the parent's. That's solved. What isn't solved is *attesting that the subcontracting happened at all*. From the original principal's perspective, two traces look identical: (a) the agent did the work itself, and (b) the agent silently forwarded the task to a third agent who did the work. Both produce one input to the agent, one output back. The hidden delegation edge doesn't appear in the OAuth audit log unless the child explicitly emits evidence.
+
+This is the case Ardur's per-edge attestation requirement addresses (the formal version is the Silence Theorem in the paper, summarised by the verifier contract in [`docs/specs/verifier-contract-v0.1.md`](../specs/verifier-contract-v0.1.md)). Without verifiable per-edge attestation, no parent-only monitor can detect every silent delegation violation. OAuth doesn't make this worse, but it doesn't make it better either — and a project that claims "we govern agent delegation" without addressing this case is overclaiming.
+
+## What Ardur adds on top of OAuth
+
+Ardur's design intentionally sits *next to* the OAuth flow, not in place of it. The composition looks like this:
+
+```
+[Identity provider issues OAuth token] ─► agent
+        │                                  │
+        │   AAT-attenuated child token     │
+        │   (signed, narrowed scope)       │
+        ▼                                  ▼
+   [sub-agent]   ◄─── tool call ───   [Ardur proxy] ─► [resource server]
+        │                                  │
+        ▼                                  ▼
+   [Execution Receipt]             [Execution Receipt]
+        │                                  │
+        └──────────► chain-hashed receipt log ◄────────
+```
+
+Three additions:
+
+- **Mission Declaration as a layer above the OAuth token.** A signed envelope that says "this session is for mission M, with allowed tools T, resource scope R, side-effect budget B, delegation policy D." The OAuth token says who the agent is; the Mission Declaration says what it's been authorised to do for this session. They sign separately and can be audited separately.
+- **Per-tool-call Execution Receipt with a tri-state verdict** (`compliant` / `violation` / `insufficient_evidence`). Each receipt is signed and chain-hashed to the previous one. The audit trail is the receipt chain, not the access log of the resource server.
+- **Verifiable delegation provenance.** Sub-agents emit signed attestations of their delegation edges. The receipt chain can be reconstructed end-to-end; silent delegations fail verification.
+
+If you already use OAuth, none of this requires changing your OAuth setup. The Mission Declaration sits at session start; the Execution Receipts emit alongside whatever the resource server logs; the AAT attenuation slots into your existing token attenuation flow. Ardur's verifier reads OAuth tokens for identity and emits MCEP receipts for evidence.
+
+## How a fair comparison would settle the debate
+
+The reviewer is right that "we should explain why" is necessary but not sufficient. The honest version of this comparison needs three concrete claims, each with evidence:
+
+**Claim 1 — Cumulative-budget enforcement is a property OAuth-only cannot deliver without extra state.**
+*Evidence:* a benchmark scenario where the same mission runs under (a) plain OAuth + scoped tokens, and (b) Ardur. The mission says "at most 3 emails." OAuth-only relies on the email service knowing the agent's session state — which means either configuring shared state across resource servers (defeats decoupling) or accepting that one mission can send 3 × N emails through N resource servers. Ardur's verifier holds the budget in one place. We'll publish the numbers when Phase 7's `tamas` benchmark suite lands publicly.
+
+**Claim 2 — Side-effect classification recovers detection power that scope-only enforcement provably gives up.**
+*Evidence:* the same trace evaluated with a scope-only monitor (Cedar over OAuth scopes) and a side-effect-aware monitor (Ardur composing native + Cedar + forbid-rules). The Cedar-Strict / Cedar-Stateful comparison is documented in our private benchmark series; the public re-run will land alongside the Phase 7 benchmark publication. Specifically the case where Cedar permits an action that the side-effect monitor flags as exfiltration: scope-only is "compliant," side-effect-aware is "violation." Both verdicts are correct given each monitor's evidence.
+
+**Claim 3 — Delegation provenance closes a hole that AAT alone leaves open.**
+*Evidence:* the Silence Theorem construction in the paper. Two traces with identical AAT chains, different downstream behaviour, only distinguishable when the sub-agent emits attestations. The math is in the paper (linked when the public arXiv ID is assigned); the runtime test in the public examples is the AAT-Biscuit composition that Phase 1's [`test_aat_adapter.py`](../../python/tests/test_aat_adapter.py) exercises.
+
+Each claim is testable. The benchmark data backs them or it doesn't. Until Phase 7 lands the numbers publicly, this document is the qualitative version of the argument; the quantitative version replaces "claim" with "measured."
+
+## Where OAuth-for-agents complements Ardur
+
+To be very clear about the composition story: **the OAuth-for-agents direction is good news for Ardur, not competition.** Specific places they help us:
+
+- **Identity provider integration.** Cloudflare's managed OAuth makes it easier for Ardur to consume a stable agent identity. We don't have to ship our own IDP; we plug into the OAuth one.
+- **Token rotation and revocation.** OAuth's mature revocation infrastructure handles the "this agent has been compromised, kill all its credentials" path. Ardur's Mission Declaration revocation layers on top.
+- **AAT itself.** Ardur's Delegation Grant is an AAT profile with one extra claim (`mission_ref`). Improvements to AAT improve Ardur directly.
+- **Resource-server policy reuse.** A team that has already invested in Cedar / OPA at the resource server keeps that investment. Ardur's Cedar backend reads the same policy syntax; the integration cost is low.
+
+The space where we have to be careful: **don't claim Ardur replaces OAuth for credential issuance.** It doesn't. We sign Mission Declarations with our own issuer key, but the agent's identity comes from somewhere else. Anyone shopping for "an OAuth replacement" is shopping for the wrong thing in this aisle.
+
+## Summary
+
+| Question | OAuth-only answer | Ardur (composing with OAuth) answer |
+|---|---|---|
+| Who is this agent? | Identity provider via OAuth | Same — uses OAuth identity |
+| What can it do at this resource? | OAuth scope check | Resource policy, unchanged from OAuth |
+| Did it stay inside the cumulative budget? | Out of scope | Tracked by mission verifier |
+| Was the side-effect class allowed? | Out of scope | Tracked by side-effect lattice |
+| Did it silently delegate? | Out of scope | Provable via signed delegation attestations |
+| What's the audit trail? | Resource-server logs | Chain-hashed Execution Receipts |
+| Can it be revoked? | OAuth revocation | OAuth revocation + mission revocation |
+
+Ardur is the **mission and evidence layer** that pairs with whatever **identity and authorization layer** you already use. If that layer is OAuth, the composition is clean and well-specified.
+
+## Further reading
+
+- [`docs/specs/mission-declaration-v0.1.md`](../specs/mission-declaration-v0.1.md) — what a Mission Declaration carries
+- [`docs/specs/delegation-grant-profile-v0.1.md`](../specs/delegation-grant-profile-v0.1.md) — Ardur's AAT profile
+- [`docs/specs/verifier-contract-v0.1.md`](../specs/verifier-contract-v0.1.md) — the verifier obligations
+- IETF — [draft-niyikiza-oauth-attenuating-agent-tokens](https://datatracker.ietf.org/doc/draft-niyikiza-oauth-attenuating-agent-tokens/)
+- Cloudflare — [Managed OAuth for Access](https://blog.cloudflare.com/managed-oauth-for-access/)

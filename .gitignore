@@ -1,5 +1,6 @@
 .DS_Store
 .venv/
-.wolverine/
+.ardur/
+.claude/
 __pycache__/
 *.pyc

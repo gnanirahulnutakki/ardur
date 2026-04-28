@@ -1,0 +1,1058 @@
+# Mission Declaration (MD) v0.1
+
+> **Public-import note.** This document was authored against the private research repo's `docs/spec/` layout. In the public ardur tree, migrated specs live under `docs/specs/`. Any `docs/spec/...` path reference in the body refers to the original private layout; the public-tree mapping is in [`docs/specs/README.md`](./README.md).
+## Status
+This document defines version `v0.1` of the Mission Declaration (MD)
+claims-set format for the Ardur runtime-governance protocol.
+This document is written in an RFC-style normative form.
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+"OPTIONAL" in this document are to be interpreted as described in
+RFC 2119 and RFC 8174 when, and only when, they appear in all capitals.
+## 1. Introduction
+The Ardur runtime-governance protocol separates delegated authority,
+mission policy, and execution evidence into three distinct artifacts:
+1. Mission Declaration (MD)
+2. Delegation Grant (DG)
+3. Execution Receipt (ER)
+The Mission Declaration is the issuer-signed, human-reviewable policy
+envelope for a mission.
+The Delegation Grant is carried by the Attenuating Authorization Token
+(AAT) wire format.
+The Execution Receipt is the per-hop signed evidence record emitted by
+verifiers and, in stronger profiles, by execution environments.
+The MD is intentionally responsible for semantics that AAT explicitly
+does not carry, including:
+1. cumulative lineage budgets
+2. typed side-effect policy
+3. mission-scoped delegation policy
+4. required telemetry obligations
+5. conformance profile selection
+6. revocation pointer
+7. approval-fatigue controls
+8. governed memory-store policy
+This document defines:
+1. the MD JSON claims-set
+2. required and optional members
+3. issuer and verifier processing rules
+4. hashing and canonicalization rules
+5. the companion JSON Schema
+This document does not define:
+1. the `mission_ref` AAT profile claim
+2. the Execution Receipt schema
+3. the full Token Status List profile for mission revocation
+4. the tool manifest schema
+5. the full verifier state machine
+Those topics are defined by companion documents.
+## 2. Representation Model
+An MD is represented as a JWT payload encoded as a JSON object.
+The JSON object defined by this document is the authoritative data model.
+The JOSE wrapper is transport and integrity metadata around that object.
+The examples in `docs/spec/examples/*.json` are payload objects only.
+The examples are not signed JWTs.
+The JSON Schema in
+`docs/spec/mission-declaration-v0.1.schema.json`
+validates the payload object only.
+An implementation that accepts a compact JWT serialization:
+1. MUST verify the JOSE signature first
+2. MUST decode the payload to a JSON object
+3. MUST validate the decoded payload against this specification
+4. MUST reject the token if the payload object violates this specification
+An implementation that stores or exchanges detached payload objects:
+1. MUST preserve the exact semantic content of the JSON object
+2. MUST apply RFC 8785 canonicalization before any hashing step defined by
+   this document
+3. MUST bind the payload object to an ES256 signature before treating it as
+   authoritative policy
+## 3. Design Goals
+The MD format has the following goals:
+1. human reviewability
+2. strict fail-closed parsing
+3. offline verifier compatibility
+4. composability with AAT
+5. reuse of existing cryptographic primitives
+6. deterministic hashing
+7. unambiguous claim semantics
+The MD format is intentionally conservative.
+This version prioritizes deterministic parsing and predictable security
+properties over extensibility.
+Unknown top-level claims are therefore forbidden.
+## 4. Relationship to DG and ER
+The MD is mission-scoped.
+The DG is delegation-hop-scoped.
+The ER is execution-hop-scoped.
+The following relationships apply:
+1. Every DG that participates in this protocol profile MUST reference one
+   MD by `mission_ref`.
+2. Every ER emitted for a governed action MUST be attributable to exactly
+   one DG and, through that DG, to exactly one MD.
+3. A verifier MAY cache MDs offline.
+4. A verifier that uses a cached MD MUST still validate the MD signature,
+   temporal validity, and revocation status before use.
+5. An MD MUST be usable by a verifier that has no online connectivity at
+   evaluation time, provided the verifier has a cached MD, the issuer key,
+   and a cached status list.
+The MD is therefore a policy root for a mission.
+It is not a running state ledger.
+Live budget consumption, live descendant reservations, and live receipt
+tracking belong to verifier state and DG / ER processing, not to the MD
+payload itself.
+## 5. Serialization and Signing
+### 5.1. JWT Envelope
+An MD MUST be signed as a JWT using JWS compact serialization.
+The JWS `alg` header parameter MUST be `ES256`.
+No other signing algorithm is permitted by this version.
+The MD format defined by this document MUST NOT be signed with a symmetric
+algorithm.
+The MD format defined by this document MUST NOT be signed with `alg: "none"`.
+An issuer MUST maintain an explicit algorithm allowlist.
+A verifier MUST reject any MD whose JWS header uses an algorithm other than
+`ES256`.
+An issuer SHOULD set `typ` to `JWT`.
+A verifier MUST NOT treat the absence of `typ` as a signature failure if
+the signature and payload otherwise validate.
+This document does not define encrypted MD payloads.
+Deployments that store or transport MDs over untrusted channels SHOULD rely
+on transport confidentiality in addition to JWS integrity protection.
+### 5.2. JWT Claim-Set Scope
+This document defines the MD payload object.
+The JOSE header is out of scope except for the signing requirements in this
+section.
+All normative claim requirements in this document apply to the decoded JSON
+payload.
+### 5.3. NumericDate Claims
+The `iat` and `exp` claims MUST be encoded as JWT NumericDate integer
+values.
+Fractional seconds MUST NOT be used.
+An issuer MUST ensure:
+1. `iat` is not in the future relative to the issuer clock
+2. `exp` is strictly greater than `iat`
+3. the mission validity interval is consistent with local policy
+A verifier MUST reject an MD if:
+1. `exp <= iat`
+2. `exp` is in the past at verification time, subject to local clock-skew
+   policy
+3. `iat` cannot be parsed as an integer NumericDate
+This document does not define `nbf`.
+Issuers and verifiers operating under this version MUST NOT add `nbf` as an
+unregistered top-level claim in the MD payload.
+### 5.4. Fail-Closed Unknown Fields
+The MD payload has a closed top-level schema.
+An issuer MUST reject any payload object that contains a top-level member
+not defined by this specification.
+This requirement is normative and fail-closed.
+A verifier MUST reject any MD payload that contains a top-level member not
+defined by this specification.
+This requirement intentionally mirrors the current fail-closed constructor
+behavior in `vibap-prototype/vibap/passport.py`.
+Forward-compatible extension in this protocol family MUST occur through a
+new versioned schema, not through silent acceptance of unknown top-level
+members.
+### 5.5. Nested Objects
+Every nested object defined by this specification is also closed.
+An issuer MUST reject any nested object that contains a member not defined
+for that object.
+A verifier MUST reject any nested object that contains a member not defined
+for that object.
+### 5.6. Arrays and Ordering
+Array element order is not semantically significant unless this document
+states otherwise.
+Implementations MUST NOT assign semantic meaning to array order for:
+1. `allowed_tool_classes`
+2. `resource_policies`
+3. `effect_policies`
+4. `allowed_child_subjects`
+5. `attenuation_rules`
+6. `flow_policies`
+7. `required_telemetry`
+8. `governed_memory_stores`
+Implementations MAY preserve source order for display.
+Hashing defined by this document operates on RFC 8785 canonicalized JSON,
+not on source formatting or source property order.
+## 6. Canonicalization and Hashing
+### 6.1. General Rule
+Any hashing step defined by this document MUST be applied to the RFC 8785
+JCS canonical form of the relevant JSON value.
+The canonicalized bytes MUST be UTF-8 encoded before hashing.
+### 6.2. JCS Preconditions
+Before canonicalization, the producer and consumer MUST parse the JSON
+value as JSON data, not as a raw byte string.
+The parsed JSON value MUST satisfy the I-JSON constraints required by
+RFC 8785.
+If canonicalization fails, the operation in progress MUST fail.
+### 6.3. Hash Algorithm
+All hashes defined by this document use SHA-256.
+This version introduces no new cryptographic primitive beyond:
+1. ES256 signatures
+2. SHA-256 hashing
+### 6.4. Digest String Encoding
+Unless another companion specification says otherwise, a SHA-256 digest
+carried as an MD claim MUST be encoded as:
+`sha-256:` followed by exactly 64 lowercase hexadecimal characters.
+Uppercase hexadecimal characters MUST NOT be used.
+Base64url encoding MUST NOT be used for MD digest claims defined by this
+version.
+### 6.5. Example Hash Procedure
+To compute a digest under this document:
+1. parse the relevant JSON value
+2. verify that it is valid JSON for the intended object type
+3. canonicalize it with RFC 8785
+4. UTF-8 encode the canonical result
+5. compute SHA-256 over those bytes
+6. encode the result as `sha-256:` plus lowercase hex
+## 7. Core Data Model
+### 7.1. Top-Level Claims
+An MD payload object in version `v0.1` contains the following top-level
+claims:
+1. `iss`
+2. `sub`
+3. `aud`
+4. `iat`
+5. `exp`
+6. `jti`
+7. `mission_id`
+8. `allowed_tool_classes`
+9. `resource_policies`
+10. `effect_policies`
+11. `lineage_budgets`
+12. `delegation_policy`
+13. `flow_policies`
+14. `required_telemetry`
+15. `receipt_policy`
+16. `conformance_profile`
+17. `tool_manifest_digest`
+18. `revocation_ref`
+19. `approval_policy`
+20. `governed_memory_stores`
+21. `probing_rate_limit`
+22. `idm_extension` (OPTIONAL)
+All claims other than `idm_extension` are REQUIRED.
+An MD without every required claim is invalid.
+### 7.2. Common Claim Rules
+Every string claim defined by this document:
+1. MUST be encoded as a JSON string
+2. MUST NOT be the empty string
+3. MUST NOT be whitespace-only
+Every integer claim defined by this document:
+1. MUST be encoded as a JSON number with integer value
+2. MUST be greater than or equal to zero unless a stricter bound is given
+Every array claim defined by this document:
+1. MUST be encoded as a JSON array
+2. MUST contain only elements of the defined type
+3. MUST NOT contain `null`
+Every object claim defined by this document:
+1. MUST be encoded as a JSON object
+2. MUST conform to the closed member set defined for that object
+## 8. Claim Definitions
+### 8.1. `iss`
+The `iss` claim identifies the MD issuer.
+`iss` MUST be present.
+`iss` MUST be a non-empty string.
+`iss` SHOULD be a stable issuer identifier.
+`iss` SHOULD be an HTTPS URI or another StringOrURI value that is stable
+within the deployment.
+If the issuer rotates signing keys, the `iss` value SHOULD remain stable.
+The issuer key lookup procedure is out of scope for this document.
+### 8.2. `sub`
+The `sub` claim identifies the primary mission subject.
+`sub` MUST be present.
+`sub` MUST be a non-empty string.
+`sub` MAY identify:
+1. a single root agent
+2. an agent workload class
+3. a service principal
+4. a user-delegated agent identity
+The exact identity namespace is deployment-specific.
+The value carried in `sub` SHOULD be compatible with the subject namespace
+used by DGs and ObservedEvents in the same deployment.
+### 8.3. `aud`
+The `aud` claim identifies the intended verifier audience.
+`aud` MUST be present.
+`aud` MUST be a non-empty string in this version.
+This version does not permit the JSON-array form of JWT `aud`.
+An issuer MUST mint MDs with a single audience string.
+A verifier MUST compare the MD `aud` claim against its configured audience
+identifier.
+If the audience does not match, the verifier MUST reject the MD.
+### 8.4. `iat`
+The `iat` claim records the issuance time of the MD.
+`iat` MUST be present.
+`iat` MUST be a NumericDate integer.
+The issuer clock used for `iat` SHOULD be synchronized.
+### 8.5. `exp`
+The `exp` claim records the expiration time of the MD.
+`exp` MUST be present.
+`exp` MUST be a NumericDate integer.
+`exp` MUST be strictly greater than `iat`.
+An issuer SHOULD prefer short validity windows when mission policy is
+short-lived.
+A verifier MUST reject an expired MD.
+### 8.6. `jti`
+The `jti` claim identifies the specific signed MD instance.
+`jti` MUST be present.
+`jti` MUST be globally unique within the issuer namespace for the lifetime
+of the token and any relevant audit retention window.
+`jti` SHOULD be a UUID or other collision-resistant identifier.
+`jti` identifies the signed instance.
+It is not the same thing as `mission_id`.
+### 8.7. `mission_id`
+The `mission_id` claim identifies the mission itself.
+`mission_id` MUST be present.
+`mission_id` MUST be a non-empty string.
+`mission_id` SHOULD be a URI or URN.
+`mission_id` SHOULD remain stable across re-signing or re-issuance of the
+same mission policy.
+If the issuer rotates an MD instance without changing the mission policy,
+the issuer SHOULD mint a new `jti` and SHOULD preserve `mission_id`.
+If the issuer changes mission semantics in a materially incompatible way,
+the issuer SHOULD mint a new `mission_id`.
+`mission_id` and `jti` SHOULD NOT be identical except in trivial
+single-instance deployments.
+### 8.8. `allowed_tool_classes`
+The `allowed_tool_classes` claim enumerates the tool classes permitted by
+the mission.
+`allowed_tool_classes` MUST be present.
+`allowed_tool_classes` MUST be an array of one or more strings.
+Each element MUST be an absolute URI.
+Each element SHOULD be authority-scoped in the sense of AAT Section 3.3.1.
+Each element SHOULD use a URI authority corresponding to:
+1. the workload identity of the tool provider, or
+2. a domain controlled by the tool operator
+Each element SHOULD include either:
+1. a version component, or
+2. a content-hash component
+This requirement ensures that all parties reason about the same tool
+schema.
+Issuers MUST reject duplicate tool-class URIs.
+Verifiers MUST treat tool-class URI comparison as exact string equality.
+This version does not define URI normalization beyond ordinary JSON string
+comparison.
+Examples of valid tool-class URIs:
+1. `https://billing-agent.example.com/tools/charge/v2`
+2. `https://gitops.example.net/tools/apply@sha256-0f4c...`
+### 8.9. `resource_policies`
+The `resource_policies` claim enumerates governed resource families and
+matching patterns.
+`resource_policies` MUST be present.
+`resource_policies` MUST be a non-empty array.
+Each array member MUST be an object with exactly these members:
+1. `family`
+2. `pattern`
+3. `sensitivity`
+#### 8.9.1. `resource_policies[].family`
+`family` identifies a resource namespace.
+`family` MUST be a non-empty string.
+Examples include:
+1. `filesystem`
+2. `http`
+3. `database`
+4. `email`
+5. `artifact`
+6. `memory`
+This version does not create an IANA registry for resource families.
+Deployments SHOULD use stable, documented family identifiers.
+#### 8.9.2. `resource_policies[].pattern`
+`pattern` identifies which resources in the family are governed by the
+policy entry.
+`pattern` MUST be a non-empty string.
+`pattern` MUST use one of these two prefix forms:
+1. `exact:`
+2. `glob:`
+If the prefix is `exact:`, the remainder of the string is matched by exact
+string equality after any family-specific normalization defined by the
+deployment.
+If the prefix is `glob:`, the remainder of the string is matched with a
+deterministic glob procedure.
+For `glob:` patterns:
+1. `*` matches zero or more characters
+2. `?` matches exactly one character
+3. `**` MAY cross separator boundaries
+The separator notion is family-specific.
+If a family does not define a separator, `*` and `**` are equivalent.
+An issuer MUST reject any pattern that does not use the required prefix.
+A verifier MUST reject any MD that carries a malformed resource pattern.
+#### 8.9.3. `resource_policies[].sensitivity`
+`sensitivity` is the issuer-defined sensitivity label associated with the
+matching resource set.
+`sensitivity` MUST be a non-empty string.
+This version does not constrain the label vocabulary.
+For interoperability, issuers SHOULD use a stable sensitivity taxonomy.
+A deployment MAY use values such as:
+1. `public`
+2. `internal`
+3. `confidential`
+4. `restricted`
+Verifiers MUST compare sensitivity labels by exact string equality.
+#### 8.9.4. Overlap and Specificity
+This version permits overlapping resource-policy entries.
+Issuers SHOULD avoid ambiguous overlap.
+If multiple resource-policy entries match the same observed resource, the
+verifier SHOULD apply the most specific match.
+If the verifier cannot determine specificity deterministically, the
+verifier MUST fail closed.
+### 8.10. `effect_policies`
+The `effect_policies` claim constrains per-event budget deltas by
+side-effect class.
+`effect_policies` MUST be present.
+`effect_policies` MUST contain exactly one entry for each side-effect class
+defined by this version.
+The defined side-effect classes are:
+1. `read`
+2. `write`
+3. `network`
+4. `exec`
+5. `external_send`
+Each array member MUST be an object with exactly these members:
+1. `side_effect_class`
+2. `limit`
+`side_effect_class` MUST be one of the five values above.
+`limit` MUST be a non-negative integer.
+`limit` defines the maximum `budget_delta` a single observed action of that
+side-effect class MAY consume.
+This makes `effect_policies` a per-event guardrail.
+The cumulative, lineage-wide ceiling is carried separately by
+`lineage_budgets`.
+If `limit` is `0`, the side-effect class is denied for event execution.
+Issuers SHOULD keep `effect_policies` and `lineage_budgets` aligned.
+For example, issuers SHOULD NOT assign a positive lineage ceiling to a
+side-effect class whose per-event limit is zero unless the mission is being
+pre-provisioned for later re-issuance.
+### 8.11. `lineage_budgets`
+The `lineage_budgets` claim defines mission-wide escrow-rights ceilings by
+side-effect class.
+`lineage_budgets` MUST be present.
+`lineage_budgets` MUST be an object with exactly one member:
+1. `per_effect_class`
+`per_effect_class` MUST be an object with exactly these five members:
+1. `read`
+2. `write`
+3. `network`
+4. `exec`
+5. `external_send`
+Each side-effect-class member MUST be an object with exactly these members:
+1. `reserved`
+2. `ceiling`
+`reserved` MUST be a non-negative integer.
+`ceiling` MUST be a non-negative integer.
+`reserved` MUST be less than or equal to `ceiling`.
+`ceiling` is the mission-wide maximum cumulative spend permitted for that
+side-effect class across the full delegation tree.
+`reserved` is the amount already encumbered at MD issuance time.
+`reserved` is not the live running spend total.
+`reserved` is not the verifier's live descendant-reservation map.
+For a newly issued root mission with no pre-existing descendants, issuers
+SHOULD set `reserved` to `0` for every side-effect class.
+If an issuer mints an MD for a mission that already has active descendant
+allocations, the issuer MAY set a non-zero `reserved` value to encode the
+encumbered starting state.
+Verifiers MUST initialize live lineage state from `reserved` and `ceiling`.
+Verifiers MUST reject any MD in which `reserved > ceiling` for any
+side-effect class.
+### 8.12. `delegation_policy`
+The `delegation_policy` claim constrains how DGs may be minted under the
+mission.
+`delegation_policy` MUST be present.
+`delegation_policy` MUST be an object with exactly these members:
+1. `max_depth`
+2. `allowed_child_subjects`
+3. `attenuation_rules`
+#### 8.12.1. `delegation_policy.max_depth`
+`max_depth` MUST be a non-negative integer.
+`max_depth = 0` means no child DG may be minted under the mission.
+`max_depth = 1` means the root subject may mint direct children, but those
+children may not mint grandchildren.
+Issuers SHOULD set `max_depth` to the minimum value that supports the
+intended workflow.
+#### 8.12.2. `delegation_policy.allowed_child_subjects`
+`allowed_child_subjects` MUST be an array.
+Each element MUST be a non-empty string.
+Each element MUST use one of these two prefix forms:
+1. `exact:`
+2. `glob:`
+The match target is the child DG `sub` value.
+If `max_depth > 0`, issuers SHOULD provide at least one matching rule.
+If `allowed_child_subjects` is empty and `max_depth > 0`, the issuer is
+declaring that delegation is structurally allowed but no child subjects are
+currently authorized.
+Verifiers MUST treat an empty `allowed_child_subjects` array as "match no
+subjects".
+#### 8.12.3. `delegation_policy.attenuation_rules`
+`attenuation_rules` MUST be a non-empty array of rule identifiers.
+This version defines these rule identifiers:
+1. `tool_subset`
+2. `resource_subset`
+3. `effect_subset`
+4. `budget_nonincrease`
+5. `telemetry_nonweakening`
+6. `receipt_level_nonweakening`
+7. `profile_nonweakening`
+8. `memory_store_subset`
+Their semantics are:
+1. `tool_subset`
+   A child DG MUST authorize a subset of the parent's tool classes.
+2. `resource_subset`
+   A child DG MUST authorize a subset of the parent mission's resource
+   patterns.
+3. `effect_subset`
+   A child DG MUST authorize a subset of the parent mission's effect
+   classes.
+4. `budget_nonincrease`
+   A child DG MUST NOT increase any lineage ceiling or any active reserved
+   share.
+5. `telemetry_nonweakening`
+   A child DG MUST NOT weaken telemetry obligations below the mission's
+   required telemetry set.
+6. `receipt_level_nonweakening`
+   A child DG MUST NOT require a weaker receipt level than the mission.
+7. `profile_nonweakening`
+   A child DG MUST NOT claim a weaker conformance profile than the mission.
+8. `memory_store_subset`
+   A child DG MUST NOT introduce governed memory stores outside the mission
+   set.
+Issuers SHOULD include every rule identifier whose invariant they expect
+downstream verifiers to enforce.
+Verifiers MUST reject unknown attenuation-rule identifiers.
+### 8.13. `flow_policies`
+The `flow_policies` claim encodes IFC-compatible source-to-sink flow rules.
+`flow_policies` MUST be present.
+`flow_policies` MAY be an empty array.
+Each array member MUST be an object with exactly these members:
+1. `from_class`
+2. `to_class`
+3. `action`
+`from_class` MUST be a non-empty string.
+`to_class` MUST be a non-empty string.
+`action` MUST be one of:
+1. `allow`
+2. `deny`
+This version keeps flow-policy actions intentionally binary.
+Deployments that require richer declassification workflows MUST version the
+schema rather than overloading the `action` field.
+Issuers SHOULD align flow classes with the deployment's content and
+sensitivity taxonomies.
+Verifiers MUST compare flow classes by exact string equality.
+If multiple flow rules match the same transition and disagree, the verifier
+MUST fail closed.
+If no flow rule matches a transition, the verifier SHOULD apply local
+default-deny behavior unless the conformance profile explicitly treats flow
+policy as advisory.
+### 8.14. `required_telemetry`
+The `required_telemetry` claim enumerates the observation fields the
+verifier MUST see for every governed action.
+`required_telemetry` MUST be present.
+`required_telemetry` MUST be a non-empty array.
+Duplicate telemetry field identifiers are not permitted.
+This version defines the following telemetry field identifiers:
+1. `event_id`
+2. `session_id`
+3. `timestamp`
+4. `actor`
+5. `action_class`
+6. `tool_name`
+7. `target`
+8. `resource_family`
+9. `content_class`
+10. `content_provenance`
+11. `summary`
+12. `side_effect_class`
+13. `visibility`
+14. `parent_event_id`
+15. `delegation_from`
+16. `delegation_to`
+17. `confidence_hint`
+18. `sensitivity`
+19. `instruction_bearing`
+20. `budget_delta`
+21. `grant_id`
+If a field named in `required_telemetry` is absent, null, empty when a
+non-empty value is required, or structurally invalid in an observed action,
+the verifier MUST return `insufficient_evidence`.
+The verifier MUST NOT silently synthesize a default value for a missing
+required telemetry field.
+If `visibility` is listed in `required_telemetry` and the observation
+indicates partial or missing visibility, the verifier SHOULD treat the
+action as `insufficient_evidence` unless a stronger local evidence model can
+prove that the missing data is irrelevant to the mission predicate.
+### 8.15. `receipt_policy`
+The `receipt_policy` claim defines the minimum evidence level the verifier
+must require for governed actions.
+`receipt_policy` MUST be present.
+`receipt_policy` MUST be an object with exactly one member:
+1. `level`
+`level` MUST be one of:
+1. `minimal`
+2. `counter_signed`
+3. `transparency_logged`
+The levels are ordered from weakest to strongest.
+Their semantics are:
+1. `minimal`
+   The verifier MUST emit an ER signed by the verifier or enforcement
+   point.
+2. `counter_signed`
+   In addition to the verifier signature, the execution environment, tool
+   adapter, or equivalent downstream component MUST counter-sign the ER or
+   equivalent evidence record.
+3. `transparency_logged`
+   The ER MUST satisfy the `counter_signed` requirements and MUST be logged
+   in an append-only transparency system with an inclusion reference that
+   the verifier can check or cache.
+A child artifact MUST NOT weaken the receipt level below the mission's
+declared level.
+### 8.16. `conformance_profile`
+The `conformance_profile` claim identifies the minimum protocol profile the
+deployment claims for the mission.
+`conformance_profile` MUST be present.
+`conformance_profile` MUST be one of:
+1. `Delegation-Core`
+2. `MIC-State`
+3. `MIC-Evidence`
+The profiles are ordered from weakest to strongest.
+Their semantics are:
+1. `Delegation-Core`
+   Requires signed MD validation, DG linkage, delegation-policy evaluation,
+   revocation checking, and basic receipt emission.
+2. `MIC-State`
+   Requires `Delegation-Core` plus stateful lineage-budget accounting and
+   required-telemetry enforcement.
+3. `MIC-Evidence`
+   Requires `MIC-State` plus receipt completeness sufficient to fail closed
+   when required evidence is missing.
+If `conformance_profile` is `MIC-Evidence`, `receipt_policy.level` MUST NOT
+be `minimal`.
+### 8.17. `tool_manifest_digest`
+The `tool_manifest_digest` claim binds the mission to a specific tool
+manifest snapshot.
+`tool_manifest_digest` MUST be present.
+`tool_manifest_digest` MUST be encoded as `sha-256:` plus 64 lowercase
+hexadecimal characters.
+The digest input MUST be the RFC 8785 canonical UTF-8 encoding of the tool
+manifest JSON object.
+The tool manifest itself is out of scope for this document.
+However, issuer and verifier MUST use byte-equivalent semantic JSON objects
+for hashing.
+The verifier MUST compare the digest by exact string equality.
+If the currently loaded tool manifest hashes to a different digest, the
+verifier MUST treat the mission as non-conformant.
+The verifier MAY distinguish this case as a `manifest_drift` finding in a
+companion error vocabulary.
+### 8.18. `revocation_ref`
+The `revocation_ref` claim points to the Token Status List resource used for
+mission revocation checks.
+`revocation_ref` MUST be present.
+`revocation_ref` MUST be an HTTPS URI.
+`revocation_ref` MUST identify a Token Status List resource and MUST carry a
+status-list index in the URI fragment as `#idx=<non-negative-decimal>`.
+Example:
+`https://status.example.com/mission/2026-04/statuslist.jwt#idx=418`
+The fragment-based encoding is used because this version defines only a
+single string claim, while the underlying status-list design conceptually
+uses a `(uri, idx)` tuple.
+The fragment MUST NOT be transmitted when fetching the status list.
+The verifier MUST:
+1. remove the fragment before performing the HTTP fetch
+2. parse the decimal `idx` fragment value
+3. use that index against the fetched status list
+Issuers MUST NOT encode the index in the query component.
+Issuers MUST NOT encode the index in a unique path segment when a shared
+status-list URI can be used instead.
+These rules reduce avoidable privacy leakage and preserve herd-privacy
+properties of shared status lists.
+If the fragment is missing or malformed, the MD is invalid.
+### 8.19. `approval_policy`
+The `approval_policy` claim constrains operator approval throughput.
+`approval_policy` MUST be present.
+`approval_policy` MUST be an object with exactly one member:
+1. `max_approvals_per_hour_per_operator`
+`max_approvals_per_hour_per_operator` MUST be a positive integer.
+This claim limits approval rate per operator per rolling hour.
+If the verifier or approval service cannot establish whether the operator is
+within the allowed approval budget, it SHOULD fail closed to
+`insufficient_evidence`.
+If the operator exceeds the approval budget, the verifier SHOULD fail closed
+rather than treating subsequent approvals as automatically valid.
+### 8.20. `governed_memory_stores`
+The `governed_memory_stores` claim enumerates memory-like stores whose
+contents are mission-governed.
+`governed_memory_stores` MUST be present.
+`governed_memory_stores` MAY be an empty array.
+Each member MUST be an object with exactly these members:
+1. `store_id`
+2. `resource_family`
+3. `ttl_s`
+4. `integrity_policy`
+#### 8.20.1. `store_id`
+`store_id` MUST be a non-empty string.
+`store_id` SHOULD be stable within the mission lifetime.
+`store_id` MAY be a URI, URN, path-like identifier, or other deployment
+identifier.
+#### 8.20.2. `resource_family`
+`resource_family` MUST be a non-empty string.
+`resource_family` SHOULD correspond to a `resource_policies[].family` value
+when applicable.
+#### 8.20.3. `ttl_s`
+`ttl_s` MUST be a non-negative integer number of seconds.
+`ttl_s = 0` means the store is non-persistent across turns or sessions.
+Issuers SHOULD set `ttl_s` to the shortest operationally feasible value.
+#### 8.20.4. `integrity_policy`
+`integrity_policy` MUST be one of:
+1. `digest_bound`
+2. `entry_signed`
+3. `transparency_logged`
+The values mean:
+1. `digest_bound`
+   The store content or entries are bound to stable content digests.
+2. `entry_signed`
+   Store entries are individually signed by an authorized producer.
+3. `transparency_logged`
+   Store writes are transparency logged or equivalently witnessed in an
+   append-only integrity system.
+If a governed memory store fails its declared integrity policy, the
+verifier SHOULD emit a mission violation for that store and SHOULD treat
+later reads from the same store as `insufficient_evidence` unless stronger
+local recovery logic exists.
+### 8.21. `probing_rate_limit`
+The `probing_rate_limit` claim limits repeated denied probes against the
+policy boundary.
+`probing_rate_limit` MUST be present.
+`probing_rate_limit` MUST be a positive integer.
+The semantic unit is:
+`distinct denied attempts per five minutes per agent`
+The RECOMMENDED default value is `10`.
+If a local authoring tool omits this field before signing, the issuer MUST
+inject `10` before producing the signed MD.
+The signed MD payload itself MUST contain an explicit integer value.
+Verifiers SHOULD track denied probes in a rolling five-minute window keyed
+at least by agent subject.
+If the probing-rate limit is exceeded, the verifier SHOULD treat subsequent
+governed actions as `insufficient_evidence` or `violation` according to
+local incident policy.
+### 8.22. `idm_extension`
+The `idm_extension` claim is OPTIONAL.
+If present, it enables an Intent Declaration Message extension profile.
+`idm_extension` MUST be an object with exactly these members:
+1. `enabled`
+2. `intent_schema_ref`
+`enabled` MUST be a boolean.
+If `enabled` is `true`, `intent_schema_ref` MUST be a non-empty absolute
+URI.
+If `enabled` is `false`, `intent_schema_ref` MAY be omitted.
+If `enabled` is `false` and `intent_schema_ref` is present, verifiers MAY
+ignore the reference.
+This document does not define the IDM schema itself.
+## 9. Processing Rules
+### 9.1. Issuer Processing
+Before signing an MD, an issuer MUST:
+1. construct the full payload object
+2. validate it against the closed schema for this version
+3. reject unknown top-level or nested members
+4. verify `exp > iat`
+5. verify `reserved <= ceiling` for each lineage budget entry
+6. verify there is exactly one `effect_policies` entry per defined
+   side-effect class
+7. verify `tool_manifest_digest` matches the issuer's intended tool manifest
+8. verify `revocation_ref` uses HTTPS and includes a valid `#idx=` fragment
+9. inject `probing_rate_limit = 10` if the authoring layer omitted it
+10. sign the payload with ES256
+An issuer SHOULD:
+1. minimize mission validity windows
+2. minimize `max_depth`
+3. minimize positive budgets
+4. prefer shared status-list URIs over unique per-mission URIs
+5. document family and sensitivity taxonomies
+### 9.2. Verifier Processing
+Before using an MD for authorization, a verifier MUST:
+1. verify the ES256 signature
+2. decode the payload JSON
+3. validate the payload against this specification
+4. verify temporal validity
+5. verify audience match
+6. resolve or consult revocation status
+7. verify the locally loaded tool manifest digest if a tool manifest is in
+   scope for the action being evaluated
+If any required step fails, the verifier MUST reject the MD.
+### 9.3. Offline Use
+An offline verifier MAY cache:
+1. issuer public keys
+2. signed MD payloads
+3. status-list resources
+4. tool manifests
+An offline verifier using cached data MUST apply local freshness policy.
+If freshness cannot be established for data required by the selected
+conformance profile, the verifier SHOULD return `insufficient_evidence`
+rather than silently permitting the action.
+### 9.4. Telemetry Failure
+When evaluating a governed action against an MD:
+1. if any field named in `required_telemetry` is missing, the verifier MUST
+   return `insufficient_evidence`
+2. if required telemetry is structurally present but malformed, the verifier
+   MUST return `insufficient_evidence`
+3. if the selected conformance profile requires receipts and the receipt is
+   missing, the verifier MUST return `insufficient_evidence`
+### 9.5. Budget Failure
+When evaluating cumulative spend:
+1. the verifier MUST initialize mission state from
+   `lineage_budgets.per_effect_class`
+2. the verifier MUST ensure cumulative consumed plus active descendant
+   reservations never exceed `ceiling`
+3. the verifier MUST NOT treat `reserved` as the live consumed total
+4. a child grant MUST NOT widen any mission ceiling
+If an action would exceed the allowed cumulative ceiling, the verifier MUST
+fail closed.
+### 9.6. Manifest Failure
+If the tool manifest digest comparison fails:
+1. the verifier MUST treat the action as non-conformant
+2. the verifier MUST NOT silently continue on the assumption that the tool
+   metadata is equivalent
+### 9.7. Revocation Failure
+If the verifier cannot retrieve or validate the referenced status list and
+the selected conformance profile requires revocation checking for permit
+decisions, the verifier SHOULD return `insufficient_evidence`.
+If the status list indicates the mission is revoked, the verifier MUST
+reject the mission.
+### 9.8. Denial-Output Leakage
+This document recognizes that denial and evidence-failure responses can
+themselves become an oracle.
+Deployments SHOULD minimize externally visible denial detail for:
+1. `violation`
+2. `insufficient_evidence`
+Detailed reason codes SHOULD be sent to an audit channel rather than to the
+requesting agent when such detail could leak protected information.
+## 10. Conformance Requirements
+### 10.1. Issuer Conformance
+An issuer conforms to MD `v0.1` if it:
+1. emits only payloads that satisfy this document
+2. signs payloads with ES256
+3. rejects unknown members
+4. applies RFC 8785 before any hash defined by this document
+### 10.2. Verifier Conformance
+A verifier conforms to MD `v0.1` if it:
+1. verifies ES256 signatures
+2. rejects unknown members
+3. enforces required telemetry fail-closed behavior
+4. enforces mission-level revocation checks
+5. enforces tool-manifest digest checks when a tool manifest is available
+### 10.3. Profile Conformance
+A deployment claiming:
+1. `Delegation-Core`
+   MUST implement Sections 5, 8, and 9.1 through 9.3.
+2. `MIC-State`
+   MUST implement `Delegation-Core` and Section 9.5.
+3. `MIC-Evidence`
+   MUST implement `MIC-State` and Section 9.4, plus receipt completeness
+   checks consistent with `receipt_policy.level`.
+## 11. Claim Registry Compatibility
+### 11.1. AAT Compatibility
+The MD is designed to compose with AAT, not to replace it.
+This document does not redefine any AAT JWT claim registered in AAT
+Section 9.1.
+The AAT Section 9.1 registered JWT claims are:
+1. `aat_type`
+2. `del_depth`
+3. `del_max_depth`
+4. `par_hash`
+The AAT Section 9.1 registered PoP JWT claims are:
+1. `aat_id`
+2. `aat_tool`
+3. `hta`
+No MD top-level claim in this document uses any of those names.
+### 11.2. Standard JWT Claims
+This document intentionally reuses these standard JWT claim names:
+1. `iss`
+2. `sub`
+3. `aud`
+4. `iat`
+5. `exp`
+6. `jti`
+That reuse is deliberate and required.
+### 11.3. Future Registration
+This version does not create a new IANA registry.
+If a future standards-track submission registers MD-specific JWT claim
+names, that registration SHOULD preserve the semantics defined here or
+issue a new version.
+## 12. Security Considerations
+### 12.1. Tool Metadata Poisoning
+The mission is not adequately bound if only tool names are authorized while
+tool metadata remains mutable.
+`tool_manifest_digest` therefore exists to bind the mission to a specific
+manifest snapshot.
+Issuers MUST hash the canonical manifest.
+Verifiers MUST compare that hash to the live manifest.
+### 12.2. Memory Poisoning
+Persistent stores can carry adversarial content across turns, sessions, or
+delegation hops.
+`governed_memory_stores` exists so those stores become first-class governed
+resources rather than ambient state.
+Issuers SHOULD keep the governed store set small.
+Verifiers SHOULD treat failed store-integrity checks as high-severity
+findings.
+### 12.3. Approval Fatigue
+Frequent human approvals can degrade operator judgment and become an attack
+surface.
+`approval_policy` therefore encodes a mission-level approval-rate ceiling.
+Deployments SHOULD couple this claim with operator-identity logging.
+### 12.4. Boundary Probing
+Repeated denied requests can reveal policy boundaries.
+`probing_rate_limit` therefore exists to cap repeated denied probes.
+Verifiers SHOULD track semantically distinct denied attempts, not merely raw
+request count, to avoid trivial evasion through exact replay.
+### 12.5. Revocation Privacy
+The Token Status List design uses shared lists to reduce per-token
+observability.
+This document therefore forbids encoding the status-list index in a query
+parameter and requires fragment-based encoding in `revocation_ref`.
+### 12.6. Algorithm Confusion
+An MD is a signed JWT and is therefore exposed to generic JWT validation
+risks.
+Issuers and verifiers MUST maintain an explicit algorithm allowlist and MUST
+reject `alg: "none"`.
+### 12.7. Offline Cache Staleness
+Offline-capable verifiers can become stale.
+If freshness of required artifacts cannot be established for the selected
+profile, the verifier SHOULD return `insufficient_evidence`.
+### 12.8. Forward Compatibility
+Silent acceptance of unknown fields is dangerous in governance policy
+artifacts.
+This version therefore forbids unknown top-level and nested members.
+## 13. Operational Considerations
+### 13.1. Authoring Tools
+Authoring tools SHOULD:
+1. expose the closed schema to operators before signing
+2. inject explicit defaults before signature generation
+3. render `reserved` and `ceiling` distinctly so operators do not confuse
+   them
+### 13.2. Caching
+Caches SHOULD key MDs by both `iss` and `jti`.
+Caches SHOULD index missions by `mission_id` as a stable lookup key.
+Caches MAY retain multiple MD instances with the same `mission_id` and
+different `jti` values.
+### 13.3. Rotation
+If an issuer rotates an MD instance without changing mission semantics:
+1. `jti` MUST change
+2. `mission_id` SHOULD remain stable
+3. `tool_manifest_digest` SHOULD remain stable if the tool manifest is
+   unchanged
+### 13.4. Transport
+Although payload integrity is provided by JWS, transport confidentiality is
+still important because MD contents expose mission structure, tool
+identifiers, and resource patterns.
+Deployments SHOULD use TLS or equivalent transport protection.
+## 14. JSON Schema
+The normative JSON Schema for this version is:
+`docs/spec/mission-declaration-v0.1.schema.json`
+The schema is part of the deliverable set for this version.
+The schema and this prose specification are intended to agree.
+If they diverge, this prose specification takes precedence.
+## 15. Examples
+This version provides these example payloads:
+1. `docs/spec/examples/minimal-md.json`
+2. `docs/spec/examples/full-md.json`
+The minimal example is intended to show the smallest practical valid MD.
+The full example is intended to exercise every optional or extensible
+surface, including `idm_extension`.
+The full example file is expected to be stored in RFC 8785 canonical byte
+form so round-trip checks can compare bytes directly.
+## 16. References
+### 16.1. Normative References
+1. RFC 2119, Key words for use in RFCs to Indicate Requirement Levels
+2. RFC 7519, JSON Web Token (JWT)
+3. RFC 8174, Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words
+4. RFC 8785, JSON Canonicalization Scheme (JCS)
+5. draft-niyikiza-oauth-attenuating-agent-tokens-00
+6. draft-ietf-oauth-status-list
+### 16.2. Informative References
+1. arXiv:2508.02110, Attractive Metadata Attack
+2. arXiv:2503.03704, MINJA
+3. `vibap-prototype/vibap/passport.py`
+4. `docs/session-2026-04-14/05-cpo-call-prep/unified-steps-final.md`
+## Appendix A. Summary Tables
+### A.1. Required Top-Level Claims
+| Claim | Type | Required |
+|-------|------|----------|
+| `iss` | string | yes |
+| `sub` | string | yes |
+| `aud` | string | yes |
+| `iat` | integer NumericDate | yes |
+| `exp` | integer NumericDate | yes |
+| `jti` | string | yes |
+| `mission_id` | string | yes |
+| `allowed_tool_classes` | array | yes |
+| `resource_policies` | array | yes |
+| `effect_policies` | array | yes |
+| `lineage_budgets` | object | yes |
+| `delegation_policy` | object | yes |
+| `flow_policies` | array | yes |
+| `required_telemetry` | array | yes |
+| `receipt_policy` | object | yes |
+| `conformance_profile` | string | yes |
+| `tool_manifest_digest` | string | yes |
+| `revocation_ref` | string | yes |
+| `approval_policy` | object | yes |
+| `governed_memory_stores` | array | yes |
+| `probing_rate_limit` | integer | yes |
+| `idm_extension` | object | no |
+### A.2. Side-Effect Classes
+The side-effect classes for this version are fixed:
+1. `read`
+2. `write`
+3. `network`
+4. `exec`
+5. `external_send`
+### A.3. Receipt Levels
+The receipt levels for this version are fixed:
+1. `minimal`
+2. `counter_signed`
+3. `transparency_logged`
+### A.4. Conformance Profiles
+The conformance profiles for this version are fixed:
+1. `Delegation-Core`
+2. `MIC-State`
+3. `MIC-Evidence`
+## Appendix B. Rationale Notes
+### B.1. Why `reserved` Appears in MD
+The MD is a policy artifact, not a live ledger.
+However, the mission may begin in a partially encumbered state.
+The `reserved` field exists to encode that initial encumbrance without
+forcing the verifier to guess.
+In ordinary root issuance, `reserved` SHOULD be zero.
+### B.2. Why `effect_policies` and `lineage_budgets` Are Separate
+They govern different failure modes.
+`effect_policies.limit` constrains per-event spend.
+`lineage_budgets.per_effect_class.*` constrains cumulative spend across the
+delegation tree.
+Both are required because either one alone is insufficient.
+### B.3. Why `revocation_ref` Uses a Fragment
+The user requirement for this version is a single `revocation_ref` claim.
+The underlying Token Status List design conceptually carries both a URI and
+an index.
+The fragment preserves a single-string claim while avoiding index leakage in
+HTTP query parameters.
+### B.4. Why Unknown Fields Are Rejected
+Mission policy is a security envelope.
+Silent acceptance of unknown fields turns schema drift into ambient
+authority.
+This version therefore chooses strict versioning over permissive parsing.
+## Appendix C. Implementation Checklist
+An implementation is ready to interoperate with MD `v0.1` if it can answer
+"yes" to all of the following:
+1. Does it reject unknown top-level members?
+2. Does it reject unknown nested members?
+3. Does it sign only with ES256?
+4. Does it reject `alg: "none"`?
+5. Does it canonicalize with RFC 8785 before hashing?
+6. Does it encode digests as `sha-256:` plus lowercase hex?
+7. Does it enforce `reserved <= ceiling`?
+8. Does it enforce exact coverage of all five side-effect classes?
+9. Does it parse `revocation_ref` fragments of the form `#idx=<n>`?
+10. Does it fail closed to `insufficient_evidence` when required telemetry is
+    missing?
+11. Does it prevent receipt-level weakening under `MIC-Evidence`?
+12. Does it compare tool-manifest digests by exact string equality?
+## Appendix D. Non-Goals
+This version does not attempt to:
+1. define a global resource-family registry
+2. define a global sensitivity-label registry
+3. define tool manifest contents
+4. define ER error codes
+5. define historical revocation semantics
+6. define encrypted MD payloads
+These are deliberate exclusions from `v0.1`.

@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ardur"
+version = "0.1.0"
+description = "Ardur — runtime governance and evidence layer for AI agents (MCEP reference implementation)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Gnani Rahul Nutakki", email = "gnani.nutakki@gmail.com" }
+]
+keywords = ["ai-agents", "governance", "mcep", "spiffe", "biscuit", "aat", "runtime-policy"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "PyJWT>=2.12.0",
+    "cryptography>=41.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "cedarpy>=4.0",
+    "z3-solver>=4.16",
+    "jsonschema>=4.0",
+    "biscuit-python==0.4.0",
+    "spiffe>=0.2,<0.3",
+    "mcp>=1.23.0",
+    "python-multipart>=0.0.26",
+]
+
+[project.scripts]
+ardur = "vibap.cli:main"
+# Deprecated alias retained for one release cycle to ease migration
+# from the legacy CLI name; emits a deprecation warning on use.
+ardur-proxy = "vibap.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/gnanirahulnutakki/ardur"
+Documentation = "https://github.com/gnanirahulnutakki/ardur/tree/main/docs"
+Repository = "https://github.com/gnanirahulnutakki/ardur"
+Issues = "https://github.com/gnanirahulnutakki/ardur/issues"
+Discussions = "https://github.com/gnanirahulnutakki/ardur/discussions"
+
+[tool.setuptools.packages.find]
+include = ["vibap*"]

@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spire-server
+  namespace: spire-system
+  labels:
+    app.kubernetes.io/name: spire-server
+    app.kubernetes.io/part-of: ardur
+data:
+  server.conf: |
+    server {
+      bind_address = "0.0.0.0"
+      bind_port = "8081"
+      socket_path = "/run/spire/sockets/server.sock"
+      trust_domain = "${SPIRE_TRUST_DOMAIN}"
+      data_dir = "/run/spire/data"
+      log_level = "INFO"
+      log_format = "text"
+      ca_key_type = "ec-p256"
+      default_x509_svid_ttl = "1h"
+      default_jwt_svid_ttl = "5m"
+      ca_ttl = "24h"
+      audit_log_enabled = true
+
+      ca_subject = {
+        organization = ["Ardur"]
+        country = ["US"]
+        common_name = ""
+      }
+    }
+
+    plugins {
+      DataStore "sql" {
+        plugin_data {
+          database_type = "postgres"
+          connection_string = "${SPIRE_DATASTORE_CONN}"
+        }
+      }
+
+      NodeAttestor "k8s_psat" {
+        plugin_data {
+          clusters = {
+            "${SPIRE_CLUSTER_NAME}" = {
+              service_account_allow_list = ["spire-system:spire-agent"]
+              audience = "spire-server"
+              allowed_node_label_keys = [
+                "kubernetes.io/hostname",
+                "topology.kubernetes.io/zone",
+              ]
+              allowed_pod_label_keys = [
+                "app.kubernetes.io/name",
+                "framework",
+                "ardur.spiffe.io/enabled",
+              ]
+            }
+          }
+        }
+      }
+
+      KeyManager "disk" {
+        plugin_data {
+          keys_path = "/run/spire/data/keys.json"
+        }
+      }
+
+      UpstreamAuthority "disk" {
+        plugin_data {
+          cert_file_path = "/run/spire/upstream-ca/tls.crt"
+          key_file_path = "/run/spire/upstream-ca/tls.key"
+          bundle_file_path = "/run/spire/upstream-ca/ca.crt"
+        }
+      }
+
+      Notifier "k8sbundle" {
+        plugin_data {
+          namespace = "spire-system"
+          config_map = "spire-bundle"
+          config_map_key = "bundle.crt"
+        }
+      }
+    }
+
+    health_checks {
+      listener_enabled = true
+      bind_address = "0.0.0.0"
+      bind_port = "8080"
+      live_path = "/live"
+      ready_path = "/ready"
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spire-bundle
+  namespace: spire-system
+  labels:
+    app.kubernetes.io/name: spire-bundle
+    app.kubernetes.io/part-of: ardur
+data:
+  bundle.crt: ""

@@ -1,0 +1,151 @@
+# Kubernetes SPIRE deployment design
+
+This directory replaces the Compose-era SPIRE topology with a Kubernetes design
+that is credible in reviewer Q&A without claiming that the repo has already
+performed a production rollout.
+
+## Scope
+
+- `server/`: 3-replica SPIRE Server StatefulSet, services, config, RBAC, and PVCs
+- `agent/`: node-local SPIRE Agent DaemonSet and Workload API socket exposure
+- `csi-driver/`: SPIFFE CSI driver for pod-mounted X.509 SVIDs
+- `registration/`: sample workload registrations for the Ardur demo frameworks
+
+## Design prerequisites
+
+These manifests are intentionally incomplete as a real deploy bundle. The
+cluster operator still needs to provide:
+
+1. A reachable PostgreSQL instance and a Secret named
+   `spire-server-datastore` in `spire-system` with key `connection_string`.
+1. A Secret named `spire-upstream-ca` in `spire-system` with:
+   - `tls.crt`: upstream CA certificate or intermediate chain
+   - `tls.key`: upstream CA private key
+   - `ca.crt`: upstream root bundle
+1. Node labels and namespace labels that match the selectors described in
+   `registration/ardur-workloads.yaml`.
+1. The SPIRE controller manager CRDs if you want to apply
+   `ClusterSPIFFEID` objects directly.
+
+## Install order
+
+Apply the manifests in this order:
+
+```bash
+kubectl apply -f k8s/spire/server/serviceaccount.yaml
+kubectl apply -f k8s/spire/server/rbac.yaml
+kubectl apply -f k8s/spire/server/configmap.yaml
+kubectl apply -f k8s/spire/server/service.yaml
+kubectl apply -f k8s/spire/server/statefulset.yaml
+
+kubectl apply -f k8s/spire/agent/serviceaccount.yaml
+kubectl apply -f k8s/spire/agent/rbac.yaml
+kubectl apply -f k8s/spire/agent/configmap.yaml
+kubectl apply -f k8s/spire/agent/daemonset.yaml
+
+kubectl apply -f k8s/spire/csi-driver/rbac.yaml
+kubectl apply -f k8s/spire/csi-driver/daemonset.yaml
+
+# Optional: only after spire-controller-manager is installed
+kubectl apply -f k8s/spire/registration/ardur-workloads.yaml
+```
+
+## Workload consumption model
+
+The preferred workload integration is the SPIFFE CSI driver. A pod consumes it
+with an inline ephemeral volume similar to:
+
+```yaml
+volumes:
+- name: spiffe
+  csi:
+    driver: csi.spiffe.io
+    readOnly: true
+
+volumeMounts:
+- name: spiffe
+  mountPath: /var/run/secrets/spiffe.io
+  readOnly: true
+```
+
+That keeps the private key lifecycle tied to the pod lifecycle and avoids
+teaching every workload to talk directly to the Workload API socket.
+
+## Validation plan
+
+After deploy, validate in this order:
+
+1. Confirm all three server pods are healthy and share the same datastore:
+
+```bash
+kubectl -n spire-system get pods -l app.kubernetes.io/name=spire-server
+kubectl -n spire-system logs statefulset/spire-server --tail=50
+```
+
+2. Confirm bundle publication is working:
+
+```bash
+kubectl -n spire-system get configmap spire-bundle -o yaml
+kubectl -n spire-system exec spire-server-0 -- \
+  /opt/spire/bin/spire-server bundle show
+```
+
+3. Confirm node attestation:
+
+```bash
+kubectl -n spire-system exec spire-server-0 -- \
+  /opt/spire/bin/spire-server entry show
+kubectl -n spire-system exec spire-server-0 -- \
+  /opt/spire/bin/spire-server agent list
+```
+
+4. Confirm workload API reachability on a node:
+
+```bash
+AGENT_POD=$(kubectl -n spire-system get pod -l app.kubernetes.io/name=spire-agent -o jsonpath='{.items[0].metadata.name}')
+kubectl -n spire-system exec "$AGENT_POD" -- \
+  /opt/spire/bin/spire-agent api fetch -socketPath /run/spire/agent-sockets/agent.sock
+```
+
+5. Confirm registration entries reconcile:
+
+```bash
+kubectl get clusterspiffeid
+kubectl describe clusterspiffeid ardur-langchain
+```
+
+## Trust bundle rotation walkthrough
+
+The rotation path is:
+
+1. SPIRE server rotates or renews its intermediate CA from the disk-based
+   upstream authority.
+1. The server updates its own bundle state in the shared datastore.
+1. The `k8sbundle` notifier rewrites the `spire-bundle` ConfigMap in
+   `spire-system`.
+1. SPIRE agents consume the updated bundle and continue serving the current
+   bundle over the Workload API.
+1. Workloads using the CSI driver see the renewed material through the mounted
+   volume; workloads using the Workload API directly fetch the new bundle on
+   their next read.
+
+## Rollback plan
+
+If the deployment needs to be backed out:
+
+1. Remove registration CRs or delete the equivalent SPIRE entries first so
+   workloads stop depending on new identities.
+1. Remove the CSI driver DaemonSet and `CSIDriver` object.
+1. Remove the agent DaemonSet.
+1. Remove the server StatefulSet and services.
+1. Keep the PostgreSQL snapshot and the PVCs until you decide whether you are
+   rolling forward again or discarding the trust domain state permanently.
+
+## Operational TODOs before a real cluster rollout
+
+- Replace the placeholder `ardur.demo` trust domain and `ardur-demo`
+  cluster name.
+- Back the upstream CA Secret with your real PKI rotation process.
+- Add PodDisruptionBudgets, NetworkPolicies, and secret delivery automation.
+- Decide whether controller-managed `ClusterSPIFFEID` reconciliation or
+  explicit `spire-server entry create` automation is the production path.

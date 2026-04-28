@@ -1,0 +1,59 @@
+# These sample ClusterSPIFFEIDs require the SPIRE controller manager CRDs.
+# If the controller manager is not deployed, translate each object into
+# equivalent `spire-server entry create` commands during install time.
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: ardur-langchain
+spec:
+  spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/ardur/langchain/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: langchain-agent
+      framework: langchain
+  namespaceSelector:
+    matchLabels:
+      ardur.spiffe.io/enabled: "true"
+  workloadSelectorTemplates:
+  - "k8s:container-name:langchain-agent"
+  - "k8s:pod-label:framework:langchain"
+  ttl: 1h
+  jwtTtl: 5m
+---
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: ardur-langgraph
+spec:
+  spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/ardur/langgraph/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: langgraph-orchestrator
+      framework: langgraph
+  namespaceSelector:
+    matchLabels:
+      ardur.spiffe.io/enabled: "true"
+  workloadSelectorTemplates:
+  - "k8s:container-name:langgraph-orchestrator"
+  - "k8s:pod-label:framework:langgraph"
+  ttl: 1h
+  jwtTtl: 5m
+---
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: ardur-autogen
+spec:
+  spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/ardur/autogen/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: autogen-agent
+      framework: autogen
+  namespaceSelector:
+    matchLabels:
+      ardur.spiffe.io/enabled: "true"
+  workloadSelectorTemplates:
+  - "k8s:container-name:autogen-agent"
+  - "k8s:pod-label:framework:autogen"
+  ttl: 1h
+  jwtTtl: 5m

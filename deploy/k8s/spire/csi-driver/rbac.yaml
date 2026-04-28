@@ -1,0 +1,11 @@
+# The upstream SPIFFE CSI driver example does not require Kubernetes API
+# permissions beyond a ServiceAccount because the daemon talks to kubelet and
+# the local SPIRE agent socket rather than the Kubernetes API server.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spiffe-csi-driver
+  namespace: spire-system
+  labels:
+    app.kubernetes.io/name: spiffe-csi-driver
+    app.kubernetes.io/part-of: ardur
