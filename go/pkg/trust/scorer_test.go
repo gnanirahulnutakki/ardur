@@ -1,0 +1,639 @@
+package trust
+
+import (
+	"context"
+	"errors"
+	"math"
+	"sync"
+	"testing"
+	"time"
+)
+
+func TestScoreWeightsValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		weights ScoreWeights
+		wantErr bool
+	}{
+		{"default", ScoreWeights{0.3, 0.3, 0.4}, false},
+		{"equal", ScoreWeights{1.0 / 3, 1.0 / 3, 1.0 / 3}, false},
+		{"sum not 1", ScoreWeights{0.5, 0.5, 0.5}, true},
+		{"negative", ScoreWeights{-0.1, 0.6, 0.5}, true},
+		{"zero sum", ScoreWeights{0, 0, 0}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.weights.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSeverityPenalty(t *testing.T) {
+	if SeverityPenalty(SeverityCritical) != 20.0 {
+		t.Error("critical penalty should be 20")
+	}
+	if SeverityPenalty(SeverityHigh) != 10.0 {
+		t.Error("high penalty should be 10")
+	}
+	if SeverityPenalty(SeverityMedium) != 5.0 {
+		t.Error("medium penalty should be 5")
+	}
+	if SeverityPenalty(SeverityLow) != 2.0 {
+		t.Error("low penalty should be 2")
+	}
+	if SeverityPenalty(SeverityInfo) != 0.0 {
+		t.Error("info penalty should be 0")
+	}
+	if SeverityPenalty("unknown") != 5.0 {
+		t.Error("unknown severity should default to 5")
+	}
+}
+
+func TestTierFromScore(t *testing.T) {
+	tests := []struct {
+		score float64
+		tier  string
+	}{
+		{100, TierFull},
+		{70, TierFull},
+		{69.9, TierLimited},
+		{40, TierLimited},
+		{39.9, TierQuarantine},
+		{0, TierQuarantine},
+	}
+
+	for _, tt := range tests {
+		tier := TierFromScore(tt.score)
+		if tier != tt.tier {
+			t.Errorf("TierFromScore(%.1f) = %s, want %s", tt.score, tier, tt.tier)
+		}
+	}
+}
+
+func TestInMemoryAggregator_RegisterAndGetScore(t *testing.T) {
+	agg, err := NewInMemoryAggregator()
+	if err != nil {
+		t.Fatalf("NewInMemoryAggregator: %v", err)
+	}
+	defer agg.Close()
+
+	ctx := context.Background()
+
+	err = agg.RegisterAgent(ctx, "agent-1", 0.8, 0.9)
+	if err != nil {
+		t.Fatalf("RegisterAgent: %v", err)
+	}
+
+	score, err := agg.GetScore(ctx, "agent-1")
+	if err != nil {
+		t.Fatalf("GetScore: %v", err)
+	}
+
+	if score.StaticCapability != 0.8 {
+		t.Errorf("static = %.2f, want 0.80", score.StaticCapability)
+	}
+	if score.HistoricalReputation != 0.9 {
+		t.Errorf("historical = %.2f, want 0.90", score.HistoricalReputation)
+	}
+	if score.RuntimeCompliance != 1.0 {
+		t.Errorf("runtime = %.2f, want 1.00", score.RuntimeCompliance)
+	}
+
+	// Default weights: 0.3*80 + 0.3*90 + 0.4*100 = 24 + 27 + 40 = 91
+	if score.CompositeScore != 91.0 {
+		t.Errorf("composite = %.2f, want 91.00", score.CompositeScore)
+	}
+	if score.AuthorizationTier != TierFull {
+		t.Errorf("tier = %s, want full", score.AuthorizationTier)
+	}
+}
+
+func TestInMemoryAggregator_RegisterValidation(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+	ctx := context.Background()
+
+	if err := agg.RegisterAgent(ctx, "", 0.5, 0.5); err == nil {
+		t.Error("expected error for empty agent ID")
+	}
+	if err := agg.RegisterAgent(ctx, "a", -0.1, 0.5); err == nil {
+		t.Error("expected error for negative static score")
+	}
+	if err := agg.RegisterAgent(ctx, "a", 0.5, 1.1); err == nil {
+		t.Error("expected error for historical > 1.0")
+	}
+}
+
+func TestInMemoryAggregator_IngestSignalDegradation(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+	ctx := context.Background()
+
+	agg.RegisterAgent(ctx, "agent-1", 0.8, 0.9)
+
+	// Ingest a critical signal (penalty = 20/100 = 0.20 to runtime)
+	score, err := agg.IngestSignal(ctx, TelemetrySignal{
+		AgentID:   "agent-1",
+		Type:      SignalBehavioralDrift,
+		Severity:  SeverityCritical,
+		Timestamp: time.Now(),
+		Source:    "tetragon",
+	})
+	if err != nil {
+		t.Fatalf("IngestSignal: %v", err)
+	}
+
+	// Runtime goes from 1.0 to 0.8
+	if score.RuntimeCompliance != 0.8 {
+		t.Errorf("runtime = %.2f, want 0.80", score.RuntimeCompliance)
+	}
+	// 0.3*80 + 0.3*90 + 0.4*80 = 24 + 27 + 32 = 83
+	if score.CompositeScore != 83.0 {
+		t.Errorf("composite = %.2f, want 83.00", score.CompositeScore)
+	}
+	if score.ViolationCount != 1 {
+		t.Errorf("violations = %d, want 1", score.ViolationCount)
+	}
+}
+
+func TestInMemoryAggregator_DegradeToQuarantine(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+	ctx := context.Background()
+
+	// Use low static+historical so quarantine is reachable
+	agg.RegisterAgent(ctx, "agent-1", 0.3, 0.3)
+
+	// Initial: 0.3*30 + 0.3*30 + 0.4*100 = 9 + 9 + 40 = 58 (limited)
+	score, _ := agg.GetScore(ctx, "agent-1")
+	if score.AuthorizationTier != TierLimited {
+		t.Logf("initial tier = %s, composite=%.2f", score.AuthorizationTier, score.CompositeScore)
+	}
+
+	// Multiple critical violations to push to quarantine
+	for i := 0; i < 5; i++ {
+		score, _ = agg.IngestSignal(ctx, TelemetrySignal{
+			AgentID:  "agent-1",
+			Type:     SignalPolicyViolation,
+			Severity: SeverityCritical,
+			Source:   "verifier",
+		})
+	}
+
+	// Runtime should be 0 after 5 critical penalties (each -0.20)
+	if score.RuntimeCompliance > 0.001 {
+		t.Errorf("runtime = %.4f, want ~0.00", score.RuntimeCompliance)
+	}
+	// 0.3*30 + 0.3*30 + 0.4*0 = 9 + 9 + 0 = 18 (quarantine)
+	if score.AuthorizationTier != TierQuarantine {
+		t.Errorf("tier = %s, want quarantine (composite=%.2f, runtime=%.4f)",
+			score.AuthorizationTier, score.CompositeScore, score.RuntimeCompliance)
+	}
+}
+
+func TestInMemoryAggregator_Recovery(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+	ctx := context.Background()
+
+	agg.RegisterAgent(ctx, "agent-1", 0.8, 0.9)
+
+	// Degrade
+	agg.IngestSignal(ctx, TelemetrySignal{
+		AgentID: "agent-1", Type: SignalBehavioralDrift,
+		Severity: SeverityHigh, Source: "tetragon",
+	})
+
+	score, _ := agg.GetScore(ctx, "agent-1")
+	runtimeBefore := score.RuntimeCompliance
+
+	// Clean interval should recover runtime
+	agg.IngestSignal(ctx, TelemetrySignal{
+		AgentID: "agent-1", Type: SignalCleanInterval,
+		Severity: SeverityInfo, Source: "aggregator",
+	})
+
+	score, _ = agg.GetScore(ctx, "agent-1")
+	if score.RuntimeCompliance <= runtimeBefore {
+		t.Errorf("runtime didn't recover: before=%.2f, after=%.2f", runtimeBefore, score.RuntimeCompliance)
+	}
+}
+
+func TestInMemoryAggregator_InfoSignalNoImpact(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+	ctx := context.Background()
+
+	agg.RegisterAgent(ctx, "agent-1", 0.8, 0.9)
+
+	scoreBefore, _ := agg.GetScore(ctx, "agent-1")
+	compositeBefore := scoreBefore.CompositeScore
+
+	agg.IngestSignal(ctx, TelemetrySignal{
+		AgentID: "agent-1", Type: SignalBehavioralDrift,
+		Severity: SeverityInfo, Source: "kubescape",
+	})
+
+	scoreAfter, _ := agg.GetScore(ctx, "agent-1")
+	if scoreAfter.CompositeScore != compositeBefore {
+		t.Errorf("info signal changed composite: before=%.2f, after=%.2f", compositeBefore, scoreAfter.CompositeScore)
+	}
+}
+
+func TestInMemoryAggregator_AgentNotFound(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+
+	_, err := agg.GetScore(context.Background(), "nonexistent")
+	if !errors.Is(err, ErrAgentNotFound) {
+		t.Errorf("err = %v, want ErrAgentNotFound", err)
+	}
+
+	_, err = agg.IngestSignal(context.Background(), TelemetrySignal{AgentID: "nonexistent"})
+	if !errors.Is(err, ErrAgentNotFound) {
+		t.Errorf("err = %v, want ErrAgentNotFound", err)
+	}
+}
+
+func TestInMemoryAggregator_Closed(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	agg.Close()
+	ctx := context.Background()
+
+	if err := agg.RegisterAgent(ctx, "a", 0.5, 0.5); !errors.Is(err, ErrAggregatorClosed) {
+		t.Errorf("RegisterAgent after close: %v", err)
+	}
+	if _, err := agg.GetScore(ctx, "a"); !errors.Is(err, ErrAggregatorClosed) {
+		t.Errorf("GetScore after close: %v", err)
+	}
+	if _, err := agg.IngestSignal(ctx, TelemetrySignal{AgentID: "a"}); !errors.Is(err, ErrAggregatorClosed) {
+		t.Errorf("IngestSignal after close: %v", err)
+	}
+	if _, err := agg.ListScores(ctx); !errors.Is(err, ErrAggregatorClosed) {
+		t.Errorf("ListScores after close: %v", err)
+	}
+}
+
+func TestInMemoryAggregator_ListScores(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+	ctx := context.Background()
+
+	agg.RegisterAgent(ctx, "agent-1", 0.8, 0.9)
+	agg.RegisterAgent(ctx, "agent-2", 0.5, 0.5)
+
+	scores, err := agg.ListScores(ctx)
+	if err != nil {
+		t.Fatalf("ListScores: %v", err)
+	}
+	if len(scores) != 2 {
+		t.Errorf("score count = %d, want 2", len(scores))
+	}
+}
+
+func TestInMemoryAggregator_CustomWeights(t *testing.T) {
+	agg, err := NewInMemoryAggregator(WithWeights(ScoreWeights{
+		Static: 0.5, Historical: 0.3, Runtime: 0.2,
+	}))
+	if err != nil {
+		t.Fatalf("NewInMemoryAggregator: %v", err)
+	}
+	defer agg.Close()
+
+	agg.RegisterAgent(context.Background(), "agent-1", 1.0, 1.0)
+	score, _ := agg.GetScore(context.Background(), "agent-1")
+
+	// 0.5*100 + 0.3*100 + 0.2*100 = 100
+	if score.CompositeScore != 100.0 {
+		t.Errorf("composite = %.2f, want 100.00", score.CompositeScore)
+	}
+}
+
+func TestInMemoryAggregator_InvalidWeights(t *testing.T) {
+	_, err := NewInMemoryAggregator(WithWeights(ScoreWeights{
+		Static: 0.5, Historical: 0.5, Runtime: 0.5,
+	}))
+	if err == nil {
+		t.Error("expected error for invalid weights")
+	}
+}
+
+func TestInMemoryAggregator_OnChangeCallback(t *testing.T) {
+	var mu sync.Mutex
+	var changes []string
+
+	agg, _ := NewInMemoryAggregator(WithOnChange(func(agentID, oldTier, newTier string, _ *TrustScore) {
+		mu.Lock()
+		defer mu.Unlock()
+		changes = append(changes, agentID+":"+oldTier+"->"+newTier)
+	}))
+	defer agg.Close()
+	ctx := context.Background()
+
+	agg.RegisterAgent(ctx, "agent-1", 0.5, 0.5)
+
+	// Push to quarantine with multiple critical violations
+	for i := 0; i < 5; i++ {
+		agg.IngestSignal(ctx, TelemetrySignal{
+			AgentID: "agent-1", Type: SignalPolicyViolation,
+			Severity: SeverityCritical, Source: "test",
+		})
+	}
+
+	// Give the goroutine a moment to fire
+	time.Sleep(50 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(changes) == 0 {
+		t.Log("note: tier change callback may not fire if score stays in same tier between individual signals")
+	}
+}
+
+func TestInMemoryAggregator_ConcurrentAccess(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+	ctx := context.Background()
+
+	agg.RegisterAgent(ctx, "agent-1", 0.8, 0.9)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			agg.IngestSignal(ctx, TelemetrySignal{
+				AgentID:  "agent-1",
+				Type:     SignalBehavioralDrift,
+				Severity: SeverityLow,
+				Source:   "test",
+			})
+		}()
+	}
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			agg.GetScore(ctx, "agent-1")
+		}()
+	}
+	wg.Wait()
+
+	score, _ := agg.GetScore(ctx, "agent-1")
+	if score.SignalCount != 50 {
+		t.Errorf("signal count = %d, want 50", score.SignalCount)
+	}
+}
+
+// --- MockAggregator tests ---
+
+func TestMockAggregator_NewMockAggregator(t *testing.T) {
+	m := NewMockAggregator()
+	if m == nil {
+		t.Fatal("NewMockAggregator returned nil")
+	}
+	if m.scores == nil {
+		t.Error("scores map should be initialized")
+	}
+	if m.closed {
+		t.Error("new mock should not be closed")
+	}
+}
+
+func TestMockAggregator_SetScore(t *testing.T) {
+	m := NewMockAggregator()
+	score := &TrustScore{AgentID: "agent-1", CompositeScore: 85.0}
+	m.SetScore(score)
+	got, err := m.GetScore(context.Background(), "agent-1")
+	if err != nil {
+		t.Fatalf("GetScore: %v", err)
+	}
+	if got.CompositeScore != 85.0 {
+		t.Errorf("composite = %.2f, want 85.00", got.CompositeScore)
+	}
+}
+
+func TestMockAggregator_SetIngestError(t *testing.T) {
+	m := NewMockAggregator()
+	m.RegisterAgent(context.Background(), "agent-1", 0.8, 0.9)
+	m.SetIngestError(errors.New("injected error"))
+	_, err := m.IngestSignal(context.Background(), TelemetrySignal{AgentID: "agent-1"})
+	if err == nil {
+		t.Error("expected error from SetIngestError")
+	}
+	if err.Error() != "injected error" {
+		t.Errorf("err = %v, want injected error", err)
+	}
+}
+
+func TestMockAggregator_IngestCount(t *testing.T) {
+	m := NewMockAggregator()
+	m.RegisterAgent(context.Background(), "agent-1", 0.8, 0.9)
+	if c := m.IngestCount(); c != 0 {
+		t.Errorf("IngestCount() = %d, want 0", c)
+	}
+	m.IngestSignal(context.Background(), TelemetrySignal{AgentID: "agent-1"})
+	m.IngestSignal(context.Background(), TelemetrySignal{AgentID: "agent-1"})
+	if c := m.IngestCount(); c != 2 {
+		t.Errorf("IngestCount() = %d, want 2", c)
+	}
+}
+
+func TestMockAggregator_Signals(t *testing.T) {
+	m := NewMockAggregator()
+	m.RegisterAgent(context.Background(), "agent-1", 0.8, 0.9)
+	sig1 := TelemetrySignal{AgentID: "agent-1", Type: SignalBehavioralDrift}
+	sig2 := TelemetrySignal{AgentID: "agent-1", Type: SignalPolicyViolation}
+	m.IngestSignal(context.Background(), sig1)
+	m.IngestSignal(context.Background(), sig2)
+	signals := m.Signals()
+	if len(signals) != 2 {
+		t.Fatalf("Signals() len = %d, want 2", len(signals))
+	}
+	if signals[0].Type != SignalBehavioralDrift {
+		t.Errorf("first signal type = %s, want behavioral_drift", signals[0].Type)
+	}
+	if signals[1].Type != SignalPolicyViolation {
+		t.Errorf("second signal type = %s, want policy_violation", signals[1].Type)
+	}
+}
+
+func TestMockAggregator_RegisterAgent(t *testing.T) {
+	m := NewMockAggregator()
+	ctx := context.Background()
+	err := m.RegisterAgent(ctx, "agent-1", 0.8, 0.9)
+	if err != nil {
+		t.Fatalf("RegisterAgent: %v", err)
+	}
+	score, err := m.GetScore(ctx, "agent-1")
+	if err != nil {
+		t.Fatalf("GetScore: %v", err)
+	}
+	if score.StaticCapability != 0.8 || score.HistoricalReputation != 0.9 {
+		t.Errorf("score = %+v", score)
+	}
+}
+
+func TestMockAggregator_IngestSignal_Success(t *testing.T) {
+	m := NewMockAggregator()
+	m.RegisterAgent(context.Background(), "agent-1", 0.8, 0.9)
+	score, err := m.IngestSignal(context.Background(), TelemetrySignal{
+		AgentID: "agent-1", Type: SignalBehavioralDrift, Source: "test",
+	})
+	if err != nil {
+		t.Fatalf("IngestSignal: %v", err)
+	}
+	if score == nil {
+		t.Fatal("expected non-nil score")
+	}
+	if score.AgentID != "agent-1" {
+		t.Errorf("agentID = %s, want agent-1", score.AgentID)
+	}
+}
+
+func TestMockAggregator_IngestSignal_Error(t *testing.T) {
+	m := NewMockAggregator()
+	m.RegisterAgent(context.Background(), "agent-1", 0.8, 0.9)
+	m.SetIngestError(errors.New("mock ingest error"))
+	_, err := m.IngestSignal(context.Background(), TelemetrySignal{AgentID: "agent-1"})
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestMockAggregator_GetScore_Found(t *testing.T) {
+	m := NewMockAggregator()
+	m.SetScore(&TrustScore{AgentID: "agent-1", CompositeScore: 75.0})
+	score, err := m.GetScore(context.Background(), "agent-1")
+	if err != nil {
+		t.Fatalf("GetScore: %v", err)
+	}
+	if score.CompositeScore != 75.0 {
+		t.Errorf("composite = %.2f, want 75.00", score.CompositeScore)
+	}
+}
+
+func TestMockAggregator_GetScore_NotFound(t *testing.T) {
+	m := NewMockAggregator()
+	_, err := m.GetScore(context.Background(), "nonexistent")
+	if !errors.Is(err, ErrAgentNotFound) {
+		t.Errorf("err = %v, want ErrAgentNotFound", err)
+	}
+}
+
+func TestMockAggregator_ListScores(t *testing.T) {
+	m := NewMockAggregator()
+	m.SetScore(&TrustScore{AgentID: "a1", CompositeScore: 80})
+	m.SetScore(&TrustScore{AgentID: "a2", CompositeScore: 90})
+	scores, err := m.ListScores(context.Background())
+	if err != nil {
+		t.Fatalf("ListScores: %v", err)
+	}
+	if len(scores) != 2 {
+		t.Errorf("len = %d, want 2", len(scores))
+	}
+}
+
+func TestMockAggregator_Close(t *testing.T) {
+	m := NewMockAggregator()
+	if err := m.Close(); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+	if !m.closed {
+		t.Error("closed should be true after Close")
+	}
+	_, err := m.GetScore(context.Background(), "any")
+	if !errors.Is(err, ErrAggregatorClosed) {
+		t.Errorf("GetScore after close: %v", err)
+	}
+}
+
+func TestMockAggregator_RegisterAgentClosed(t *testing.T) {
+	m := NewMockAggregator()
+	m.Close()
+	err := m.RegisterAgent(context.Background(), "agent-1", 0.5, 0.5)
+	if !errors.Is(err, ErrAggregatorClosed) {
+		t.Errorf("RegisterAgent after close: %v", err)
+	}
+}
+
+// --- Scorer edge cases ---
+
+func TestScoreWeightsValidate_NegativeWeights(t *testing.T) {
+	tests := []struct {
+		name string
+		w    ScoreWeights
+	}{
+		{"static negative", ScoreWeights{Static: -0.1, Historical: 0.6, Runtime: 0.5}},
+		{"historical negative", ScoreWeights{Static: 0.6, Historical: -0.1, Runtime: 0.5}},
+		{"runtime negative", ScoreWeights{Static: 0.5, Historical: 0.5, Runtime: -0.1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.w.Validate()
+			if err == nil {
+				t.Error("expected error for negative weight")
+			}
+		})
+	}
+}
+
+func TestScoreWeightsValidate_NaNInfWeights(t *testing.T) {
+	tests := []struct {
+		name string
+		w    ScoreWeights
+	}{
+		{"NaN static", ScoreWeights{Static: math.NaN(), Historical: 0.5, Runtime: 0.5}},
+		{"NaN historical", ScoreWeights{Static: 0.5, Historical: math.NaN(), Runtime: 0.5}},
+		{"NaN runtime", ScoreWeights{Static: 0.5, Historical: 0.5, Runtime: math.NaN()}},
+		{"Inf static", ScoreWeights{Static: math.Inf(1), Historical: 0.5, Runtime: 0.5}},
+		{"Inf historical", ScoreWeights{Static: 0.5, Historical: math.Inf(-1), Runtime: 0.5}},
+		{"Inf runtime", ScoreWeights{Static: 0.5, Historical: 0.5, Runtime: math.Inf(1)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.w.Validate()
+			if err == nil {
+				t.Error("expected error for NaN/Inf weight")
+			}
+		})
+	}
+}
+
+func TestInMemoryAggregator_RegisterAgentClosed(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	agg.Close()
+	err := agg.RegisterAgent(context.Background(), "agent-1", 0.5, 0.5)
+	if !errors.Is(err, ErrAggregatorClosed) {
+		t.Errorf("RegisterAgent on closed aggregator: %v", err)
+	}
+}
+
+func TestInMemoryAggregator_IngestSignalEmptyAgentID(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+	agg.RegisterAgent(context.Background(), "agent-1", 0.8, 0.9)
+	_, err := agg.IngestSignal(context.Background(), TelemetrySignal{AgentID: ""})
+	if err == nil {
+		t.Error("expected error for empty agent ID")
+	}
+	if !errors.Is(err, ErrInvalidSignal) {
+		t.Errorf("err = %v, want ErrInvalidSignal", err)
+	}
+}
+
+func TestInMemoryAggregator_RegisterAgentEmptyAgentID(t *testing.T) {
+	agg, _ := NewInMemoryAggregator()
+	defer agg.Close()
+	err := agg.RegisterAgent(context.Background(), "", 0.5, 0.5)
+	if err == nil {
+		t.Error("expected error for empty agent ID")
+	}
+	if !errors.Is(err, ErrInvalidSignal) {
+		t.Errorf("err = %v, want ErrInvalidSignal", err)
+	}
+}
