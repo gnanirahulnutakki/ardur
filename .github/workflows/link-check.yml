@@ -29,19 +29,18 @@ jobs:
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411  # v2.8.0
         with:
           # Excludes:
-          # - github.com/.../discussions[/...]: GitHub returns 404 until
-          #   Discussions is enabled in repo settings. Issue templates +
-          #   README link to the Discussions tab as our intended public
-          #   feedback surface; once Discussions is enabled the exclude
-          #   can be removed.
           # - github.com/.../security/advisories/new: requires being
           #   signed in to GitHub; unauthenticated lychee gets a redirect
-          #   that GitHub then 404s.
+          #   that GitHub then 404s. Cannot be unblocked without
+          #   authenticating the lychee runner.
+          # (Discussions exclude removed 2026-04-28: Discussions are now
+          # enabled on the repo so the discussions tab and category URLs
+          # return 200 to unauthenticated callers.)
           args: >-
             --cache
             --max-cache-age 7d
             --no-progress
             --accept 200,206,429
-            --exclude 'github\.com/.*/(discussions|security/advisories/new)(/.*)?$'
+            --exclude 'github\.com/.*/security/advisories/new(/.*)?$'
             './**/*.md'
           fail: true
