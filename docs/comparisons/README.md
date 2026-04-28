@@ -6,7 +6,7 @@ A reader doing due diligence on Ardur ends up with the same set of questions eve
 
 - **[OAuth and managed-agent auth](./oauth-and-managed-agent-auth.md)** — where Ardur sits relative to OAuth, AAT, and the managed-agent-auth direction Cloudflare and others are pursuing. Short version: complementary, not competing.
 - **[Hook evaluation model](./hook-evaluation-model.md)** — how the verifier decides on a tool call when the call's arguments aren't fully resolved at pre-action time. Three responses (deterministic pre-action, abstain on uncertainty, post-action attestation) covering the cases LLM-driven agents actually produce.
-- **[Protocol overhead](./protocol-overhead.md)** — what we'll measure and publish in Phase 7 (payload size, latency, audit volume), and why we're not publishing the internal numbers until they've been re-run under the renamed runtime.
+- **[Protocol overhead](./protocol-overhead.md)** — what we'll measure and publish (payload size, latency, audit volume), and why we're not publishing the internal numbers until they've been re-run under the renamed runtime.
 
 ## What's not here
 

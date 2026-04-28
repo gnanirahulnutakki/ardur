@@ -3,7 +3,7 @@
 Ardur is the runtime governance and evidence layer for AI agents.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Phase](https://img.shields.io/badge/phase-0%20%E2%80%94%20public%20shell-blue)](STATUS.md)
+[![Status](https://img.shields.io/badge/status-pre--release-blue)](STATUS.md)
 [![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/gnanirahulnutakki/ardur/discussions)
 [![Articles](https://img.shields.io/badge/docs-articles-9cf)](docs/articles/README.md)
 
@@ -46,7 +46,7 @@ This repo currently includes:
 - public v0.1 specs for mission declarations, execution receipts, verifier contracts, conformance profiles, and related protocol surfaces
 - curated Python and Go runtime imports under `python/` and `go/`
 - JSON-only mission examples plus framework example stubs under `examples/`
-- selected archival terminal recordings (rerunnable proof path lands with Phase 1 — see [MEDIA.md](MEDIA.md))
+- selected archival terminal recordings (the rerunnable proof path lands with the next public drop — see [MEDIA.md](MEDIA.md))
 
 ## What Is Coming Next
 
@@ -63,7 +63,7 @@ Ardur sits between an AI agent and the tools it calls — so the integration sto
 
 | Layer                | In repo now | Still pending public validation |
 |----------------------|-------------|---------------------------------|
-| **Agent framework**  | JSON mission examples; framework stubs for Claude Code, OpenAI Agents SDK, Google ADK, LangChain, LangGraph, AutoGen | runnable framework adapters |
+| **Agent framework**  | JSON mission examples; framework stubs (README-only) for Claude Code, OpenAI Agents SDK, Google ADK, LangChain, LangGraph, AutoGen | runnable framework adapters |
 | **Model provider**   | provider-agnostic tool boundary in the runtime design | local Ollama quickstarts and live-provider examples |
 | **Policy engine**    | native checks, forbid-rules, Cedar-facing surfaces | OPA and broader Biscuit datalog examples |
 | **Identity**         | SPIFFE / SPIRE-oriented code and docs | full cluster deployment walkthrough |

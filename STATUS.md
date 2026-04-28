@@ -9,7 +9,7 @@
 - curated Python runtime files and tests are present under `python/`
 - curated Go runtime, governance, and operator files are present under `go/`
 - JSON mission examples and framework example stubs are present under `examples/`
-- selected archival walkthrough recordings are ready as starter public media (the rerunnable proof path lands with Phase 1 — see `MEDIA.md`)
+- selected archival walkthrough recordings are ready as starter public media (the rerunnable proof path lands with the next public drop — see `MEDIA.md`)
 - the launch direction is documented without shipping the full internal docs tree
 
 ## In Progress
@@ -21,7 +21,7 @@
 
 ## What We Still Need To Resolve
 
-- finish verifying the imported Python and Go surfaces against the public repo layout
+- complete the verification pass for the imported Python and Go surfaces against the public repo layout
 - keep every public claim mapped to a real verifier path or artifact
 - replace or re-render legacy media that still carries internal path or repo-layout assumptions
 - keep `VIBAP`, `MCEP`, and related protocol names only where they describe
