@@ -7,14 +7,17 @@ Working examples of Ardur governing AI agents across the major frameworks. Some 
 | Example | Status | Runtime dependency |
 |---------|--------|-------------------|
 | [missions/](missions/) | runnable | None — JSON files only |
-| [langchain-quickstart/](langchain-quickstart/) | placeholder | `python/` editable install + LangChain + Ollama |
-| [langgraph-quickstart/](langgraph-quickstart/) | placeholder | `python/` editable install + LangGraph + Ollama |
-| [autogen-quickstart/](autogen-quickstart/) | placeholder | `python/` editable install + AutoGen v0.4+ + Ollama |
+| [langchain-quickstart/](langchain-quickstart/) | runnable | `python/` editable install + LangChain + an LLM provider |
+| [langgraph-quickstart/](langgraph-quickstart/) | runnable | `python/` editable install + LangGraph + an LLM provider |
+| [autogen-quickstart/](autogen-quickstart/) | runnable | `python/` editable install + AutoGen v0.4+ + an LLM provider |
+| [_shared/](_shared/) | helpers | Imported by the three framework demos above |
 | [claude-code-hook/](claude-code-hook/) | placeholder | `python/` editable install + a frontier-LLM coding-agent CLI |
 | [openai-agents-sdk/](openai-agents-sdk/) | placeholder | `python/` editable install + OpenAI Agents SDK + OpenAI API key |
 | [google-adk/](google-adk/) | placeholder | `python/` editable install + Google ADK + Google AI API key |
 
-Each placeholder directory carries a README that lays out the dependency footprint, the file layout the import will produce, and the framework-specific gotchas a contributor should know going in. The adapter code lives in the private research repo and is being imported with the public-name cleanup applied; whoever picks up an adapter can finish the import in isolation without coordinating with the others.
+The runnable framework directories (`langchain-quickstart/`, `langgraph-quickstart/`, `autogen-quickstart/`) ship a `demo.py` entrypoint and, where applicable, a `Dockerfile` that produces the published `rahulnutakki/ardur-demo:*` images. They share helpers under [`_shared/`](_shared/) — provider selection, SVID fetch, Biscuit issuance, governed-session setup, receipt-chain verification, end-of-session attestation. No model identifiers are hard-coded in any of these files; provider config is sourced from environment variables at runtime (see [CONTRIBUTING.md](../CONTRIBUTING.md) "No specific LLM model names" rule).
+
+The remaining placeholder directories carry READMEs that describe the dependency footprint and file layout the next import wave will produce. Whoever picks up an adapter can finish the import in isolation without coordinating with the others.
 
 ## Running the mission examples (today, no agent required)
 

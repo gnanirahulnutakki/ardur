@@ -1,9 +1,5 @@
 # LangGraph + Ardur quickstart
 
-Placeholder. The adapter code lives in the private research repo and is being imported with the public-name cleanup applied; this directory describes what lands when that import finishes.
-
-## What this example will demonstrate
-
 A LangGraph agent making tool calls through Ardur's governance proxy. The agent runs under an Ardur-issued mission credential, calls a small set of tools (read, write, summarize), and Ardur:
 
 1. Issues a Mission Declaration signed by the local issuer key
@@ -13,37 +9,35 @@ A LangGraph agent making tool calls through Ardur's governance proxy. The agent 
 
 LangGraph's integration point is different from LangChain's: the verifier hooks into node transitions on the `StateGraph`, not the tool wrapper directly. That means cycles and conditional edges need receipts that carry the source/target node so the attestation stays linkable to the graph topology — receipts emit in node order, not call order.
 
-## Dependencies
-
-- `python/` editable install (this repo, `pip install -e ../python`; CLI is `ardur`, module imports are `vibap`)
-- `langgraph ^0.2.0`
-- LLM access: local Ollama via `OllamaChat`
-- Optional: Docker for the recorded asciinema flow
-
-## File layout (when imported)
+## File layout
 
 ```
 langgraph-quickstart/
 ├── README.md              # this file
-├── run.sh                 # one-line runner
-├── src/
-│   ├── agent.py           # the StateGraph definition
-│   └── tools.py           # tool stubs (read, write, summarize)
-├── mission.json           # the Mission Declaration the agent runs under
-└── expected-receipt.json  # what a clean run produces, for diff-testing
+└── demo.py                # the LangGraph agent + scenarios entrypoint
 ```
 
-## Run (when available)
+`demo.py` imports framework-agnostic helpers from [`examples/_shared/demo_scenes.py`](../_shared/demo_scenes.py). The LangGraph quickstart shares the LangChain Docker image (`rahulnutakki/ardur-demo:lang`) — both frameworks live in the same Python dependency stack, so a single image covers them.
+
+## Dependencies
+
+- Python 3.13+
+- `python/` editable install (this repo, `pip install -e ../../python[dev]`)
+- `langgraph ^0.2.0` plus the `langchain-*` family (already pulled by `[dev]` extras for the LangChain demo)
+- LLM access: local Ollama, an OpenAI-compatible gateway, or an Anthropic API key
+- Optional: Docker via the LangChain image (`rahulnutakki/ardur-demo:lang` runs this demo too — pass `demo.py` as the entrypoint)
+
+## Running locally
 
 ```bash
-cd langgraph-quickstart
-./run.sh
-# Output:
-#   - mission compiled
-#   - agent started with passport
-#   - per-node tool calls + verdicts
-#   - session attestation printed at exit
+cd ../../python && pip install -e '.[dev]'
+export ARDUR_PROVIDER=ollama
+export OLLAMA_MODEL='<your local model tag>'
+cd ../examples/langgraph-quickstart
+PYTHONPATH=../_shared python demo.py
 ```
+
+`ARDUR_PROVIDER` plus the matching `*_MODEL` env var are required. No model identifiers are hard-coded — see [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ## Out of scope for this example
 
@@ -52,4 +46,4 @@ cd langgraph-quickstart
 - Multi-tenant key isolation — single issuer key.
 - Persistent checkpointing across runs (LangGraph supports it, but the example resets state each run for reproducible receipts).
 
-For pure protocol exercising without the framework on top, see `examples/missions/`.
+For pure protocol exercising without the framework on top, see [`examples/missions/`](../missions/).
