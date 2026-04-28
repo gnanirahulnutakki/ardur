@@ -35,7 +35,7 @@ When some part of the argument can't be resolved at pre-action time — typicall
 
 It returns `insufficient_evidence`. The default deployment posture for `insufficient_evidence` is **fail-closed**: block the call, emit the Receipt with the missing-evidence flag, surface what was missing.
 
-This is the design-choice that the [Partial Visibility article](../articles/03-partial-visibility-and-the-unknown-state.md) covers. The value is honesty: a verifier that returns `compliant` for an action it couldn't actually evaluate is worse than one that abstains, because downstream audit pipelines can't tell the difference between "evaluated and approved" and "couldn't evaluate but said yes anyway."
+This is the design choice the tri-state verdict in [`docs/specs/verifier-contract-v0.1.md`](../specs/verifier-contract-v0.1.md) encodes. The value is honesty: a verifier that returns `compliant` for an action it couldn't actually evaluate is worse than one that abstains, because downstream audit pipelines can't tell the difference between "evaluated and approved" and "couldn't evaluate but said yes anyway."
 
 In practice, *fail-closed-on-uncertainty* drives agents toward emitting fully-resolved arguments at the verifier boundary. This is a real workflow change for some integrations — the agent can't lazily defer argument resolution past the hook. The trade-off is that the system is honest about what it knows. Per ADR-021, the verifier requires the agent to bind argument provenance with KB-JWT proof-of-possession at the call boundary, which forces the agent to commit to the resolved arguments before the verifier evaluates.
 

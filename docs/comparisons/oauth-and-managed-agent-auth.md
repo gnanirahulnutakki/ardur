@@ -39,7 +39,7 @@ A mission that says "no exfiltration" needs a verifier that can see what actuall
 
 **3. Delegation topology.** When an agent delegates a sub-task to another agent, OAuth-AAT can attenuate the token cleanly: the child's token is provably a narrower subset of the parent's. That's solved. What isn't solved is *attesting that the subcontracting happened at all*. From the original principal's perspective, two traces look identical: (a) the agent did the work itself, and (b) the agent silently forwarded the task to a third agent who did the work. Both produce one input to the agent, one output back. The hidden delegation edge doesn't appear in the OAuth audit log unless the child explicitly emits evidence.
 
-This is the case Ardur's [Silence Theorem article](../articles/04-delegation-without-authority-inflation.md) addresses. Without verifiable per-edge attestation, no parent-only monitor can detect every silent delegation violation. OAuth doesn't make this worse, but it doesn't make it better either — and a project that claims "we govern agent delegation" without addressing this case is overclaiming.
+This is the case Ardur's per-edge attestation requirement addresses (the formal version is the Silence Theorem in the paper, summarised by the verifier contract in [`docs/specs/verifier-contract-v0.1.md`](../specs/verifier-contract-v0.1.md)). Without verifiable per-edge attestation, no parent-only monitor can detect every silent delegation violation. OAuth doesn't make this worse, but it doesn't make it better either — and a project that claims "we govern agent delegation" without addressing this case is overclaiming.
 
 ## What Ardur adds on top of OAuth
 
@@ -75,10 +75,10 @@ The reviewer is right that "we should explain why" is necessary but not sufficie
 *Evidence:* a benchmark scenario where the same mission runs under (a) plain OAuth + scoped tokens, and (b) Ardur. The mission says "at most 3 emails." OAuth-only relies on the email service knowing the agent's session state — which means either configuring shared state across resource servers (defeats decoupling) or accepting that one mission can send 3 × N emails through N resource servers. Ardur's verifier holds the budget in one place. We'll publish the numbers when Phase 7's `tamas` benchmark suite lands publicly.
 
 **Claim 2 — Side-effect classification recovers detection power that scope-only enforcement provably gives up.**
-*Evidence:* the same trace evaluated with a scope-only monitor (Cedar over OAuth scopes) and a side-effect-aware monitor (Ardur composing native + Cedar + forbid-rules). The Cedar-Strict / Cedar-Stateful comparison is documented in our private benchmark series; the public re-run lands in [Article 13](../articles/README.md). Specifically the case where Cedar permits an action that the side-effect monitor flags as exfiltration: scope-only is "compliant," side-effect-aware is "violation." Both verdicts are correct given each monitor's evidence.
+*Evidence:* the same trace evaluated with a scope-only monitor (Cedar over OAuth scopes) and a side-effect-aware monitor (Ardur composing native + Cedar + forbid-rules). The Cedar-Strict / Cedar-Stateful comparison is documented in our private benchmark series; the public re-run will land alongside the Phase 7 benchmark publication. Specifically the case where Cedar permits an action that the side-effect monitor flags as exfiltration: scope-only is "compliant," side-effect-aware is "violation." Both verdicts are correct given each monitor's evidence.
 
 **Claim 3 — Delegation provenance closes a hole that AAT alone leaves open.**
-*Evidence:* the [Silence Theorem](../articles/04-delegation-without-authority-inflation.md) construction. Two traces with identical AAT chains, different downstream behaviour, only distinguishable when the sub-agent emits attestations. The math is in the paper (linked when the public arXiv ID is assigned); the runtime test in the public examples is the AAT-Biscuit composition that Phase 1's [`test_aat_adapter.py`](../../python/tests/test_aat_adapter.py) exercises.
+*Evidence:* the Silence Theorem construction in the paper. Two traces with identical AAT chains, different downstream behaviour, only distinguishable when the sub-agent emits attestations. The math is in the paper (linked when the public arXiv ID is assigned); the runtime test in the public examples is the AAT-Biscuit composition that Phase 1's [`test_aat_adapter.py`](../../python/tests/test_aat_adapter.py) exercises.
 
 Each claim is testable. The benchmark data backs them or it doesn't. Until Phase 7 lands the numbers publicly, this document is the qualitative version of the argument; the quantitative version replaces "claim" with "measured."
 
@@ -112,7 +112,5 @@ Ardur is the **mission and evidence layer** that pairs with whatever **identity 
 - [`docs/specs/mission-declaration-v0.1.md`](../specs/mission-declaration-v0.1.md) — what a Mission Declaration carries
 - [`docs/specs/delegation-grant-profile-v0.1.md`](../specs/delegation-grant-profile-v0.1.md) — Ardur's AAT profile
 - [`docs/specs/verifier-contract-v0.1.md`](../specs/verifier-contract-v0.1.md) — the verifier obligations
-- [`docs/articles/03-partial-visibility-and-the-unknown-state.md`](../articles/03-partial-visibility-and-the-unknown-state.md) — why three-state verdicts matter
-- [`docs/articles/04-delegation-without-authority-inflation.md`](../articles/04-delegation-without-authority-inflation.md) — delegation conservation
 - IETF — [draft-niyikiza-oauth-attenuating-agent-tokens](https://datatracker.ietf.org/doc/draft-niyikiza-oauth-attenuating-agent-tokens/)
 - Cloudflare — [Managed OAuth for Access](https://blog.cloudflare.com/managed-oauth-for-access/)

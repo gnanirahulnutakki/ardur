@@ -145,7 +145,7 @@ Same SHA-pinning discipline as the rest of the workflows. Annotated tags get pee
 
 ## Test-authoring rules (carry-over from private research, applies to all phases)
 
-- **No rigged adapters.** Labels come from a separate file derived from public dataset labels. Adapters never see the ground truth. Violations are the single fastest way to get a benchmark retracted — see [Article 11 (The Rigged-Tests Audit)](articles/11-the-rigged-tests-audit.md) for the audit story and the discipline that came out of it.
+- **No rigged adapters.** Labels come from a separate file derived from public dataset labels. Adapters never see the ground truth. Violations are the single fastest way to get a benchmark retracted; the discipline that produced this rule is documented in the test-harness contract at the top of `python/tests/conftest.py`.
 - **Regression tests for every bug fix.** If you fix bug X, write a test that fails on the pre-fix code and passes on the fixed code. The test goes in the same PR as the fix.
 - **Name tests after what they prove, not what they exercise.** `test_passport_with_invalid_sig_is_rejected` beats `test_verify_passport_case_3`.
 - **Avoid live-LLM tests by default.** Unit suites run with null-judge / null-challenger stubs; live-LLM paths are explicit opt-in via env var. CI doesn't burn API budget on every push.

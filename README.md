@@ -5,7 +5,6 @@ Ardur is the runtime governance and evidence layer for AI agents.
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-pre--release-blue)](STATUS.md)
 [![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/gnanirahulnutakki/ardur/discussions)
-[![Articles](https://img.shields.io/badge/docs-articles-9cf)](docs/articles/README.md)
 
 This public repo is opening in phases. It now contains the product intent,
 research-informed positioning, public specs, curated Python and Go runtime
@@ -13,7 +12,7 @@ imports, mission examples, and framework example stubs. Broader proof surfaces,
 packaging, and production deployment material are still being tightened before
 they are presented as release-ready.
 
-[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md)
+[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Docs](docs/README.md)
 
 ## Why Ardur
 
