@@ -31,7 +31,7 @@ func NewMockIdentityProvider(opts MockIdentityProviderOptions) *MockIdentityProv
 		opts.ExpiresAt = time.Now().Add(1 * time.Hour)
 	}
 	if opts.TrustDomain == "" {
-		opts.TrustDomain = "vibap.ardur.dev"
+		opts.TrustDomain = "ardur.dev"
 	}
 	if opts.SPIFFEID == "" {
 		opts.SPIFFEID = fmt.Sprintf("spiffe://%s/agent/test/instance-mock", opts.TrustDomain)

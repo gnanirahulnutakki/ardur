@@ -18,7 +18,7 @@ import (
 // This is the output of IdentityProvider.FetchIdentity and feeds directly
 // into the IdentityClaims of a VIBAP credential (Layer 1).
 type AgentIdentity struct {
-	// SPIFFE ID of this agent instance (e.g., spiffe://vibap.ardur.dev/agent/weather-bot/instance-abc)
+	// SPIFFE ID of this agent instance (e.g., spiffe://ardur.dev/agent/weather-bot/instance-abc)
 	SPIFFEID string
 
 	// SPIFFE ID of the deployer (human or service account).
@@ -26,7 +26,7 @@ type AgentIdentity struct {
 	// in Phase 5 the admission webhook verifies it against SPIRE registration entries.
 	OwnerID string
 
-	// Trust domain the agent belongs to (e.g., "vibap.ardur.dev")
+	// Trust domain the agent belongs to (e.g., "ardur.dev")
 	TrustDomain string
 
 	// Expiration time of the current SVID

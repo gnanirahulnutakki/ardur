@@ -178,7 +178,7 @@ func (r *AgentPassportReconciler) issueCredential(ctx context.Context, ap *vibap
 
 	agentID := ap.Spec.Identity.SPIFFEID
 	if agentID == "" {
-		agentID = fmt.Sprintf("spiffe://vibap.ardur.dev/ns/%s/agent/%s", ap.Namespace, ap.Name)
+		agentID = fmt.Sprintf("spiffe://ardur.dev/ns/%s/agent/%s", ap.Namespace, ap.Name)
 	}
 
 	if err := r.ensureAgentRegistered(ctx, agentID, ap.Spec.Trust); err != nil {

@@ -8,7 +8,7 @@ This is the Go side of Ardur: the runtime, the governance engine, and the Kubern
 module github.com/gnanirahulnutakki/ardur/go
 ```
 
-The Go version is pinned in `go.mod`. You'll see `vibap.` everywhere in the source tree — that's the original protocol research name (VIBAP = Verifiable Identity-Bound Agent Passport) and it stays as the package prefix because it *is* the protocol's name. The user-facing project is **Ardur**, and that's what the binaries print as their identity.
+The Go version is pinned in `go.mod`. You'll see `vibap.` everywhere in the source tree — that's the original protocol research name (VIBAP = Verifiable Identity-Bound Agent Passport) and it stays as the package prefix because it *is* the protocol's name. The user-facing project is **Ardur**; the CLI and operator binaries currently still print `vibap` in their identity strings (a follow-up commit will swap those to `ardur` once the CLI surface stabilises).
 
 ## Build
 

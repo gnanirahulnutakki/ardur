@@ -53,12 +53,12 @@ go test ./cmd/specvalidate/...
 
 ## Relationship to Other Components
 
-### Benchmark Schemas (`benchmark/schema/`)
+### Benchmark schemas (forthcoming)
 
-The benchmark schemas (`scenario.schema.json`, `event.schema.json`) define the wire format for benchmark test scenarios and their synthetic events. This governance protocol generalizes those concepts for runtime use:
+A separate set of benchmark wire-format schemas (`scenario.schema.json`, `event.schema.json`) is being prepared for `go/benchmark/schema/`. Until they land publicly, this section describes the intended relationship; the files referenced below are not yet present in the public tree.
 
 - The benchmark `declaration` object (embedded in scenarios) maps to `declaration.schema.json` here, with additional fields for session binding and metadata.
-- The benchmark `event.schema.json` maps to `event.schema.json` here, minus the `expected_label` field (which is benchmark-specific ground truth) and `notes`.
+- The benchmark `event.schema.json` maps to `event.schema.json` here, minus the `expected_label` field (benchmark-specific ground truth) and `notes`.
 - Enum values for `action_class`, `side_effect_class`, and `visibility` are identical across both.
 
 ### Go Types (`pkg/governance/types.go`)

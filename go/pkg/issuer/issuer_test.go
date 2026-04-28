@@ -42,9 +42,9 @@ func testHolderKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 
 func defaultMockIdentity() *spiffe.MockIdentityProvider {
 	return spiffe.NewMockIdentityProvider(spiffe.MockIdentityProviderOptions{
-		SPIFFEID:    "spiffe://vibap.ardur.dev/agent/test/instance-001",
-		OwnerID:     "spiffe://vibap.ardur.dev/user/deployer",
-		TrustDomain: "vibap.ardur.dev",
+		SPIFFEID:    "spiffe://ardur.dev/agent/test/instance-001",
+		OwnerID:     "spiffe://ardur.dev/user/deployer",
+		TrustDomain: "ardur.dev",
 		A2ACardRef:  "https://agent.example.com/.well-known/agent.json",
 	})
 }
@@ -72,7 +72,7 @@ func defaultMockProfiling() *profiling.MockProfileProvider {
 func defaultMockTrust() *trust.MockAggregator {
 	m := trust.NewMockAggregator()
 	m.SetScore(&trust.TrustScore{
-		AgentID:              "spiffe://vibap.ardur.dev/agent/test/instance-001",
+		AgentID:              "spiffe://ardur.dev/agent/test/instance-001",
 		StaticCapability:     0.8,
 		HistoricalReputation: 0.9,
 		RuntimeCompliance:    1.0,
@@ -89,11 +89,11 @@ func defaultTransparencyLog(t *testing.T) *transparency.InMemoryLog {
 
 func minimalRequest() IssueRequest {
 	return IssueRequest{
-		SPIFFEID:         "spiffe://vibap.ardur.dev/agent/test/instance-001",
-		OwnerID:          "spiffe://vibap.ardur.dev/user/deployer",
+		SPIFFEID:         "spiffe://ardur.dev/agent/test/instance-001",
+		OwnerID:          "spiffe://ardur.dev/user/deployer",
 		PolicyText:       `permit(principal, action == Action::"read", resource);`,
 		PermittedActions: []string{"read:database"},
-		AgentID:          "spiffe://vibap.ardur.dev/agent/test/instance-001",
+		AgentID:          "spiffe://ardur.dev/agent/test/instance-001",
 		SystemPrompt:     "You are a test agent",
 		ToolManifest:     `{"tools": ["read"]}`,
 	}
@@ -780,7 +780,7 @@ func TestIssue_FullRoundtrip(t *testing.T) {
 	if decoded.Claims.Issuer != "https://vibap.example.com" {
 		t.Errorf("iss = %q", decoded.Claims.Issuer)
 	}
-	if decoded.Claims.Identity.SPIFFEID != "spiffe://vibap.ardur.dev/agent/test/instance-001" {
+	if decoded.Claims.Identity.SPIFFEID != "spiffe://ardur.dev/agent/test/instance-001" {
 		t.Errorf("spiffe_id = %q", decoded.Claims.Identity.SPIFFEID)
 	}
 

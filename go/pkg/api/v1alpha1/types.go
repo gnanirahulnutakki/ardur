@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	GroupName = "vibap.ardur.dev"
+	GroupName = "ardur.dev"
 	Version   = "v1alpha1"
 
 	AnnotationCredential = "vibap.ardur.dev/credential" // #nosec G101 -- Kubernetes annotation key, not a secret

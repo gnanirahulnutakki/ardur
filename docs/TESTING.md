@@ -6,7 +6,7 @@ The structure mirrors how testing works in the private research repo: structured
 
 ## What runs today
 
-Three GitHub Actions workflows, all gated on push to `dev`/`main` and on every pull request.
+Four GitHub Actions workflows. Most run on push to `dev`/`main` and on every pull request; `link-check` runs on PRs and a weekly cron only (no push trigger, since the same Markdown gets checked on the resulting PR anyway).
 
 ### `secret-scan` — gitleaks + forbidden-term gate
 
@@ -20,7 +20,7 @@ Three GitHub Actions workflows, all gated on push to `dev`/`main` and on every p
 [`/.github/workflows/link-check.yml`](../.github/workflows/link-check.yml)
 
 - Runs on PRs touching `**/*.md` and weekly via cron. Uses `lycheeverse/lychee-action@v2.8.0` (commit-pinned).
-- Excludes two URL patterns that are known to 404 for an unauthenticated checker: the GitHub Discussions tab (404 until Discussions is enabled in repo settings) and `security/advisories/new` (requires sign-in). Both are part of our intended feedback surface; the excludes are temporary and documented inline in the workflow.
+- Currently excludes one URL pattern that 404s for an unauthenticated checker: `security/advisories/new` (the page requires being signed in to GitHub). The earlier Discussions-tab exclude was removed once Discussions was enabled on the repo.
 
 ### `validate-formats` — JSON and YAML parsers
 
@@ -87,13 +87,10 @@ jobs:
           pip show cedarpy | head -3
       - name: pytest
         run: pytest python/tests/ -q
-      - name: Z3 composition proofs (if applicable)
-        run: |
-          python python/verification/composition_smt.py | tee /tmp/z3-output.txt
-          grep -q "ALL PROPERTIES HOLD" /tmp/z3-output.txt
-      - name: make reproduce
-        working-directory: python
-        run: make reproduce
+      # Z3 composition proofs and `make reproduce` will land once
+      # python/verification/ is imported publicly. Until then those
+      # steps stay omitted from this gate so it doesn't fail on
+      # missing paths.
 ```
 
 ### Local development setup
@@ -128,8 +125,8 @@ make reproduce
 | Surface | Minimum coverage | Source of bar |
 |---------|------------------|---------------|
 | `python/vibap/` | 80% | matches private research repo's bar for `pkg/` |
-| `python/cli/` | 60% | matches private research repo's bar for `cmd/` |
-| `python/integrations/<framework>/` | 70% | new bar for public adapters |
+| `python/cli/` (when imported) | 60% | matches private research repo's bar for `cmd/` |
+| `python/integrations/<framework>/` (when imported) | 70% | new bar for public adapters |
 
 Coverage runs against the renamed Ardur runtime only; legacy-era results are archived under `artifacts/legacy-era-*/` for lineage but never count for gates.
 
@@ -148,7 +145,7 @@ Same SHA-pinning discipline as the rest of the workflows. Annotated tags get pee
 
 ## Test-authoring rules (carry-over from private research, applies to all phases)
 
-- **No rigged adapters.** Labels come from a separate file derived from public dataset labels. Adapters never see the ground truth. Violations are the single fastest way to get a benchmark retracted — see [Article 11 (Public Import Discipline)](articles/06-public-import-discipline.md) on the rigged-tests audit story.
+- **No rigged adapters.** Labels come from a separate file derived from public dataset labels. Adapters never see the ground truth. Violations are the single fastest way to get a benchmark retracted — see [Article 11 (The Rigged-Tests Audit)](articles/11-the-rigged-tests-audit.md) for the audit story and the discipline that came out of it.
 - **Regression tests for every bug fix.** If you fix bug X, write a test that fails on the pre-fix code and passes on the fixed code. The test goes in the same PR as the fix.
 - **Name tests after what they prove, not what they exercise.** `test_passport_with_invalid_sig_is_rejected` beats `test_verify_passport_case_3`.
 - **Avoid live-LLM tests by default.** Unit suites run with null-judge / null-challenger stubs; live-LLM paths are explicit opt-in via env var. CI doesn't burn API budget on every push.

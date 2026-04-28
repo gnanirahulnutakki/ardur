@@ -57,7 +57,7 @@ func TestConstants(t *testing.T) {
 		name      string
 		got, want string
 	}{
-		{"GroupName", GroupName, "vibap.ardur.dev"},
+		{"GroupName", GroupName, "ardur.dev"},
 		{"Version", Version, "v1alpha1"},
 		{"AnnotationCredential", AnnotationCredential, "vibap.ardur.dev/credential"},
 		{"AnnotationTrustTier", AnnotationTrustTier, "vibap.ardur.dev/trust-tier"},

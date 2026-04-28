@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ardur.dev/spec/mission-declaration/v0.1/mission-declaration-v0.1.schema.json",
+  "$id": "https://ardur.dev/vibap/spec/mission-declaration/v0.1/mission-declaration-v0.1.schema.json",
   "title": "Mission Declaration v0.1",
   "description": "Mission Declaration (MD) payload object for the Ardur runtime-governance protocol.",
   "type": "object",

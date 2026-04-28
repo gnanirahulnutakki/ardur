@@ -47,14 +47,16 @@ live under `docs/specs/`; pending companion specs are listed by name in
 [`docs/specs/README.md`](../specs/README.md) until they migrate.
 
 - **A.1 / Mission Declaration**:
-  `docs/spec/mission-declaration-v0.1.md` (pending public migration)
+  `docs/spec/mission-declaration-v0.1.md` (migrated — see
+  [`./mission-declaration-v0.1.md`](./mission-declaration-v0.1.md))
 - **A.2 / Delegation Grant profile**:
   `docs/spec/delegation-grant-profile-v0.1.md` (migrated — see
   [`./delegation-grant-profile-v0.1.md`](./delegation-grant-profile-v0.1.md));
   references to `docs/session-2026-04-14/...` source briefs are private
   research material that has not been imported.
 - **A.3 / Execution Receipt**:
-  `docs/spec/execution-receipt-v0.1.md` (pending public migration)
+  `docs/spec/execution-receipt-v0.1.md` (migrated — see
+  [`./execution-receipt-v0.1.md`](./execution-receipt-v0.1.md))
 
 The verifier MUST treat those companion documents as authoritative for the
 shapes of MD, DG, and ER.

@@ -1,13 +1,16 @@
 # Default values for the Ardur chart.
 # This is a skeleton — real components are scaffolded but not
-# production-ready. See templates/README.md for what's stubbed.
+# production-ready. See README.md for what's stubbed.
 
 # -----------------------------------------------------------------
 # Global configuration
 # -----------------------------------------------------------------
 
 global:
-  # Trust domain for SPIFFE IDs issued to Ardur workloads
+  # Trust domain for SPIFFE IDs issued to Ardur workloads. This is a
+  # PLACEHOLDER chosen so a fresh `helm install` doesn't accidentally
+  # collide with the canonical public domain. Override on real
+  # deployments (see the Go-side canonical: `ardur.dev`).
   trustDomain: "ardur.example.com"
   # Image registry + pull policy
   registry: "ghcr.io/gnanirahulnutakki"

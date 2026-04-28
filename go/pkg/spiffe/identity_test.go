@@ -18,14 +18,14 @@ func TestValidateSPIFFEID(t *testing.T) {
 	}{
 		{
 			name:     "valid agent SPIFFE ID",
-			id:       "spiffe://vibap.ardur.dev/agent/weather-bot/instance-abc123",
-			wantTD:   "vibap.ardur.dev",
+			id:       "spiffe://ardur.dev/agent/weather-bot/instance-abc123",
+			wantTD:   "ardur.dev",
 			wantPath: "/agent/weather-bot/instance-abc123",
 		},
 		{
 			name:     "valid owner SPIFFE ID",
-			id:       "spiffe://vibap.ardur.dev/user/deployer-42",
-			wantTD:   "vibap.ardur.dev",
+			id:       "spiffe://ardur.dev/user/deployer-42",
+			wantTD:   "ardur.dev",
 			wantPath: "/user/deployer-42",
 		},
 		{
@@ -109,9 +109,9 @@ func TestValidateSPIFFEID(t *testing.T) {
 
 func TestMockIdentityProvider_FetchIdentity(t *testing.T) {
 	mock := NewMockIdentityProvider(MockIdentityProviderOptions{
-		SPIFFEID:    "spiffe://vibap.ardur.dev/agent/test/instance-001",
-		OwnerID:     "spiffe://vibap.ardur.dev/user/deployer",
-		TrustDomain: "vibap.ardur.dev",
+		SPIFFEID:    "spiffe://ardur.dev/agent/test/instance-001",
+		OwnerID:     "spiffe://ardur.dev/user/deployer",
+		TrustDomain: "ardur.dev",
 	})
 	defer mock.Close()
 
@@ -121,14 +121,14 @@ func TestMockIdentityProvider_FetchIdentity(t *testing.T) {
 		t.Fatalf("FetchIdentity() error = %v", err)
 	}
 
-	if identity.SPIFFEID != "spiffe://vibap.ardur.dev/agent/test/instance-001" {
-		t.Errorf("SPIFFEID = %q, want %q", identity.SPIFFEID, "spiffe://vibap.ardur.dev/agent/test/instance-001")
+	if identity.SPIFFEID != "spiffe://ardur.dev/agent/test/instance-001" {
+		t.Errorf("SPIFFEID = %q, want %q", identity.SPIFFEID, "spiffe://ardur.dev/agent/test/instance-001")
 	}
-	if identity.OwnerID != "spiffe://vibap.ardur.dev/user/deployer" {
-		t.Errorf("OwnerID = %q, want %q", identity.OwnerID, "spiffe://vibap.ardur.dev/user/deployer")
+	if identity.OwnerID != "spiffe://ardur.dev/user/deployer" {
+		t.Errorf("OwnerID = %q, want %q", identity.OwnerID, "spiffe://ardur.dev/user/deployer")
 	}
-	if identity.TrustDomain != "vibap.ardur.dev" {
-		t.Errorf("TrustDomain = %q, want %q", identity.TrustDomain, "vibap.ardur.dev")
+	if identity.TrustDomain != "ardur.dev" {
+		t.Errorf("TrustDomain = %q, want %q", identity.TrustDomain, "ardur.dev")
 	}
 }
 
@@ -144,7 +144,7 @@ func TestMockIdentityProvider_FetchAfterClose(t *testing.T) {
 
 func TestMockIdentityProvider_WatchRotation(t *testing.T) {
 	mock := NewMockIdentityProvider(MockIdentityProviderOptions{
-		SPIFFEID: "spiffe://vibap.ardur.dev/agent/v1",
+		SPIFFEID: "spiffe://ardur.dev/agent/v1",
 	})
 	defer mock.Close()
 
@@ -166,8 +166,8 @@ func TestMockIdentityProvider_WatchRotation(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	mock.SimulateRotation(&AgentIdentity{
-		SPIFFEID:    "spiffe://vibap.ardur.dev/agent/v2",
-		TrustDomain: "vibap.ardur.dev",
+		SPIFFEID:    "spiffe://ardur.dev/agent/v2",
+		TrustDomain: "ardur.dev",
 		ExpiresAt:   time.Now().Add(1 * time.Hour),
 	})
 
@@ -176,7 +176,7 @@ func TestMockIdentityProvider_WatchRotation(t *testing.T) {
 	if received == nil {
 		t.Fatal("callback was never invoked")
 	}
-	if received.SPIFFEID != "spiffe://vibap.ardur.dev/agent/v2" {
+	if received.SPIFFEID != "spiffe://ardur.dev/agent/v2" {
 		t.Errorf("rotated SPIFFEID = %q, want v2", received.SPIFFEID)
 	}
 }
@@ -190,7 +190,7 @@ func TestMockIdentityProvider_DefaultValues(t *testing.T) {
 		t.Fatalf("FetchIdentity() error = %v", err)
 	}
 
-	if identity.TrustDomain != "vibap.ardur.dev" {
+	if identity.TrustDomain != "ardur.dev" {
 		t.Errorf("default TrustDomain = %q, want vibap.ardur.dev", identity.TrustDomain)
 	}
 	if identity.SPIFFEID == "" {
@@ -225,7 +225,7 @@ func TestValidateSPIFFEID_Userinfo(t *testing.T) {
 
 func TestMockIdentityProvider_SimulateRotationThenFetchIdentity(t *testing.T) {
 	mock := NewMockIdentityProvider(MockIdentityProviderOptions{
-		SPIFFEID: "spiffe://vibap.ardur.dev/agent/v1",
+		SPIFFEID: "spiffe://ardur.dev/agent/v1",
 	})
 	defer mock.Close()
 
@@ -235,14 +235,14 @@ func TestMockIdentityProvider_SimulateRotationThenFetchIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchIdentity() error = %v", err)
 	}
-	if id1.SPIFFEID != "spiffe://vibap.ardur.dev/agent/v1" {
+	if id1.SPIFFEID != "spiffe://ardur.dev/agent/v1" {
 		t.Errorf("initial SPIFFEID = %q, want v1", id1.SPIFFEID)
 	}
 
 	// Simulate rotation to v2
 	newID := &AgentIdentity{
-		SPIFFEID:    "spiffe://vibap.ardur.dev/agent/v2",
-		TrustDomain: "vibap.ardur.dev",
+		SPIFFEID:    "spiffe://ardur.dev/agent/v2",
+		TrustDomain: "ardur.dev",
 		ExpiresAt:   time.Now().Add(2 * time.Hour),
 	}
 	mock.SimulateRotation(newID)
@@ -252,7 +252,7 @@ func TestMockIdentityProvider_SimulateRotationThenFetchIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchIdentity() after rotation error = %v", err)
 	}
-	if id2.SPIFFEID != "spiffe://vibap.ardur.dev/agent/v2" {
+	if id2.SPIFFEID != "spiffe://ardur.dev/agent/v2" {
 		t.Errorf("after rotation SPIFFEID = %q, want v2", id2.SPIFFEID)
 	}
 	if id2.ExpiresAt != newID.ExpiresAt {
@@ -264,8 +264,8 @@ func TestMockIdentityProvider_CustomExpiresAtAndA2ACardRef(t *testing.T) {
 	expiresAt := time.Now().Add(30 * time.Minute)
 	a2aRef := "https://agentgateway.example.com/cards/weather-bot"
 	mock := NewMockIdentityProvider(MockIdentityProviderOptions{
-		SPIFFEID:    "spiffe://vibap.ardur.dev/agent/custom",
-		TrustDomain: "vibap.ardur.dev",
+		SPIFFEID:    "spiffe://ardur.dev/agent/custom",
+		TrustDomain: "ardur.dev",
 		ExpiresAt:   expiresAt,
 		A2ACardRef:  a2aRef,
 	})
