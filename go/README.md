@@ -47,7 +47,7 @@ A note on why there are so many `cmd/` entries: they're genuinely separate binar
 
 ## What's *not* in this tree
 
-- **EDR connector.** The `cmd/edr_*` binaries and the `edr-connector` Go module stay private. They wrap CrowdStrike Falcon API calls under vendor-license context that hasn't been cleared for public release, so they're not something we can drop into an MIT repo.
+- **Vendor-specific telemetry connectors.** The `cmd/edr_*` binaries and the `edr-connector` Go module stay private. They wrap third-party endpoint-detection vendor APIs under license terms that haven't been cleared for public release, so they're not something we can drop into an MIT repo.
 - **Live benchmark fixtures.** The heavy corpora — AgentDojo, InjecAgent, R-Judge, STAC — remain in the internal research tree. They're large, redistribution terms vary, and they don't belong here. A reproducible smoke-benchmark harness will land later in a separate commit.
 
 ## Names that matter (don't drift these)
