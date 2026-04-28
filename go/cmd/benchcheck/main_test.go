@@ -257,7 +257,6 @@ func TestStrictScenarioValidationCatchesTypedDeclarationErrors(t *testing.T) {
 		},
 		"environment": {"available_tools": ["delegator"]},
 		"ground_truth": {"label": "delegation_violation"},
-		"baseline_expectations": {},
 		"metrics_focus": ["x"]
 	}`)
 	errs := validateScenario("test.json", data, true)
