@@ -1,0 +1,166 @@
+# Default values for ardur chart.
+# This is a skeleton — real components are scaffolded but not
+# production-ready. See templates/README.md for what's stubbed.
+
+# -----------------------------------------------------------------
+# Global configuration
+# -----------------------------------------------------------------
+
+global:
+  # Trust domain for SPIFFE IDs issued to Ardur workloads
+  trustDomain: "ardur.example.com"
+  # Image registry + pull policy
+  registry: "ghcr.io/gnanirahulnutakki"
+  imagePullPolicy: "IfNotPresent"
+
+# -----------------------------------------------------------------
+# SPIRE dependency — set enabled=false if the cluster already runs
+# SPIRE and you want ardur to attach via workload API.
+# -----------------------------------------------------------------
+
+spire:
+  enabled: true
+  # When .spire.enabled=false, set this to the host path of the
+  # workload API socket provided by your existing SPIRE agent
+  # DaemonSet.
+  socketPath: "/run/spire/agent-sockets/spire-agent.sock"
+
+# -----------------------------------------------------------------
+# Ardur proxy (the DECLARE -> CARRY -> OBSERVE -> ATTEST runtime)
+# -----------------------------------------------------------------
+
+proxy:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: "ardur/vibap-proxy"
+    tag: "0.1.0-alpha"
+  service:
+    type: ClusterIP
+    port: 8443
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+  # Mounted into each proxy pod via SPIFFE CSI driver
+  spiffeVolume:
+    driver: "csi.spiffe.io"
+    readOnly: true
+
+# -----------------------------------------------------------------
+# Governance engine (Go; the Reconcile() service from VIBAP/pkg/governance)
+# -----------------------------------------------------------------
+
+governance:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: "ardur/governance-engine"
+    tag: "0.1.0-alpha"
+  service:
+    type: ClusterIP
+    port: 9443
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+# -----------------------------------------------------------------
+# Admission webhook (validates MissionDeclaration CRDs at apply-time)
+# -----------------------------------------------------------------
+
+webhook:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: "ardur/admission-webhook"
+    tag: "0.1.0-alpha"
+  failurePolicy: "Fail"
+  service:
+    type: ClusterIP
+    port: 8443
+
+# -----------------------------------------------------------------
+# CRD operator (manages MissionDeclaration resources)
+# -----------------------------------------------------------------
+
+operator:
+  enabled: true
+  image:
+    repository: "ardur/operator"
+    tag: "0.1.0-alpha"
+  # Watches all namespaces by default; override for multi-tenant
+  # deployments.
+  watchNamespaces: []
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# -----------------------------------------------------------------
+# Biscuit signing key material
+#
+# IMPORTANT: these keys must be provisioned out-of-band — either
+# by an operator kubectl command using existing Kubernetes Secrets,
+# or by an external-secrets-operator ExternalSecret referencing a
+# cloud KMS / Vault path. The chart does NOT generate keys.
+# -----------------------------------------------------------------
+
+signingKeys:
+  # Reference an existing Secret in the release namespace.
+  existingSecret: ""
+  # Keys expected inside the Secret when existingSecret is set.
+  issuerPrivateKeyKey: "issuer-private-key.pem"
+  issuerPublicKeyKey:  "issuer-public-key.pem"
+
+# -----------------------------------------------------------------
+# Observability — all three are optional wiring; off by default.
+# -----------------------------------------------------------------
+
+observability:
+  prometheus:
+    enabled: false
+    scrapeInterval: "30s"
+  openTelemetry:
+    enabled: false
+    collectorEndpoint: ""
+  sentry:
+    enabled: false
+    dsnSecretRef: ""
+
+# -----------------------------------------------------------------
+# Security posture
+# -----------------------------------------------------------------
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: "RuntimeDefault"
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - "ALL"
+
+# -----------------------------------------------------------------
+# Network policy (CNI-dependent; CNI must support NetworkPolicy)
+# -----------------------------------------------------------------
+
+networkPolicy:
+  enabled: true
+  # When true: ingress restricted to in-namespace traffic only.
+  # Override for cross-namespace or ingress-controller scenarios.
+  restrictIngress: true

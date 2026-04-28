@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: spire-server
+  namespace: spire-system
+  labels:
+    app.kubernetes.io/name: spire-server
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: ardur
+spec:
+  replicas: 3
+  serviceName: spire-server-headless
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: spire-server
+        app.kubernetes.io/component: identity
+        app.kubernetes.io/part-of: ardur
+    spec:
+      serviceAccountName: spire-server
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: spire-server
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: spire-server
+        image: ghcr.io/spiffe/spire-server:1.14.2
+        imagePullPolicy: IfNotPresent
+        args:
+        - -expandEnv
+        - -config
+        - /run/spire/config/server.conf
+        env:
+        - name: SPIRE_TRUST_DOMAIN
+          value: "ardur.demo"
+        - name: SPIRE_CLUSTER_NAME
+          value: "ardur-demo"
+        - name: SPIRE_DATASTORE_CONN
+          valueFrom:
+            secretKeyRef:
+              name: spire-server-datastore
+              key: connection_string
+        ports:
+        - name: grpc
+          containerPort: 8081
+        - name: health
+          containerPort: 8080
+        volumeMounts:
+        - name: spire-config
+          mountPath: /run/spire/config
+          readOnly: true
+        - name: spire-data
+          mountPath: /run/spire/data
+        - name: spire-upstream-ca
+          mountPath: /run/spire/upstream-ca
+          readOnly: true
+        - name: spire-sockets
+          mountPath: /run/spire/sockets
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: health
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 3
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: false
+      volumes:
+      - name: spire-config
+        configMap:
+          name: spire-server
+      - name: spire-upstream-ca
+        secret:
+          secretName: spire-upstream-ca
+      - name: spire-sockets
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: spire-data
+      labels:
+        app.kubernetes.io/name: spire-server
+        app.kubernetes.io/part-of: ardur
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi

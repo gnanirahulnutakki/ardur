@@ -1,0 +1,105 @@
+# Ardur Helm chart — skeleton
+
+Status: **SKELETON**. `Chart.yaml` + `values.yaml` + `_helpers.tpl`
+shape the deploy model; concrete resource templates are scaffolded
+but need implementation + testing against a real cluster before
+production use.
+
+## What's wired
+
+- `Chart.yaml` — chart metadata, SPIRE as optional sub-chart
+- `values.yaml` — full default values for proxy / governance /
+  webhook / operator / signing-keys / observability / security
+- `_helpers.tpl` — standard name / fullname / labels helpers
+
+## What's stubbed (templates to write)
+
+Each of these should produce a Deployment + Service + RBAC set,
+under `.Values.<component>.enabled` guards:
+
+- `proxy-deployment.yaml`, `proxy-service.yaml`,
+  `proxy-serviceaccount.yaml`, `proxy-role.yaml`,
+  `proxy-rolebinding.yaml`
+- `governance-deployment.yaml`, `governance-service.yaml`,
+  `governance-serviceaccount.yaml`
+- `webhook-deployment.yaml`, `webhook-service.yaml`,
+  `webhook-validatingwebhookconfiguration.yaml`
+- `operator-deployment.yaml`, `operator-clusterrole.yaml`,
+  `operator-clusterrolebinding.yaml`, `operator-serviceaccount.yaml`
+- `mission-declaration-crd.yaml` (CRD definition)
+- `networkpolicy.yaml` (conditional on `.Values.networkPolicy.enabled`)
+- `servicemonitor.yaml` (conditional on observability.prometheus)
+
+## Producing production templates
+
+The existing `k8s/spire/` manifests (Lane F, ADR-015) are the
+starting-point shape for the SPIRE dependency. Look at:
+
+- `k8s/spire/server/statefulset.yaml` — shows the fsGroup,
+  seccompProfile, affinity pattern that any Ardur
+  Deployment should inherit
+- `k8s/spire/agent/daemonset.yaml` — for node-attached
+  components (if any)
+- `k8s/spire/csi-driver/daemonset.yaml` — the SPIFFE CSI driver
+  that the proxy + webhook mount for workload API access
+- `k8s/spire/registration/ardur-workloads.yaml` — sample
+  ClusterSPIFFEID entries, shape for the operator's auto-registration
+  reconciler
+
+## Testing the chart
+
+```bash
+# Local lint
+helm lint deploy/helm/ardur
+
+# Template render (no cluster)
+helm template ardur-test deploy/helm/ardur \
+  --namespace ardur-system \
+  --set spire.enabled=false \
+  --set signingKeys.existingSecret=ardur-signing-keys \
+  > /tmp/rendered.yaml
+
+# Dry-run against a cluster
+helm install ardur-test deploy/helm/ardur \
+  --namespace ardur-system --create-namespace \
+  --dry-run --debug
+```
+
+## Deployment flow (planned)
+
+1. **Pre-flight**: operator provisions Biscuit signing keys into
+   a Kubernetes Secret named per `.Values.signingKeys.existingSecret`
+2. **Install SPIRE** (if `.spire.enabled=true`) — creates trust
+   domain, server StatefulSet, agent DaemonSet, SPIFFE CSI driver
+3. **Install Ardur** — creates operator, proxy, governance,
+   webhook with SPIFFE-injected SVIDs
+4. **Register workloads**: operator auto-creates ClusterSPIFFEID
+   entries for proxy / governance / webhook based on pod labels
+5. **Apply MissionDeclaration CRDs**: users submit
+   MissionDeclaration CRs; operator validates via webhook, engine
+   reconciles observed behavior
+
+## Known non-goals (this chart version)
+
+- **Multi-cluster federation** — single-cluster only for now
+- **HA of the operator** — single-replica, leader election not
+  implemented
+- **Automatic signing-key rotation** — provisioned out-of-band,
+  not managed by the chart
+- **Mesh integration** (Istio, Linkerd) — runs alongside but not
+  integrated
+
+## Next lanes (if adopted)
+
+This chart is the scaffolding for a "Lane H — Helm chart
+production-ready" future effort. That lane would:
+
+1. Write concrete Deployment / Service / RBAC templates for each
+   component
+2. Produce a real `values.production.yaml` example
+3. Run on a kind cluster end-to-end (MissionDeclaration CR →
+   Reconcile verdict)
+4. Add an ADR (`docs/decisions/ADR-016-ardur-helm-chart.md`)
+   documenting chart design decisions
+5. Publish to a Helm repo (possibly GitHub Pages under
+   `https://gnanirahulnutakki.github.io/ardur-charts/`)

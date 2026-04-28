@@ -1,0 +1,43 @@
+apiVersion: v2
+name: ardur
+description: >
+  Mission-Controlled Execution Protocol (MCEP) reference
+  implementation — Ardur proxy, governance engine, admission webhook,
+  and CRD operator. Composes with SPIFFE/SPIRE (see dependencies)
+  and Biscuit signing keys provisioned out-of-band.
+
+type: application
+version: 0.1.0-alpha
+appVersion: "0.1.0-alpha"
+
+home: https://github.com/gnanirahulnutakki/ardur
+sources:
+  - https://github.com/gnanirahulnutakki/ardur
+maintainers:
+  - name: Gnani Rahul
+    email: gnani.nutakki@gmail.com
+
+keywords:
+  - ai-agent-governance
+  - mcep
+  - ardur
+  - spiffe
+  - biscuit
+  - mission-declaration
+  - runtime-governance
+
+annotations:
+  artifacthub.io/license: "TBD"
+  artifacthub.io/prerelease: "true"
+
+# Dependencies — SPIRE is pulled in as a dependency chart. Biscuit
+# signing material is expected to be provisioned out-of-band (see
+# values.yaml signingKeys.* section).
+dependencies:
+  - name: spire
+    version: "0.x"
+    repository: "https://spiffe.github.io/helm-charts-hardened"
+    condition: spire.enabled
+    # Optional: operators with an existing SPIRE deployment should
+    # set spire.enabled=false and point ardur at their SVID
+    # workload API socket via .Values.spire.socketPath.

@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: spire-agent
+  namespace: spire-system
+  labels:
+    app.kubernetes.io/name: spire-agent
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: ardur
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: spire-agent
+        app.kubernetes.io/component: identity
+        app.kubernetes.io/part-of: ardur
+    spec:
+      serviceAccountName: spire-agent
+      hostPID: true
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      priorityClassName: system-node-critical
+      containers:
+      - name: spire-agent
+        image: ghcr.io/spiffe/spire-agent:1.14.2
+        imagePullPolicy: IfNotPresent
+        args:
+        - -expandEnv
+        - -config
+        - /run/spire/config/agent.conf
+        env:
+        - name: SPIRE_TRUST_DOMAIN
+          value: "ardur.demo"
+        - name: SPIRE_CLUSTER_NAME
+          value: "ardur-demo"
+        - name: KUBE_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        ports:
+        - name: health
+          containerPort: 8080
+        volumeMounts:
+        - name: spire-config
+          mountPath: /run/spire/config
+          readOnly: true
+        - name: spire-bundle
+          mountPath: /run/spire/bundle
+          readOnly: true
+        - name: spire-agent-sockets
+          mountPath: /run/spire/agent-sockets
+        - name: spire-agent-data
+          mountPath: /run/spire/data
+        - name: spire-token
+          mountPath: /var/run/secrets/tokens
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: health
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: spire-config
+        configMap:
+          name: spire-agent
+      - name: spire-bundle
+        configMap:
+          name: spire-bundle
+      - name: spire-agent-sockets
+        hostPath:
+          path: /run/spire/agent-sockets
+          type: DirectoryOrCreate
+      - name: spire-agent-data
+        emptyDir: {}
+      - name: spire-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: spire-agent
+              expirationSeconds: 7200
+              audience: spire-server
