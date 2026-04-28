@@ -115,5 +115,4 @@ Ardur is the **mission and evidence layer** that pairs with whatever **identity 
 - [`docs/articles/03-partial-visibility-and-the-unknown-state.md`](../articles/03-partial-visibility-and-the-unknown-state.md) — why three-state verdicts matter
 - [`docs/articles/04-delegation-without-authority-inflation.md`](../articles/04-delegation-without-authority-inflation.md) — delegation conservation
 - IETF — [draft-niyikiza-oauth-attenuating-agent-tokens](https://datatracker.ietf.org/doc/draft-niyikiza-oauth-attenuating-agent-tokens/)
-- IETF — [draft-ietf-oauth-transaction-tokens-for-agents](https://datatracker.ietf.org/doc/draft-ietf-oauth-transaction-tokens-for-agents/)
 - Cloudflare — [Managed OAuth for Access](https://blog.cloudflare.com/managed-oauth-for-access/)
