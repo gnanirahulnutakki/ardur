@@ -32,6 +32,14 @@ Three GitHub Actions workflows, all gated on push to `dev`/`main` and on every p
 
 This workflow exists because a misplaced comma in `media/selected-assets.json` or a stray indent in an issue-template YAML would otherwise sit broken silently.
 
+### `codeql` — CodeQL static analysis
+
+[`/.github/workflows/codeql.yml`](../.github/workflows/codeql.yml)
+
+- A pre-flight job (`detect-languages`) checks whether `python/` or `go/` carries any source files. While the repo is content-only at Phase 0, the matrix is empty and the analyse job is skipped — the workflow records as a clean run with no alerts. Once Phase 1 imports Python and Phase 5 imports Go, the matrix populates automatically and analysis fires per-language.
+- Pinned to `github/codeql-action@ce64ddcb` (commit-pinned; `v3` is an annotated tag whose tag-object is `865f5f5c...` and whose underlying commit is `ce64ddcb...`). Same pin discipline as the rest of the workflow set.
+- Pairs with the `code_quality` ruleset rule on `main`: that rule reads from GitHub's code-scanning alerts table, so it passes vacuously while the matrix is empty and substantively once code lands. The CI job name (`codeql`) is intentionally **not** in the required-status-checks list — the ruleset already gates merges via the alerts mechanism.
+
 ### What's NOT enforced by CI today
 
 Honest list, so the gap is visible:
@@ -127,7 +135,7 @@ Coverage runs against the renamed Ardur runtime only; legacy-era results are arc
 
 ## What runs after Phase 5 (Go runtime imported)
 
-A `go-ci.yml` mirrors the radiantic pattern:
+A `go-ci.yml` mirrors the private source repo pattern:
 
 - `go mod verify`
 - `go build ./...`
