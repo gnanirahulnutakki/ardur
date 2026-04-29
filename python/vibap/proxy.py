@@ -97,7 +97,16 @@ from .passport import (
     resolve_keys_dir,
     verify_passport,
 )
-from .receipt import build_receipt, sign_receipt
+# NOTE: ``from .receipt import build_receipt, sign_receipt`` was a top-level
+# import here, but proxy ↔ receipt forms a cycle (receipt.py uses ``PolicyEvent``
+# from this module under ``TYPE_CHECKING``). Although the cycle is safe at
+# runtime — receipt.py uses ``from __future__ import annotations`` so all
+# annotations are strings, and the proxy import in receipt.py is gated by
+# ``TYPE_CHECKING`` — CodeQL's ``py/unsafe-cyclic-import`` rule flags the
+# topology regardless. The two consumers (build_receipt + sign_receipt) are
+# called in exactly one method (``_build_receipt_log_entry``), so a deferred
+# local import there breaks the topological cycle without changing semantics.
+# See ``_build_receipt_log_entry`` for the deferred import.
 from .policy_backend import PolicyDecision, compose_decisions, get_backend, register_backend, timed_evaluate
 
 DEFAULT_STATE_DIR = Path(os.environ.get("VIBAP_STATE_DIR", DEFAULT_HOME / "state")).expanduser()
@@ -1958,6 +1967,14 @@ class GovernanceProxy:
         audit_reason: str,
         policy_claims: dict[str, Any],
     ) -> dict[str, Any]:
+        # Deferred local import to break the proxy ↔ receipt module-load cycle
+        # (CodeQL py/unsafe-cyclic-import). receipt.py only references this
+        # module under ``TYPE_CHECKING``, so the cycle is type-only at the
+        # runtime level — but moving this import out of module scope removes
+        # the static topology cycle that the linter flags. Cost is one
+        # ``sys.modules`` cache lookup per call to this method.
+        from .receipt import build_receipt, sign_receipt
+
         signed_policy_decisions = self._signed_policy_decisions(event, decision, audit_reason)
         if event.budget_delta is None:
             event.budget_delta = self._receipt_budget_delta(
