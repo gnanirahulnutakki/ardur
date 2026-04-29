@@ -15,6 +15,15 @@
 # identifiers are baked in — the runtime expects ARDUR_PROVIDER plus
 # the matching *_MODEL env vars at run time.
 
+# FIX-9 (2026-04-28): production builds MUST digest-pin the base image.
+# Resolve the current digest with:
+#   skopeo inspect docker://docker.io/library/python:3.13-slim \
+#     --format '{{.Digest}}'
+# Then change the FROM line to:
+#   FROM python:3.13-slim@sha256:<digest>
+# The published demo image keeps the tag-pinned form so unprivileged
+# contributors can reproduce it; CI/release builds should swap to a
+# digest before pushing to a registry consumers will pull from.
 FROM python:3.13-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

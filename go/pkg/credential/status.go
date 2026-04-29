@@ -213,6 +213,19 @@ func ParseStatusListToken(raw string, issuerPubKey ed25519.PublicKey) (*StatusLi
 		return nil, fmt.Errorf("status list JWT expired at %s",
 			time.Unix(claims.ExpiresAt, 0).UTC().Format(time.RFC3339))
 	}
+	// Round 5 hardening (FIX-R5-H4, 2026-04-28): bound iat into the
+	// future. The status list is the revocation backbone — a brief
+	// compromise of the status authority + a status list with iat far
+	// in the future would permanently assert "all credentials valid"
+	// from the verifier's perspective until cache TTL turns over.
+	// Mirrors the SD-JWT-VC verifier's skewSec (30s) for clock drift.
+	const statusListIatSkewSec int64 = 30
+	if claims.IssuedAt > 0 && claims.IssuedAt > time.Now().Unix()+statusListIatSkewSec {
+		return nil, fmt.Errorf(
+			"status list iat lies more than %ds in the future "+
+				"(iat=%d, now=%d) — refusing to accept",
+			statusListIatSkewSec, claims.IssuedAt, time.Now().Unix())
+	}
 
 	// Decompress the status list
 	bits, err := decompressStatusList(claims.StatusList.List)

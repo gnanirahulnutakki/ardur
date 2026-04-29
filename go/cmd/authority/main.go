@@ -13,6 +13,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -272,9 +273,91 @@ func (a *authority) handlePublicKey(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, jwk)
 }
 
+// authStartupConfig is the result of validating the env-driven auth
+// configuration at process startup. Round-7 (FIX-R7-4, 2026-04-29):
+// extracted from main() so the startup-refusal logic — fail-closed
+// when ARDUR_AUTHORITY_TOKEN is missing or shorter than 32 bytes
+// unless the explicit --no-require-auth flag is set — can be unit-
+// tested without spawning a subprocess. Mirrors the testable shape
+// of governance.Config.Validate().
+type authStartupConfig struct {
+	noRequireAuth bool
+	apiToken      []byte
+}
+
+// validateAuthStartup is the pure function that decides whether to
+// allow the Authority to start. Returns nil when startup is allowed
+// (optionally with a warning to log on no-require-auth path) and an
+// error otherwise. Operator-friendly error messages are part of the
+// public contract and the test pins them.
+func validateAuthStartup(cfg authStartupConfig) (warning string, err error) {
+	if cfg.noRequireAuth {
+		// Explicit local-dev opt-out — allow but loudly warn.
+		return ("bearer-token authentication is DISABLED via " +
+			"--no-require-auth. /sign accepts requests from anyone " +
+			"with network reach. DO NOT use in production."), nil
+	}
+	if len(cfg.apiToken) == 0 {
+		return "", fmt.Errorf(
+			"startup refused: ARDUR_AUTHORITY_TOKEN is not set. " +
+				"Pass --no-require-auth ONLY for local development; " +
+				"production MUST authenticate /sign")
+	}
+	if len(cfg.apiToken) < 32 {
+		return "", fmt.Errorf(
+			"startup refused: ARDUR_AUTHORITY_TOKEN must be at " +
+				"least 32 bytes long (e.g. `openssl rand -hex 32`). " +
+				"NOTE: length is a floor, not entropy — generate " +
+				"the token from a CSPRNG, not a passphrase")
+	}
+	return "", nil
+}
+
+// requireBearerAuth wraps a handler with a length-independent bearer-
+// token check (FIX-R5-H1, 2026-04-29; round-7 FIX-R7-5 closed the
+// length-leak that round-6 audit MED-2 raised).
+//
+// Round-7 hardening: ``subtle.ConstantTimeCompare`` short-circuits on
+// length mismatch and returns 0 immediately, leaking the expected
+// token's length to a remote attacker via response timing. Hashing
+// both sides through SHA-256 before the compare normalizes both
+// inputs to a fixed 32-byte length — the comparison runs in constant
+// time regardless of the presented token's length, defeating the
+// length oracle.
+func requireBearerAuth(expectedToken []byte, next http.HandlerFunc) http.HandlerFunc {
+	expectedHash := sha256.Sum256(expectedToken)
+	return func(w http.ResponseWriter, r *http.Request) {
+		hdr := r.Header.Get("Authorization")
+		// FIX-R9-4 (round-9, 2026-04-29): RFC 9110 §11.1 says the
+		// auth-scheme is case-insensitive. Round-8 audit (LOW-NEW-3)
+		// caught that the Python proxy (correctly) lower-cases the
+		// scheme before comparison while the Go side requires the
+		// exact "Bearer " prefix. A standards-compliant client
+		// sending "bearer <token>" (lowercase) was rejected. Now
+		// accept any case variation of the 6-character scheme.
+		if len(hdr) < len("Bearer ") || !strings.EqualFold(hdr[:len("Bearer ")], "Bearer ") {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="ardur-authority"`)
+			http.Error(w, "Authorization: Bearer <token> required", http.StatusUnauthorized)
+			return
+		}
+		presented := []byte(strings.TrimSpace(hdr[len("Bearer "):]))
+		presentedHash := sha256.Sum256(presented)
+		if subtle.ConstantTimeCompare(presentedHash[:], expectedHash[:]) != 1 {
+			http.Error(w, "invalid bearer token", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
 func main() {
 	var addr string
+	var noRequireAuth bool
 	flag.StringVar(&addr, "addr", ":8443", "Listen address")
+	flag.BoolVar(&noRequireAuth, "no-require-auth", false,
+		"Disable bearer-token authentication on /sign and /status. "+
+			"Use ONLY for local development; production deployments "+
+			"MUST set ARDUR_AUTHORITY_TOKEN.")
 	flag.Parse()
 
 	auth, err := newAuthority()
@@ -282,9 +365,36 @@ func main() {
 		log.Fatalf("Failed to initialize authority: %v", err)
 	}
 
+	// FIX-R5-H1 (2026-04-29): the round-4 hostile audit flagged that
+	// the /sign endpoint was unauthenticated. Round-7 (2026-04-29)
+	// extracted the validation into ``validateAuthStartup`` so
+	// startup-refusal is unit-testable (FIX-R7-4 from round-6 audit).
+	apiToken := []byte(strings.TrimSpace(os.Getenv("ARDUR_AUTHORITY_TOKEN")))
+	warning, err := validateAuthStartup(authStartupConfig{
+		noRequireAuth: noRequireAuth,
+		apiToken:      apiToken,
+	})
+	if err != nil {
+		log.Fatalf("[Authority] %s", err.Error())
+	}
+	if warning != "" {
+		log.Println("!!! [Authority] WARNING: " + warning)
+	}
+
+	signHandler := http.HandlerFunc(auth.handleSign)
+	statusHandler := http.HandlerFunc(auth.handleStatus)
+	if !noRequireAuth {
+		signHandler = requireBearerAuth(apiToken, auth.handleSign)
+		statusHandler = requireBearerAuth(apiToken, auth.handleStatus)
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/sign", auth.handleSign)
-	mux.HandleFunc("/status", auth.handleStatus)
+	// /sign and /status require authentication. /attestation and
+	// /public-key are deliberately public — they advertise the trust
+	// anchor; anyone offline-verifying credentials needs them. /healthz
+	// is the liveness probe.
+	mux.HandleFunc("/sign", signHandler)
+	mux.HandleFunc("/status", statusHandler)
 	mux.HandleFunc("/attestation", auth.handleAttestation)
 	mux.HandleFunc("/public-key", auth.handlePublicKey)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -295,7 +405,7 @@ func main() {
 	})
 
 	log.Printf("[Authority] Listening on %s", addr)
-	log.Printf("[Authority] Endpoints: /sign /status /attestation /public-key /healthz")
+	log.Printf("[Authority] Endpoints: /sign /status (auth) /attestation /public-key /healthz (public)")
 
 	server := &http.Server{
 		Addr:              addr,

@@ -144,3 +144,46 @@ class TestAttestationMissingClaims:
         bad_token = jwt.encode(bad_claims, private_key, algorithm=ALGORITHM)
         with pytest.raises(jwt.MissingRequiredClaimError):
             verify_attestation(bad_token, public_key)
+
+
+# --- Round-4 audit (FIX-R4-3, 2026-04-28): the round-3 hostile audit
+# flagged that ``verify_attestation`` had no bounded iat check. As a
+# public API exported in vibap/__init__.py, callers in cross-trust
+# scenarios got no protection from far-future-iat attestation forgeries.
+# The round-4 fix wires ``assert_iat_in_window`` into the verifier;
+# this test pins the new gate.
+
+class TestVerifyAttestationIatSkew:
+    def test_far_future_iat_fails_closed(self, private_key, public_key):
+        from vibap.passport import ALGORITHM as _ALG
+        far_future = int(time.time()) + 365 * 86400
+        claims = {
+            "iss": "att-issuer",
+            "sub": "agent",
+            "aud": "vibap-attestation-verifier",
+            "iat": far_future,
+            "exp": far_future + 3600,
+            "jti": "att-far-future",
+            "passport_jti": "p-1",
+            "log_digest": "abc",
+            "events_count": 1,
+        }
+        token = jwt.encode(claims, private_key, algorithm=_ALG)
+        with pytest.raises(jwt.InvalidTokenError, match="attestation iat"):
+            verify_attestation(token, public_key)
+
+    def test_in_window_iat_accepted(self, private_key, public_key):
+        # Exercise the happy path so the new gate doesn't false-positive.
+        events = _sample_events()
+        token = issue_attestation(
+            passport_jti="parent-jti-456",
+            agent_id="agent-happy-path",
+            mission="iat-window check",
+            events=events,
+            permits=1,
+            denials=1,
+            elapsed_s=0.5,
+            private_key=private_key,
+        )
+        claims = verify_attestation(token, public_key)
+        assert claims["passport_jti"] == "parent-jti-456"

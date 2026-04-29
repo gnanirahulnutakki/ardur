@@ -1,6 +1,8 @@
 package governance
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -14,12 +16,47 @@ const maxRequestBody = 1 << 20 // 1 MB
 type Handler struct {
 	service *SessionService
 	logger  *slog.Logger
+
+	// FIX-R5-H2 (2026-04-29) — bearer-token auth on /v1/*. When
+	// authToken is non-nil and non-empty, the auth middleware is
+	// active. NewHandler keeps it nil for back-compat; NewHandlerWithAuth
+	// is the production constructor.
+	authToken []byte
 }
 
+// NewHandler builds a handler with NO authentication on /v1/* routes.
+//
+// SECURITY-RELEVANT (FIX-R6-7, round-6, 2026-04-29): this constructor
+// is a foot-gun. Round-5 audit flagged that callers who pick this
+// instead of NewHandlerWithAuth get unauthenticated control-plane
+// endpoints with no warning logged. Production code MUST use
+// NewHandlerWithAuth; this constructor is retained ONLY for tests
+// and explicit local-dev opt-out via cmd/governor's
+// ARDUR_GOVERNOR_NO_REQUIRE_AUTH env flag. A loud warning is emitted
+// on construction so accidental use shows up in deployment logs.
 func NewHandler(service *SessionService) *Handler {
+	slog.Warn(
+		"governance.NewHandler called WITHOUT bearer-token auth — every " +
+			"/v1/* route accepts unauthenticated requests. Production " +
+			"deployments MUST use NewHandlerWithAuth(service, token). " +
+			"This is a hard foot-gun: only use NewHandler for tests or " +
+			"explicit local-dev opt-out via ARDUR_GOVERNOR_NO_REQUIRE_AUTH.")
 	return &Handler{
 		service: service,
 		logger:  slog.Default(),
+	}
+}
+
+// NewHandlerWithAuth builds a handler that requires a bearer token on
+// every /v1/* route. The token is compared in constant time. Public
+// routes (/healthz, /readyz) remain unauthenticated for liveness/
+// readiness probes. Pass an empty byteslice ONLY in tests that
+// explicitly opt out — production code MUST pass a real token.
+func NewHandlerWithAuth(service *SessionService, authToken []byte) *Handler {
+	return &Handler{
+		service:   service,
+		logger:    slog.Default(),
+		authToken: authToken,
 	}
 }
 
@@ -38,16 +75,60 @@ type healthResponse struct {
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("POST /v1/declarations", h.createDeclaration)
-	mux.HandleFunc("POST /v1/events", h.ingestEvent)
-	mux.HandleFunc("GET /v1/sessions", h.listSessions)
-	mux.HandleFunc("GET /v1/sessions/{id}", h.getSession)
-	mux.HandleFunc("DELETE /v1/sessions/{id}", h.closeSession)
-	mux.HandleFunc("GET /v1/decisions/{id}", h.getDecision)
+	// /v1/* endpoints require bearer-token auth when h.authToken is
+	// configured (FIX-R5-H2 from round-4 audit). /healthz and /readyz
+	// stay unauthenticated for K8s liveness/readiness probes.
+	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
+		if len(h.authToken) == 0 {
+			// Auth is unconfigured — handler runs raw. This path is
+			// reachable via NewHandler (back-compat for tests). Production
+			// code uses NewHandlerWithAuth and sets a token; main.go in
+			// cmd/governor refuses to start without one.
+			return next
+		}
+		return h.bearerAuth(next)
+	}
+	mux.HandleFunc("POST /v1/declarations", requireAuth(h.createDeclaration))
+	mux.HandleFunc("POST /v1/events", requireAuth(h.ingestEvent))
+	mux.HandleFunc("GET /v1/sessions", requireAuth(h.listSessions))
+	mux.HandleFunc("GET /v1/sessions/{id}", requireAuth(h.getSession))
+	mux.HandleFunc("DELETE /v1/sessions/{id}", requireAuth(h.closeSession))
+	mux.HandleFunc("GET /v1/decisions/{id}", requireAuth(h.getDecision))
 	mux.HandleFunc("GET /healthz", h.healthz)
 	mux.HandleFunc("GET /readyz", h.readyz)
 
 	return h.recovery(h.logging(h.contentType(mux)))
+}
+
+// bearerAuth wraps a handler with a length-independent bearer-token
+// check. 401 fall-through on missing or mismatched Authorization
+// header. Round-7 hardening (FIX-R7-5, 2026-04-29) hashes both
+// presented and expected tokens through SHA-256 before the
+// constant-time compare, so the response time does not leak the
+// expected token's length to a remote attacker. (subtle.ConstantTimeCompare
+// short-circuits on length mismatch by stdlib design.)
+func (h *Handler) bearerAuth(next http.HandlerFunc) http.HandlerFunc {
+	expectedHash := sha256.Sum256(h.authToken)
+	return func(w http.ResponseWriter, r *http.Request) {
+		hdr := r.Header.Get("Authorization")
+		// FIX-R9-4 (round-9, 2026-04-29): RFC 9110 §11.1 — auth-scheme
+		// is case-insensitive. Match Python's parser (which uses
+		// .lower().startswith()).
+		if len(hdr) < len("Bearer ") || !strings.EqualFold(hdr[:len("Bearer ")], "Bearer ") {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="ardur-governor"`)
+			writeJSON(w, http.StatusUnauthorized,
+				apiError{Error: "Authorization: Bearer <token> required"})
+			return
+		}
+		presented := []byte(strings.TrimSpace(hdr[len("Bearer "):]))
+		presentedHash := sha256.Sum256(presented)
+		if subtle.ConstantTimeCompare(presentedHash[:], expectedHash[:]) != 1 {
+			writeJSON(w, http.StatusUnauthorized,
+				apiError{Error: "invalid bearer token"})
+			return
+		}
+		next(w, r)
+	}
 }
 
 // --- Handlers ---

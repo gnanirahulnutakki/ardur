@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -511,4 +513,179 @@ func TestDecisionBeforeAnyEvent(t *testing.T) {
 		t.Errorf("status = %d, want %d for no decision yet", resp.StatusCode, http.StatusNotFound)
 	}
 	resp.Body.Close()
+}
+
+// FIX-R5-H2 (round-5, 2026-04-29): regression tests for the bearer-token
+// middleware. Round-4 audit flagged that every /v1/* endpoint was
+// unauthenticated. The new middleware rejects unauthenticated requests
+// with 401 and accepts only requests carrying the configured token.
+
+func newAuthenticatedTestServer(token []byte) *httptest.Server {
+	store := NewMemoryStore()
+	engine := NewEngine()
+	sink := NewLoggingActionSink()
+	svc := NewSessionService(store, engine, sink)
+	handler := NewHandlerWithAuth(svc, token)
+	return httptest.NewServer(handler.Routes())
+}
+
+func TestBearerAuth_RejectsMissingHeader(t *testing.T) {
+	token := []byte("test-bearer-token-32-bytes-abcd")
+	srv := newAuthenticatedTestServer(token)
+	defer srv.Close()
+	resp, err := http.Post(
+		srv.URL+"/v1/declarations",
+		"application/json",
+		strings.NewReader(`{}`),
+	)
+	if err != nil {
+		t.Fatalf("post error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d (missing Authorization)", resp.StatusCode, http.StatusUnauthorized)
+	}
+	if got := resp.Header.Get("WWW-Authenticate"); !strings.Contains(got, "Bearer") {
+		t.Errorf("WWW-Authenticate header = %q, want Bearer challenge", got)
+	}
+}
+
+func TestBearerAuth_RejectsWrongToken(t *testing.T) {
+	token := []byte("test-bearer-token-32-bytes-abcd")
+	srv := newAuthenticatedTestServer(token)
+	defer srv.Close()
+	req, _ := http.NewRequest("POST", srv.URL+"/v1/declarations", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer attacker-supplied-token")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d (wrong token)", resp.StatusCode, http.StatusUnauthorized)
+	}
+}
+
+func TestBearerAuth_AcceptsCorrectToken(t *testing.T) {
+	token := []byte("test-bearer-token-32-bytes-abcd")
+	srv := newAuthenticatedTestServer(token)
+	defer srv.Close()
+	body := `{"id":"decl-auth","name":"auth-pin","mission_id":"m"}`
+	req, _ := http.NewRequest("POST", srv.URL+"/v1/declarations", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer test-bearer-token-32-bytes-abcd")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+	// 201 for created or 400 if validation rejects the body — either
+	// outcome means the auth layer passed the request through, which is
+	// what we're pinning here.
+	if resp.StatusCode == http.StatusUnauthorized {
+		t.Errorf("authenticated request rejected with 401; auth layer should pass through")
+	}
+}
+
+func TestBearerAuth_HealthzAndReadyzRemainPublic(t *testing.T) {
+	token := []byte("test-bearer-token-32-bytes-abcd")
+	srv := newAuthenticatedTestServer(token)
+	defer srv.Close()
+	for _, path := range []string{"/healthz", "/readyz"} {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		if resp.StatusCode == http.StatusUnauthorized {
+			t.Errorf("public endpoint %s returned 401; auth must NOT be applied here", path)
+		}
+		resp.Body.Close()
+	}
+}
+
+// FIX-R7-1 (round-7, 2026-04-29): pin that ``NewHandler`` (no-auth
+// constructor) emits a security-relevant warning at construction time.
+// Round-6 added the slog.Warn as a foot-gun guard; round-6 audit
+// flagged that the fix shipped without a regression test. This test
+// captures stderr-equivalent slog output via a custom handler and
+// asserts the warning fires.
+func TestNewHandler_EmitsFootgunWarning(t *testing.T) {
+	// Replace slog default with a logger that records into a buffer.
+	originalDefault := slog.Default()
+	defer slog.SetDefault(originalDefault)
+
+	var captured strings.Builder
+	captureHandler := slog.NewTextHandler(&captured, &slog.HandlerOptions{
+		Level: slog.LevelWarn,
+	})
+	slog.SetDefault(slog.New(captureHandler))
+
+	store := NewMemoryStore()
+	engine := NewEngine()
+	sink := NewLoggingActionSink()
+	svc := NewSessionService(store, engine, sink)
+	_ = NewHandler(svc) // construct WITHOUT auth — must warn
+
+	got := captured.String()
+	if !strings.Contains(got, "WARN") {
+		t.Errorf("NewHandler() must emit a WARN-level slog event; got: %q", got)
+	}
+	if !strings.Contains(got, "NewHandler") || !strings.Contains(got, "WITHOUT") {
+		t.Errorf("warning must mention NewHandler and WITHOUT auth; got: %q", got)
+	}
+	if !strings.Contains(strings.ToLower(got), "production") {
+		t.Errorf("warning must direct operators to production-safe alternative; got: %q", got)
+	}
+}
+
+// FIX-R9-2 (round-9, 2026-04-29) — DE-RIG REGRESSION.
+//
+// Round-8 audit found the round-7 SHA-256 length-oracle closure for
+// Governor bearer-auth is not pinned by behavioral tests: a revert to
+// raw-bytes ConstantTimeCompare keeps every existing test green
+// because the rejection contract is unchanged — only the timing
+// oracle reopens. This source-shape test would catch a revert to the
+// pre-R7-5 pattern. Brittle by design: a deliberate refactor must
+// update both the code AND this test.
+func TestBearerAuth_SourceContainsSha256Normalization(t *testing.T) {
+	src, err := os.ReadFile("http.go")
+	if err != nil {
+		t.Fatalf("read http.go: %v", err)
+	}
+	srcStr := string(src)
+
+	if !strings.Contains(srcStr, "expectedHash := sha256.Sum256") {
+		t.Error("FIX-R7-5 regression: bearerAuth must precompute expected token hash via sha256.Sum256")
+	}
+	if !strings.Contains(srcStr, "presentedHash := sha256.Sum256") {
+		t.Error("FIX-R7-5 regression: bearerAuth must hash presented token via sha256.Sum256")
+	}
+	// Anti-pattern: raw-bytes ConstantTimeCompare against h.authToken.
+	if strings.Contains(srcStr, "ConstantTimeCompare(presented, h.authToken)") {
+		t.Error("FIX-R7-5 regression: bearer-auth reverted to raw-bytes ConstantTimeCompare against h.authToken, leaking length via timing. Use sha256-normalized inputs.")
+	}
+}
+
+// FIX-R7-1b: confirm NewHandlerWithAuth does NOT emit the foot-gun
+// warning — that's the production path.
+func TestNewHandlerWithAuth_DoesNotEmitWarning(t *testing.T) {
+	originalDefault := slog.Default()
+	defer slog.SetDefault(originalDefault)
+
+	var captured strings.Builder
+	slog.SetDefault(slog.New(slog.NewTextHandler(&captured, &slog.HandlerOptions{
+		Level: slog.LevelWarn,
+	})))
+
+	store := NewMemoryStore()
+	engine := NewEngine()
+	sink := NewLoggingActionSink()
+	svc := NewSessionService(store, engine, sink)
+	token := []byte("test-bearer-token-32-bytes-abcd")
+	_ = NewHandlerWithAuth(svc, token)
+
+	if got := captured.String(); strings.Contains(got, "WITHOUT") {
+		t.Errorf("NewHandlerWithAuth must NOT emit a 'WITHOUT auth' warning; got: %q", got)
+	}
 }

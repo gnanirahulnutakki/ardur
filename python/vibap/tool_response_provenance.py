@@ -432,22 +432,40 @@ def verify_envelope(
         )
 
     current = int(time.time()) if now is None else int(now)
-    age = current - int(claims["iat"])
-    if age > max_age_s:
+    # FIX-R5-M4 (round-5, 2026-04-29): route the iat-bound check through
+    # the canonical ``assert_iat_in_window`` helper instead of inline
+    # arithmetic. The 60s future tolerance is intentionally tighter than
+    # the 300s default for the rest of the JWT verifier surface — tool-
+    # response signatures are short-lived runtime artefacts where a
+    # generous future skew would defeat the freshness guarantee. The
+    # past-skew bound is ``max_age_s`` so legacy / archived signatures
+    # outside the freshness window fail closed with a uniform
+    # InvalidTokenError shape.
+    from .passport import assert_iat_in_window
+    try:
+        assert_iat_in_window(
+            claims.get("iat"),
+            future_skew_s=60,
+            past_skew_s=max_age_s,
+            now=current,
+            field_name="tool-response iat",
+        )
+    except jwt.InvalidTokenError as exc:
+        msg = str(exc)
+        if "in the future" in msg:
+            return ToolResponseVerdict(
+                verdict="INVALID",
+                reason=msg,
+                signer_key_id=envelope.key_id,
+                signer_spiffe_id=str(claims.get("iss", "")),
+                tool_name=expected_tool_name,
+            )
+        # Past-skew exceeded → "stale signature" stays the canonical
+        # caller-facing reason for back-compat.
+        age = current - int(claims["iat"])
         return ToolResponseVerdict(
             verdict="INVALID",
             reason=f"stale signature: {age}s old (max {max_age_s}s)",
-            signer_key_id=envelope.key_id,
-            signer_spiffe_id=str(claims.get("iss", "")),
-            tool_name=expected_tool_name,
-        )
-    if age < -60:
-        # Clock-skew tolerance: allow the signer to be up to 60s ahead of
-        # the proxy. Beyond that, reject — a far-future iat is a sign the
-        # signer's clock was manipulated.
-        return ToolResponseVerdict(
-            verdict="INVALID",
-            reason=f"future signature: iat is {-age}s in the future",
             signer_key_id=envelope.key_id,
             signer_spiffe_id=str(claims.get("iss", "")),
             tool_name=expected_tool_name,

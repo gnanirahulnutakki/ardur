@@ -550,3 +550,143 @@ class TestCwdClaim:
             "read_file", {"path": "./anything.txt"}
         )
         assert decision.value == "PERMIT"
+
+
+# --- Round-4 audit (2026-04-28): the round-3 prompt advertised passport
+# iat-skew tests in the test class header but never wrote them. This
+# closes the regression-test gap (FIX-R4-7).
+
+class TestPassportIatSkewGuard:
+    """Pin that ``verify_passport`` rejects far-future / far-past iat
+    values via the shared ``assert_iat_in_window`` helper."""
+
+    def test_passport_with_iat_in_far_future_fails_closed(
+        self, private_key, public_key
+    ):
+        far_future = int(time.time()) + 365 * 86400
+        claims = {
+            "iss": "vibap-governance-proxy",
+            "sub": "agent-test",
+            "aud": "vibap-proxy",
+            "iat": far_future,
+            "exp": far_future + 60,
+            "jti": "passport-far-future",
+            "mission": "test",
+            "allowed_tools": ["read_file"],
+            "forbidden_tools": [],
+            "resource_scope": [],
+            "max_tool_calls": 5,
+            "max_duration_s": 60,
+            "delegation_allowed": False,
+            "max_delegation_depth": 0,
+        }
+        token = jwt.encode(claims, private_key, algorithm="ES256")
+        with pytest.raises(jwt.InvalidTokenError, match="passport iat"):
+            verify_passport(token, public_key)
+
+    def test_passport_with_iat_in_far_past_fails_closed(
+        self, private_key, public_key
+    ):
+        far_past = int(time.time()) - 365 * 86400
+        claims = {
+            "iss": "vibap-governance-proxy",
+            "sub": "agent-test",
+            "aud": "vibap-proxy",
+            "iat": far_past,
+            # exp also far in the past; PyJWT will catch ExpiredSignature
+            # before our gate runs, so we must also push exp into the
+            # future to exercise the past-skew check distinctly.
+            "exp": int(time.time()) + 60,
+            "jti": "passport-far-past",
+            "mission": "test",
+            "allowed_tools": ["read_file"],
+            "forbidden_tools": [],
+            "resource_scope": [],
+            "max_tool_calls": 5,
+            "max_duration_s": 60,
+            "delegation_allowed": False,
+            "max_delegation_depth": 0,
+        }
+        token = jwt.encode(claims, private_key, algorithm="ES256")
+        with pytest.raises(jwt.InvalidTokenError, match="passport iat"):
+            verify_passport(token, public_key)
+
+
+# --- FIX-R7-3 (round-7, 2026-04-29): defense-in-depth regression for
+# the KB-JWT second-decode bounded-iat. Round-6 added the
+# ``assert_iat_in_window`` call at proxy.py:2339-2347 specifically to
+# defend against a future refactor that removes ``verify_pop`` while
+# keeping the nonce-extraction path. Round-6 audit (LOW-2) flagged
+# that no test catches a revert of just that block, because verify_pop
+# above it already covers the same shape. This test monkeypatches
+# verify_pop to a no-op and confirms the second-decode gate fires.
+
+class TestKbJwtSecondDecodeIatBound:
+    def test_far_future_kb_jwt_iat_rejected_when_verify_pop_mocked(
+        self, tmp_path, public_key, private_key, session_keys_dir, monkeypatch
+    ):
+        """If verify_pop is silently bypassed (refactor risk), the
+        defense-in-depth iat gate at proxy.py:2339-2347 must still
+        reject a KB-JWT with iat far in the future. Mock verify_pop
+        to a no-op to isolate the new gate."""
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from vibap.passport import (
+            MissionPassport,
+            compute_jwk_thumbprint,
+            issue_passport,
+        )
+        from vibap.proxy import GovernanceProxy
+        import vibap.proxy as proxy_mod
+
+        # Generate a holder keypair.
+        holder_priv = ec.generate_private_key(ec.SECP256R1())
+        holder_pub = holder_priv.public_key()
+        thumbprint = compute_jwk_thumbprint(holder_pub)
+
+        # Mint a passport bound to that key (cnf claim).
+        mission = MissionPassport(
+            agent_id="agent-kb-jwt-iat",
+            mission="m",
+            allowed_tools=["read"],
+            forbidden_tools=[],
+            resource_scope=[],
+            max_tool_calls=5,
+            max_duration_s=60,
+            holder_key_thumbprint=thumbprint,
+        )
+        passport_token = issue_passport(mission, private_key, ttl_s=60)
+
+        # Build a KB-JWT with iat far in the future.
+        far_future = int(time.time()) + 365 * 86400
+        sd_hash_raw = hashlib.sha256(passport_token.encode("ascii")).digest()
+        sd_hash = base64.urlsafe_b64encode(sd_hash_raw).rstrip(b"=").decode()
+        kb_claims = {
+            "iat": far_future,
+            "nonce": "fresh-nonce-x" * 4,
+            "sd_hash": sd_hash,
+        }
+        kb_jwt_str = jwt.encode(kb_claims, holder_priv, algorithm="ES256")
+
+        # Mock verify_pop to a no-op so we can isolate the second-decode
+        # gate. In real production, verify_pop runs first and catches
+        # this case — the round-6 fix is defense-in-depth for the case
+        # where a future refactor splits or removes verify_pop. The
+        # function is locally imported inside start_session via
+        # ``from .passport import verify_pop``, so we patch the source
+        # module attribute (proxy_mod resolves the name at call time).
+        def _noop_verify_pop(*args, **kwargs):
+            return True
+        monkeypatch.setattr("vibap.passport.verify_pop", _noop_verify_pop)
+
+        proxy = GovernanceProxy(
+            log_path=tmp_path / "log.jsonl",
+            state_dir=tmp_path / "state",
+            public_key=public_key,
+            keys_dir=session_keys_dir,
+        )
+        with pytest.raises(PermissionError, match="KB-JWT iat"):
+            proxy.start_session(
+                passport_token,
+                holder_public_key=holder_pub,
+                kb_jwt=kb_jwt_str,
+            )

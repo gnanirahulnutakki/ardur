@@ -23,7 +23,7 @@ go test -race ./...
 
 | Path | What lives here |
 |---|---|
-| `pkg/aat` | Attenuating Authorization Token primitives + AAT chain verification |
+| `pkg/aat` | **Skeleton only** — AAT chain verification is a fail-closed stub today. Returns `VerdictDeny` on every call. Real `AAT §7` enforcement is tracked at `docs/session-2026-04-14/06-briefs-issued/B5-go-aat-skeleton.md`. Do NOT use this package as a verifier in any deployment. |
 | `pkg/api/v1alpha1` | CRD types for the Kubernetes operator (`AgentPassport`, etc.) |
 | `pkg/credential` | Mission credential issuance + verification |
 | `pkg/governance` | Core governance engine (verifier, composition) |

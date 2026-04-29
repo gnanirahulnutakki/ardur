@@ -24,7 +24,13 @@ from typing import TYPE_CHECKING, Any, NoReturn
 import jwt
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from .passport import ALGORITHM, DEFAULT_ISSUER
+from .passport import (
+    ALGORITHM,
+    DEFAULT_IAT_FUTURE_SKEW_S,
+    DEFAULT_IAT_PAST_SKEW_S,
+    DEFAULT_ISSUER,
+    assert_iat_in_window,
+)
 
 if TYPE_CHECKING:
     from .proxy import PolicyEvent
@@ -34,6 +40,15 @@ RECEIPT_JWT_TYPE = "application/ardur.er+jwt"
 DEFAULT_RECEIPT_TTL_S = 300
 DEFAULT_EVIDENCE_LEVEL = "self_signed"
 DEFAULT_REPLAY_CACHE_MAX_ENTRIES = 4096
+
+# Round 3 (2026-04-28) lifted the bounded-iat-skew implementation into
+# :func:`vibap.passport.assert_iat_in_window` so AAT/MD/passport/status-list
+# verifiers all share the same gate. ``_IAT_FUTURE_SKEW_S`` /
+# ``_IAT_PAST_SKEW_S`` remain here as backwards-compatible aliases for
+# external callers that imported them by name. New code should import
+# DEFAULT_IAT_FUTURE_SKEW_S / DEFAULT_IAT_PAST_SKEW_S from vibap.passport.
+_IAT_FUTURE_SKEW_S = DEFAULT_IAT_FUTURE_SKEW_S
+_IAT_PAST_SKEW_S = DEFAULT_IAT_PAST_SKEW_S
 
 _REQUIRED_CLAIMS = [
     "receipt_id",
@@ -635,7 +650,21 @@ def verify_receipt(
     replay_cache: MutableSet[str] | None = None,
     trusted_issuer_bindings: dict[str, set[str] | list[str] | tuple[str, ...]] | None = None,
     verify_expiry: bool = True,
+    iat_future_skew_s: int = _IAT_FUTURE_SKEW_S,
+    iat_past_skew_s: int = _IAT_PAST_SKEW_S,
+    now_fn: "callable[..., float] | None" = None,
 ) -> dict[str, Any]:
+    """Verify a single Execution Receipt JWT.
+
+    ``iat_future_skew_s`` / ``iat_past_skew_s`` close FIX-6 from the
+    2026-04-28 hostile audit: previously ``verify_receipt`` only checked
+    ``exp`` (via PyJWT's ``verify_exp``) and never bounded ``iat``, which
+    let a forged receipt claim ``iat=year_3000`` pass validation as long
+    as ``exp`` was also future-dated. Receipts whose ``iat`` lies outside
+    ``now - iat_past_skew_s ... now + iat_future_skew_s`` now fail closed.
+    Set both skews to ``None`` (or 0) only in archival-replay contexts
+    where legitimately old receipts must be re-verified.
+    """
     claims = jwt.decode(
         jwt_str,
         public_key,
@@ -644,7 +673,22 @@ def verify_receipt(
             "require": _PYJWT_REQUIRED_CLAIMS,
             "verify_aud": False,
             "verify_exp": verify_expiry,
+            # Disable PyJWT's default iat validation — its "not yet valid"
+            # rejection (with a fixed leeway) collides with our explicit
+            # bounded-skew gate below, masking error messages and making
+            # behavior less testable. We control iat semantics ourselves.
+            "verify_iat": False,
         },
+    )
+    # Bounded-iat skew gate (FIX-6 + round 3 generalization, 2026-04-28).
+    # Delegates to the shared helper so receipts and every other JWT
+    # verifier (AAT, MD, passport, status list) use the same window.
+    assert_iat_in_window(
+        claims.get("iat"),
+        future_skew_s=iat_future_skew_s,
+        past_skew_s=iat_past_skew_s,
+        now=(now_fn() if now_fn is not None else None),
+        field_name="receipt iat",
     )
     missing = [claim for claim in _REQUIRED_CLAIMS if claim not in claims]
     if missing:
@@ -724,6 +768,14 @@ def verify_chain(
                     "receipt chain does not start at a root receipt "
                     f"(index 0 has parent_receipt_hash={claims.get('parent_receipt_hash')})"
                 )
+            # Root receipts must also carry a null-shaped parent_receipt_id —
+            # a non-null id without a matching hash is a chain-anomaly.
+            pid = claims.get("parent_receipt_id")
+            if pid is not None:
+                raise ReceiptChainError(
+                    f"root receipt has parent_receipt_id={pid!r} without a "
+                    "parent_receipt_hash; chain head must have neither"
+                )
             continue
         expected_hash = hashlib.sha256(tokens[index - 1].encode("ascii")).hexdigest()
         if claims.get("parent_receipt_hash") != expected_hash:
@@ -731,6 +783,20 @@ def verify_chain(
                 f"parent_receipt_hash mismatch at index {index}: "
                 f"expected {expected_hash}, got {claims.get('parent_receipt_hash')}"
             )
+        # FIX-6 (2026-04-28): receipts emit ``parent_receipt_id`` as a
+        # 16-hex-char prefix of ``parent_receipt_hash``. If a receipt
+        # carries a non-null parent_receipt_id that disagrees with this
+        # derivation, the producer mis-linked or tampered with the chain.
+        # Ignore None to preserve back-compat with pre-shim consumers.
+        pid = claims.get("parent_receipt_id")
+        if pid is not None:
+            expected_pid = expected_hash[:16]
+            if pid != expected_pid:
+                raise ReceiptChainError(
+                    f"parent_receipt_id mismatch at index {index}: "
+                    f"expected {expected_pid!r}, got {pid!r} "
+                    "(parent_receipt_id must equal parent_receipt_hash[:16])"
+                )
     return verified_claims
 
 

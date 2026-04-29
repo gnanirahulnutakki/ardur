@@ -31,6 +31,7 @@ func main() {
 		enableLeaderElection bool
 		signingKeyPath       string
 		issuerURI            string
+		allowEphemeralKey    bool
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Metrics endpoint bind address.")
@@ -38,6 +39,13 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for HA.")
 	flag.StringVar(&signingKeyPath, "signing-key", "", "Path to Ed25519 signing key (JWK). Required in production.")
 	flag.StringVar(&issuerURI, "issuer-uri", "https://vibap.ardur.dev", "Credential issuer URI.")
+	// FIX-R9-6 (round-9, 2026-04-29): explicit opt-in for ephemeral
+	// key generation. Without --signing-key AND without --allow-
+	// ephemeral-key, the operator refuses to start.
+	flag.BoolVar(&allowEphemeralKey, "allow-ephemeral-key", false,
+		"Allow generating an ephemeral signing key when --signing-key is empty. "+
+			"Use ONLY for local development; production deployments MUST supply "+
+			"a persistent signing key.")
 	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -60,7 +68,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	reconciler, err := NewAgentPassportReconciler(mgr.GetClient(), mgr.GetScheme(), signingKeyPath, issuerURI)
+	reconciler, err := NewAgentPassportReconciler(mgr.GetClient(), mgr.GetScheme(), signingKeyPath, issuerURI, allowEphemeralKey)
 	if err != nil {
 		setupLog.Error(err, "unable to create reconciler")
 		os.Exit(1)

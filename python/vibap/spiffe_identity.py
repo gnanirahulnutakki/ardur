@@ -162,6 +162,18 @@ def verify_jwt_svid(
     exp = validated_svid.expiry
     if not isinstance(exp, int) or isinstance(exp, bool):
         raise ValueError("JWT-SVID exp claim must be an integer")
+    # Round-4 hardening (FIX-R4-4, 2026-04-28): the JWT-SVID spec is
+    # silent on iat-future bounds, and the underlying SPIFFE library
+    # cannot be relied on to enforce them. Apply the same bounded-iat
+    # gate every other JWT verifier in this codebase uses, so a
+    # briefly-compromised SPIFFE signer cannot mint long-lived
+    # future-dated SVIDs that bind to Biscuit holder identities forever.
+    # Local import avoids a circular dep at module load time.
+    from .passport import assert_iat_in_window
+    try:
+        assert_iat_in_window(iat, field_name="JWT-SVID iat")
+    except Exception as exc:  # noqa: BLE001 - re-raise as ValueError for caller contract
+        raise ValueError(str(exc)) from exc
 
     return SvidClaims(
         spiffe_id=str(validated_svid.spiffe_id),
@@ -228,16 +240,30 @@ def get_public_key_from_trust_bundle(
 
 def make_mock_svid_bundle(
     spiffe_id: str = "spiffe://example.org/workload-test",
+    *,
+    iat: int | None = None,
+    exp: int | None = None,
 ) -> SvidBundle:
-    """Build a deterministic mock X.509-SVID/JWT-SVID bundle for tests."""
+    """Build a deterministic mock X.509-SVID/JWT-SVID bundle for tests.
 
+    Round-5 (FIX-R5-H7, 2026-04-28): the original ``_MOCK_IAT`` constant
+    sat at 2023-11 — fine for tests that never call
+    :func:`verify_jwt_svid` against the bundle, but unusable once the
+    bounded-iat-skew gate (FIX-R4-4) defaults to ±30 days past. New
+    callers can pass ``iat=int(time.time())`` to mint a fresh token
+    that survives the gate; the legacy ``_MOCK_IAT`` default is kept
+    for back-compat with tests that don't exercise the verifier path.
+    """
+
+    effective_iat = _MOCK_IAT if iat is None else iat
+    effective_exp = _MOCK_EXP if exp is None else exp
     materials = _mock_materials(spiffe_id)
     jwt_svid_token = jwt.encode(
         {
             "sub": spiffe_id,
             "aud": [_MOCK_JWT_AUDIENCE],
-            "iat": _MOCK_IAT,
-            "exp": _MOCK_EXP,
+            "iat": effective_iat,
+            "exp": effective_exp,
         },
         materials["jwt_private_key"],
         algorithm="ES256",

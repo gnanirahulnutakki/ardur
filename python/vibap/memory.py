@@ -97,12 +97,30 @@ class GovernedMemoryStore:
                 algorithms=[ALGORITHM],
                 audience=MEMORY_AUDIENCE,
                 issuer=MEMORY_ISSUER,
-                options={"require": ["exp", "iat", "jti", "ch", "sub"]},
+                options={
+                    "require": ["exp", "iat", "jti", "ch", "sub"],
+                    # FIX-R5-M3 (round-5, 2026-04-29): use the canonical
+                    # bounded-iat helper instead of relying on PyJWT's
+                    # default ``verify_iat`` which uses zero leeway and
+                    # is out of band with every other JWT verifier in
+                    # the codebase. PyJWT's check fires on
+                    # ``ImmatureSignatureError``; ours raises a clear
+                    # named bound that surfaces via assert_iat_in_window.
+                    "verify_iat": False,
+                },
             )
         except ExpiredSignatureError as e:
             raise MemoryIntegrityError("provenance expired") from e
         except (InvalidSignatureError, DecodeError) as e:
             raise MemoryIntegrityError("provenance signature invalid") from e
+        # Bounded-iat skew check (FIX-R5-M3, 2026-04-29). Mirrors the
+        # rest of the JWT verifier surface (passport / AAT / MD / SVID /
+        # status-list / receipt / attestation).
+        from .passport import assert_iat_in_window
+        try:
+            assert_iat_in_window(claims.get("iat"), field_name="memory tag iat")
+        except jwt.InvalidTokenError as exc:
+            raise MemoryIntegrityError(str(exc)) from exc
 
         if str(claims.get("sub")) != self.store_id:
             raise MemoryIntegrityError("store_id mismatch in provenance")

@@ -62,3 +62,93 @@ jobs:
   # an extra space or a stripped trailing pipe. The signal-to-noise ratio
   # was too low to justify the gate. If we want this back, use a real
   # Markdown parser (mdformat, remark) rather than a pipe-count heuristic.
+
+  spec-schema-sync:
+    name: Spec Schema Sync
+    # Round 3 (2026-04-28): the Mission Declaration v0.1 JSON Schema
+    # ships in two places — the canonical doc at
+    # docs/specs/mission-declaration-v0.1.schema.json and the package
+    # data at python/vibap/_specs/mission_declaration_v01.schema.json
+    # that the runtime loads via importlib.resources. Because the
+    # runtime trusts the embedded copy, a PR that desyncs them silently
+    # weakens validation. This gate diffs the two and fails the build
+    # on any drift.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Compare every embedded schema to its canonical doc
+        # Round 4 (FIX-R4-10, 2026-04-28): generalized from a single
+        # hardcoded pair to a glob over python/vibap/_specs/*.json so
+        # any future spec schema added under that directory is auto-
+        # gated. Filename mapping: an embedded file named
+        # ``some_thing_v01.schema.json`` is paired with the canonical
+        # at ``docs/specs/some-thing-v0.1.schema.json`` (underscores in
+        # the embedded name → hyphens in the canonical name; ``v01`` →
+        # ``v0.1``). Pairs that don't follow this convention are
+        # listed explicitly in EXTRA_PAIRS below.
+        run: |
+          set -euo pipefail
+          # Explicit overrides for non-conventional filenames go here:
+          declare -a EXTRA_PAIRS=()
+          fail=0
+          shopt -s nullglob
+          for embedded in python/vibap/_specs/*.schema.json; do
+            base=$(basename "$embedded" .schema.json)
+            # Convert e.g. ``mission_declaration_v01`` →
+            # ``mission-declaration-v0.1`` using a portable Python helper.
+            # Round-5 (FIX-R5-M2, 2026-04-28): heredoc is now QUOTED
+            # (``<<'PY'``) so shell variable interpolation cannot inject
+            # Python code via a maliciously-named PR file. ``$base`` is
+            # passed via argv (sys.argv[1]) instead of being embedded in
+            # the script source. This closes the round-4 M2 finding.
+            canonical_base=$(python3 - "$base" <<'PY'
+import re, sys
+b = sys.argv[1]
+m = re.match(r'^(.*)_v(\d)(\d)$', b)
+if m:
+    out = f"{m.group(1).replace('_', '-')}-v{m.group(2)}.{m.group(3)}"
+else:
+    out = b.replace('_', '-')
+sys.stdout.write(out)
+PY
+)
+            canonical="docs/specs/${canonical_base}.schema.json"
+            if [ ! -f "$canonical" ]; then
+              echo "::error file=$embedded::no canonical pair found at $canonical"
+              fail=1
+              continue
+            fi
+            c_hash=$(python3 -c "import json,sys,hashlib; print(hashlib.sha256(json.dumps(json.load(open(sys.argv[1])), sort_keys=True).encode()).hexdigest())" "$canonical")
+            e_hash=$(python3 -c "import json,sys,hashlib; print(hashlib.sha256(json.dumps(json.load(open(sys.argv[1])), sort_keys=True).encode()).hexdigest())" "$embedded")
+            if [ "$c_hash" != "$e_hash" ]; then
+              echo "::error::Spec schema out of sync: $base"
+              echo "  canonical: $canonical (sha256: $c_hash)"
+              echo "  embedded:  $embedded (sha256: $e_hash)"
+              echo ""
+              echo "To resync after editing the canonical doc:"
+              echo "  cp $canonical $embedded"
+              echo ""
+              diff -u "$canonical" "$embedded" || true
+              fail=1
+              continue
+            fi
+            echo "✓ $base in sync (sha256: $c_hash)"
+          done
+          # Apply explicit overrides if any.
+          for pair in "${EXTRA_PAIRS[@]}"; do
+            canonical="${pair%%::*}"
+            embedded="${pair##*::}"
+            if [ ! -f "$canonical" ] || [ ! -f "$embedded" ]; then
+              echo "::error::EXTRA_PAIR file missing: $pair"
+              fail=1
+              continue
+            fi
+            c_hash=$(python3 -c "import json,sys,hashlib; print(hashlib.sha256(json.dumps(json.load(open(sys.argv[1])), sort_keys=True).encode()).hexdigest())" "$canonical")
+            e_hash=$(python3 -c "import json,sys,hashlib; print(hashlib.sha256(json.dumps(json.load(open(sys.argv[1])), sort_keys=True).encode()).hexdigest())" "$embedded")
+            if [ "$c_hash" != "$e_hash" ]; then
+              echo "::error::Override pair out of sync: $pair"
+              fail=1
+            fi
+          done
+          exit "$fail"

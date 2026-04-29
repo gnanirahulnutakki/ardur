@@ -211,3 +211,61 @@ func issueEscrowRoot(t *testing.T, key *SigningKey, ceiling int) string {
 	}
 	return root
 }
+
+// TestVerifyPassportFutureIatRejected pins FIX-R5-H3 (round-5 audit,
+// 2026-04-29). Round-3's bounded-iat-skew gate landed on the SD-JWT-VC
+// verifier; round-4 audit found this VerifyPassport path missed it.
+// Round-5 added the gate at delegation.go:213-228; this test guards
+// against a revert that would silently re-open the future-iat bypass.
+func TestVerifyPassportFutureIatRejected(t *testing.T) {
+	key := testSigningKey(t)
+	// Mint a passport with iat one hour in the future — well beyond
+	// the 30s clock-drift tolerance the verifier allows.
+	farFuture := time.Now().Add(1 * time.Hour)
+	tok, err := IssuePassport(MissionPassport{
+		AgentID:            "root-far-future",
+		Mission:            "iat-skew test",
+		AllowedTools:       []string{"read"},
+		MaxToolCalls:       5,
+		MaxDurationSeconds: 600,
+	}, key, &IssuePassportOptions{
+		TTL: 600 * time.Second,
+		Now: farFuture,
+	})
+	if err != nil {
+		t.Fatalf("IssuePassport(): %v", err)
+	}
+
+	_, err = VerifyPassport(tok, key.PublicKey)
+	if err == nil {
+		t.Fatal("VerifyPassport accepted a passport with iat far in the future; FIX-R5-H3 must reject")
+	}
+	if !strings.Contains(err.Error(), "iat lies more than") {
+		t.Errorf("error = %q, want it to contain 'iat lies more than'", err.Error())
+	}
+}
+
+// TestVerifyPassportIatWithinSkewWindowAccepted complements the
+// rejection test: an iat 15s in the future (within 30s tolerance)
+// must still be accepted, so the fix doesn't false-positive on
+// legitimate cross-node clock drift.
+func TestVerifyPassportIatWithinSkewWindowAccepted(t *testing.T) {
+	key := testSigningKey(t)
+	slightFuture := time.Now().Add(15 * time.Second)
+	tok, err := IssuePassport(MissionPassport{
+		AgentID:            "root-slight-future",
+		Mission:            "iat-window-accept test",
+		AllowedTools:       []string{"read"},
+		MaxToolCalls:       5,
+		MaxDurationSeconds: 600,
+	}, key, &IssuePassportOptions{
+		TTL: 600 * time.Second,
+		Now: slightFuture,
+	})
+	if err != nil {
+		t.Fatalf("IssuePassport(): %v", err)
+	}
+	if _, err := VerifyPassport(tok, key.PublicKey); err != nil {
+		t.Errorf("passport with iat=now+15s rejected: %v", err)
+	}
+}

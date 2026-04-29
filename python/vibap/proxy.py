@@ -2112,18 +2112,22 @@ class GovernanceProxy:
             raise ValueError("memory_store_write requires store_id")
         if not isinstance(content, str):
             raise ValueError("memory_store_write requires content (str)")
-        actor_key_pem = arguments.get("actor_private_key_pem")
-        if actor_key_pem is None:
-            actor_key = load_private_key(self._keys_dir)
-        else:
-            if not isinstance(actor_key_pem, str) or not actor_key_pem.strip():
-                raise ValueError("memory_store_write requires actor_private_key_pem")
-            actor_key = serialization.load_pem_private_key(
-                actor_key_pem.encode(),
-                password=None,
+        # FIX-8 (2026-04-28): caller-supplied actor_private_key_pem is
+        # rejected. Before this, any caller could pass an arbitrary EC
+        # private key as the signer for a memory-store write, producing
+        # records that verified with the caller's matching public key —
+        # an attacker who could call this tool could write records under
+        # any identity they liked. The signer is now bound to the
+        # proxy's session-anchored key so receipts are always
+        # attributable to the governing proxy.
+        if "actor_private_key_pem" in arguments:
+            raise ValueError(
+                "memory_store_write no longer accepts caller-supplied "
+                "actor_private_key_pem; the proxy's session-bound key is "
+                "the canonical signer (FIX-8, 2026-04-28). Remove the "
+                "argument from your tool-call payload."
             )
-            if not isinstance(actor_key, ec.EllipticCurvePrivateKey):
-                raise ValueError("actor_private_key_pem must be an EC private key")
+        actor_key = load_private_key(self._keys_dir)
         store = self._get_or_create_memory_store(session, arguments)
         session.last_memory_record_id = store.write(content, actor_key)
 
@@ -2137,15 +2141,21 @@ class GovernanceProxy:
         store = session.memory_stores.get(store_id)
         if store is None:
             raise MemoryIntegrityError("memory store not initialized in this session")
-        verifier_key_pem = arguments.get("verifier_public_key_pem")
-        if verifier_key_pem is None:
-            verifier_key = self.public_key
-        else:
-            if not isinstance(verifier_key_pem, str) or not verifier_key_pem.strip():
-                raise ValueError("memory_store_read requires verifier_public_key_pem")
-            verifier_key = serialization.load_pem_public_key(verifier_key_pem.encode())
-            if not isinstance(verifier_key, ec.EllipticCurvePublicKey):
-                raise ValueError("verifier_public_key_pem must be an EC public key")
+        # FIX-8 (2026-04-28): caller-supplied verifier_public_key_pem is
+        # rejected. Before this, a caller could specify any EC public
+        # key against which stored records would be validated — an
+        # attacker who controlled both the writer and the read path
+        # could substitute their own key to make forged records verify.
+        # The proxy's session-anchored public key is now the canonical
+        # verifier, matching the writer-side binding above.
+        if "verifier_public_key_pem" in arguments:
+            raise ValueError(
+                "memory_store_read no longer accepts caller-supplied "
+                "verifier_public_key_pem; the proxy's session-bound public "
+                "key is the canonical verifier (FIX-8, 2026-04-28). Remove "
+                "the argument from your tool-call payload."
+            )
+        verifier_key = self.public_key
         store.read(record_id, verifier_key)
 
     def _apply_memory_post_permit(
@@ -2304,6 +2314,7 @@ class GovernanceProxy:
             # previously-seen nonces within the freshness window.
             if kb_jwt is not None:
                 import jwt as _jwt
+                from .passport import assert_iat_in_window
                 # Decode outside the nonce lock — decoding touches no shared
                 # state. Failure here is fail-closed: a malformed KB-JWT must
                 # not be accepted just because verify_pop already passed (the
@@ -2317,6 +2328,23 @@ class GovernanceProxy:
                     raise PermissionError(
                         f"KB-JWT decode failed during nonce extraction: {exc}"
                     ) from exc
+                # FIX-R6-9 (round-6, 2026-04-29): defense-in-depth iat bound
+                # on this second KB-JWT decode. verify_pop above already
+                # bounds the same JWT, but a future refactor that splits
+                # the lock acquisition or removes verify_pop while keeping
+                # this nonce-extraction path would silently re-open the
+                # iat-future bypass. Apply the canonical helper with a
+                # tight window matching verify_pop's 30s clock-drift
+                # tolerance for short-lived KB-JWTs.
+                try:
+                    assert_iat_in_window(
+                        kb_claims.get("iat"),
+                        future_skew_s=30,
+                        past_skew_s=300,
+                        field_name="KB-JWT iat",
+                    )
+                except _jwt.InvalidTokenError as exc:
+                    raise PermissionError(str(exc)) from exc
                 nonce = kb_claims.get("nonce", "")
                 if not isinstance(nonce, str) or not nonce:
                     raise PermissionError("KB-JWT nonce must be a non-empty string")
@@ -2412,7 +2440,7 @@ class GovernanceProxy:
         parent_aat_token: str | None = None,
         holder_public_key: "ec.EllipticCurvePublicKey | None" = None,
         kb_jwt: str | None = None,
-        require_pop: bool = False,
+        require_pop: bool = True,
     ) -> GovernanceSession:
         """Start a governed session from a minimal AAT-compatible JWT grant.
 
@@ -2420,14 +2448,15 @@ class GovernanceProxy:
         maps it to an internal passport token with the same ``jti`` so receipts
         and delegated children keep the AAT grant id as their lineage anchor.
 
-        Proof-of-possession (off by default for back-compat): set
-        ``require_pop=True`` to enforce RFC 7800 confirmation-bound AAT
-        semantics. When enabled, any AAT carrying a ``cnf`` claim requires
-        the caller to supply ``holder_public_key`` + ``kb_jwt`` so the
-        adapter can verify the presenter holds the matching private key.
-        Bearer AATs (no ``cnf``) bypass PoP regardless of the flag.
-        Production deployments SHOULD opt into ``require_pop=True``. See
-        :func:`material_from_aat_grant` for H2 remediation rationale.
+        Proof-of-possession (default ``True`` since 2026-04-28): if the AAT
+        carries a ``cnf`` claim, the caller MUST supply ``holder_public_key``
+        + ``kb_jwt`` so the adapter can verify the presenter holds the matching
+        private key (RFC 7800 confirmation-bound AAT semantics). Bearer AATs
+        (no ``cnf``) bypass PoP regardless of the flag. Library callers that
+        legitimately need bearer-style acceptance of a cnf-bearing AAT MUST
+        opt out with ``require_pop=False`` so the security-relevant choice is
+        visible at the call site. See :func:`material_from_aat_grant` for the
+        H2 remediation rationale and the 2026-04-28 default flip.
         """
         parent_claims = (
             decode_aat_claims(parent_aat_token, self.public_key)
@@ -4495,18 +4524,45 @@ def serve_proxy(
     # Resolve auth token: env var overrides explicit arg per product requirement
     # ("token from env var should override the generated one"). If neither is set,
     # generate a fresh 32-byte random token.
-    env_token = os.environ.get("VIBAP_API_TOKEN")
+    # FIX-R9-1 (round-9, 2026-04-29): TrimSpace the env-loaded token,
+    # mirroring the Go-side R8-3 closure. Round-8 audit (MED-NEW-1)
+    # flagged that R8-3 closed the Go path but missed Python — same
+    # Python/Go asymmetry pattern round-7 raised against the bearer
+    # length-leak. Without this, an operator who sets
+    # ``VIBAP_API_TOKEN=" my-token "`` (e.g. via a YAML-quoted secret)
+    # creates a proxy where NO client can authenticate, because
+    # ``_check_auth`` strips the bearer payload but the env-loaded
+    # token retains its whitespace.
+    env_token_raw = os.environ.get("VIBAP_API_TOKEN")
+    env_token = env_token_raw.strip() if env_token_raw is not None else None
     if env_token:
         api_token = env_token
         token_source = "env:VIBAP_API_TOKEN"
     elif api_token:
+        # FIX-R10-4 (round-10, 2026-04-29): strip the CLI-supplied
+        # token symmetric with the env-loaded path (R9-1) and the Go
+        # binaries' TrimSpace. Round-9 audit (LOW-NEW-3) caught the
+        # asymmetry: an operator running ``--api-token "  abc  "`` (e.g.
+        # from a YAML ``command:`` block) would create the same
+        # operator-confusion failure mode R9-1 closed for env vars.
+        api_token = api_token.strip()
         token_source = "argument"
     else:
         api_token = _generate_api_token()
         token_source = "generated"
 
-    # Pre-encode once for constant-time comparison in the hot path.
+    # Pre-encode once for the hot path. Round-8 (FIX-R8-1, 2026-04-29):
+    # the bearer-auth comparison now hashes both presented and expected
+    # tokens through SHA-256 before ``hmac.compare_digest``, normalizing
+    # both inputs to a fixed 32-byte length. CPython's ``_tscmp`` (the
+    # C function backing ``hmac.compare_digest``) iterates ``min(len_a,
+    # len_b)`` and short-circuits on length mismatch, leaking the
+    # expected token's length to a remote attacker. Round-7 closed this
+    # for the Go control-plane services (cmd/authority + pkg/governance);
+    # round-8 closes the symmetric Python proxy gap that round-7 audit
+    # flagged as MED-NEW-1.
     api_token_bytes = api_token.encode("ascii")
+    api_token_hash = hashlib.sha256(api_token_bytes).digest()
 
     active_session_ref = {"id": initial_session_id}
     active_session_lock = threading.Lock()
@@ -4636,8 +4692,24 @@ def serve_proxy(
             if not header or not header.lower().startswith("bearer "):
                 self._send_json(401, {"error": "missing or malformed Authorization header"})
                 return False
-            provided = header[7:].strip().encode("ascii", errors="replace")
-            if not hmac.compare_digest(provided, api_token_bytes):
+            # FIX-R9-5 (round-9, 2026-04-29): symmetric ASCII handling.
+            # Round-8 audit (LOW-NEW-4) flagged asymmetric error
+            # handling — the operator-supplied token used strict ASCII
+            # (fail-loud at startup), the client-presented token used
+            # ``errors="replace"`` (fail-quiet, mapping non-ASCII to
+            # `?`). A client with a UTF-8 token had its bytes silently
+            # mutated before comparison. Now both sides use strict
+            # ASCII; non-ASCII bytes in the Authorization header
+            # produce an explicit 401 instead of a silent mismap.
+            try:
+                provided = header[7:].strip().encode("ascii")
+            except UnicodeEncodeError:
+                self._send_json(401, {"error": "bearer token must be ASCII"})
+                return False
+            # FIX-R8-1: hash-then-compare normalizes lengths and defeats
+            # the length oracle; see api_token_hash construction above.
+            provided_hash = hashlib.sha256(provided).digest()
+            if not hmac.compare_digest(provided_hash, api_token_hash):
                 self._send_json(401, {"error": "invalid bearer token"})
                 return False
             return True
@@ -4701,10 +4773,66 @@ def serve_proxy(
                         parent_aat_token = payload.get("parent_token")
                         if parent_aat_token is not None and not isinstance(parent_aat_token, str):
                             raise ValueError("parent_token must be a string when token_type=aat")
+                        # PoP plumbing — defaults secure (require_pop=True). The
+                        # adapter only enforces PoP for AATs that actually carry
+                        # a `cnf` claim, so bearer-mode AATs continue to work
+                        # without any new fields. Callers who legitimately need
+                        # bearer acceptance of a cnf-bearing AAT must pass
+                        # "require_pop": false explicitly so the security
+                        # downgrade is visible in request logs.
+                        require_pop_field = payload.get("require_pop", True)
+                        if not isinstance(require_pop_field, bool):
+                            raise ValueError(
+                                "require_pop must be a boolean when token_type=aat"
+                            )
+                        holder_pem = payload.get("holder_public_key_pem")
+                        if holder_pem is not None and not isinstance(holder_pem, str):
+                            raise ValueError(
+                                "holder_public_key_pem must be a PEM-encoded string"
+                            )
+                        kb_jwt_field = payload.get("kb_jwt")
+                        if kb_jwt_field is not None and not isinstance(kb_jwt_field, str):
+                            raise ValueError("kb_jwt must be a string when provided")
+                        # Round 3 (2026-04-28) DoS guard: a well-formed
+                        # KB-JWT is small (<2KB). Bound the field length
+                        # so an attacker cannot ship a 1MB string and
+                        # force the server to allocate / parse it before
+                        # verify_pop rejects it. Anything larger than
+                        # MAX_KB_JWT_BYTES is rejected at the HTTP edge.
+                        MAX_KB_JWT_BYTES = 8 * 1024
+                        if (
+                            isinstance(kb_jwt_field, str)
+                            and len(kb_jwt_field.encode("utf-8")) > MAX_KB_JWT_BYTES
+                        ):
+                            raise ValueError(
+                                f"kb_jwt exceeds MAX_KB_JWT_BYTES={MAX_KB_JWT_BYTES}; "
+                                "well-formed RFC 7800 key-binding JWTs are small"
+                            )
+                        holder_pubkey: ec.EllipticCurvePublicKey | None = None
+                        if holder_pem is not None:
+                            from cryptography.hazmat.primitives.serialization import (
+                                load_pem_public_key,
+                            )
+                            try:
+                                loaded = load_pem_public_key(
+                                    holder_pem.encode("utf-8")
+                                )
+                            except Exception as exc:  # noqa: BLE001
+                                raise ValueError(
+                                    f"invalid holder_public_key_pem: {exc}"
+                                ) from exc
+                            if not isinstance(loaded, ec.EllipticCurvePublicKey):
+                                raise ValueError(
+                                    "holder_public_key_pem must encode an EC public key"
+                                )
+                            holder_pubkey = loaded
                         session = proxy.start_session_from_aat(
                             token,
                             signing_key=private_key,
                             parent_aat_token=parent_aat_token,
+                            holder_public_key=holder_pubkey,
+                            kb_jwt=kb_jwt_field,
+                            require_pop=require_pop_field,
                         )
                     elif token_type in {"passport", "mcep", "vibap"}:
                         session = proxy.start_session(token)

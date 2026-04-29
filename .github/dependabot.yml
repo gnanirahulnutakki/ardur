@@ -14,3 +14,66 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
+
+  # Python runtime + dev extras. pyproject.toml is in /python.
+  - package-ecosystem: "pip"
+    directory: "/python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "python"
+      - "dependencies"
+    commit-message:
+      prefix: "deps(python)"
+      include: "scope"
+
+  # Go modules. go.mod is in /go.
+  - package-ecosystem: "gomod"
+    directory: "/go"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "go"
+      - "dependencies"
+    commit-message:
+      prefix: "deps(go)"
+      include: "scope"
+
+  # Docker base images for example quickstarts.
+  - package-ecosystem: "docker"
+    directory: "/examples/langchain-quickstart"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "docker"
+      - "dependencies"
+    commit-message:
+      prefix: "deps(docker)"
+      include: "scope"
+
+  - package-ecosystem: "docker"
+    directory: "/examples/autogen-quickstart"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "docker"
+      - "dependencies"
+    commit-message:
+      prefix: "deps(docker)"
+      include: "scope"
