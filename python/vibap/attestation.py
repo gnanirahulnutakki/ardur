@@ -67,10 +67,29 @@ def verify_attestation(
     token: str,
     public_key: ec.EllipticCurvePublicKey,
 ) -> dict[str, Any]:
-    return jwt.decode(
+    """Verify a Phase-3.3 attestation JWT and return its claims.
+
+    Round-4 hardening (FIX-R4-3, 2026-04-28): the attestation verifier
+    now applies the same bounded-iat-skew gate every other JWT loader
+    runs, defending against a briefly-compromised attestation issuer
+    minting tokens with iat far in the future. Defaults to ±300s future
+    / 30 days past — same envelope as the rest of the JWT surface.
+    """
+    # Local import keeps attestation.py free of a cyclic dep on passport
+    # at module load time.
+    from .passport import assert_iat_in_window
+
+    claims = jwt.decode(
         token,
         public_key,
         algorithms=[ALGORITHM],
         audience="vibap-attestation-verifier",
-        options={"require": ["iss", "sub", "aud", "iat", "exp", "jti", "passport_jti"]},
+        options={
+            "require": ["iss", "sub", "aud", "iat", "exp", "jti", "passport_jti"],
+            # Use the explicit window helper below; PyJWT's default check
+            # uses zero leeway and clashes with cross-node clock drift.
+            "verify_iat": False,
+        },
     )
+    assert_iat_in_window(claims.get("iat"), field_name="attestation iat")
+    return claims

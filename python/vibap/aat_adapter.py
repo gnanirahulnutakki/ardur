@@ -25,7 +25,7 @@ from .mission import (
     mission_is_revoked,
     parse_mission_ref,
 )
-from .passport import ALGORITHM, MissionPassport, verify_pop
+from .passport import ALGORITHM, MissionPassport, assert_iat_in_window, verify_pop
 
 AAT_AUTHORIZATION_DETAIL_TYPE = "attenuating_agent_token"
 AAT_CREDENTIAL_FORMAT = "aat-compatible-jwt"
@@ -51,8 +51,12 @@ def decode_aat_claims(
         options={
             "require": ["jti", "iss", "sub", "iat", "exp", "aat_type"],
             "verify_aud": False,
+            # Bounded-iat check below; PyJWT's default check uses zero
+            # leeway and would clash with cross-node clock drift.
+            "verify_iat": False,
         },
     )
+    assert_iat_in_window(claims.get("iat"), field_name="AAT iat")
     if claims.get("aat_type") != "delegation":
         raise PermissionError("unsupported AAT token shape: aat_type must be delegation")
     if "mission_ref" not in claims:
@@ -71,42 +75,54 @@ def material_from_aat_grant(
     mission_loader: Callable[[Any], Any] | None = None,
     holder_public_key: ec.EllipticCurvePublicKey | None = None,
     kb_jwt: str | None = None,
-    require_pop: bool = False,
+    require_pop: bool = True,
 ) -> AATSessionMaterial:
     """Build session material from a verified AAT grant.
 
-    Proof-of-possession (H2 from the 2026-04-21 review):
+    Proof-of-possession (H2 from the 2026-04-21 review; default flipped
+    fail-closed in the 2026-04-28 hardening pass):
 
-    - When ``require_pop=True`` AND the AAT carries a ``cnf`` claim
-      (confirmation key), the presenter MUST demonstrate possession of the
-      matching private key by supplying ``holder_public_key`` and a fresh
+    - When ``require_pop=True`` (the default) AND the AAT carries a ``cnf``
+      claim (confirmation key), the presenter MUST demonstrate possession of
+      the matching private key by supplying ``holder_public_key`` and a fresh
       ``kb_jwt`` (RFC 7800 key-binding). This mirrors the enforcement the
       non-AAT passport path performs in :meth:`GovernanceProxy.start_session`.
     - When the AAT has no ``cnf`` (pure bearer mode), PoP is skipped
-      regardless of ``require_pop``.
-    - ``require_pop`` defaults to ``False`` to preserve back-compat with
-      callers that predate this remediation. **Production deployments SHOULD
-      set ``require_pop=True``** so a captured confirmation-bound AAT cannot
-      be replayed by an observer. The new :meth:`GovernanceProxy.start_session_from_aat`
-      parameter opts in with ``require_pop=True`` by default; only
-      library-level callers keep the legacy behavior.
+      regardless of ``require_pop`` — the flag only gates *cnf-bearing* AATs.
+    - **The default changed to ``require_pop=True`` on 2026-04-28** so that
+      callers do not accidentally accept replayable confirmation-bound AATs.
+      Library callers that legitimately need bearer-style acceptance (e.g.
+      tests, demos that don't have key-binding infrastructure) MUST opt out
+      explicitly with ``require_pop=False``. This makes the security-relevant
+      decision visible in every call site grep, instead of buried in a
+      default-argument flag.
     - Prior to this change, ``cnf`` was structurally copied into
-      ``extra_claims["aat_cnf"]`` but never verified — a captured AAT could
-      be replayed by anyone who observed it, violating the paper's claim
-      that confirmation-bound credentials are holder-restricted.
+      ``extra_claims["aat_cnf"]`` but never verified by default — a captured
+      AAT could be replayed by anyone who observed it, violating the paper's
+      claim that confirmation-bound credentials are holder-restricted.
     """
     claims = decode_aat_claims(token, public_key)
     cnf = claims.get("cnf")
-    if isinstance(cnf, dict) and require_pop:
+    # Round-4 hardening (FIX-R4-5, 2026-04-28): mirror the GovernanceProxy
+    # passport path's robust cnf check. Previously the gate at
+    # ``isinstance(cnf, dict) and require_pop`` silently routed cnf=""/0/
+    # False/[] AATs through the bearer path, restoring the pre-2026-04-21
+    # truthy-skip bug for the AAT format. Now ANY non-None cnf forces
+    # verify_pop to run; that helper rejects malformed shapes with
+    # PermissionError ("cnf claim but missing jkt", etc.).
+    if "cnf" in claims and claims["cnf"] is not None and require_pop:
         if holder_public_key is None or kb_jwt is None:
             raise PermissionError(
                 "AAT grant presents a cnf claim but PoP inputs were not "
                 "supplied (holder_public_key and kb_jwt are required for "
-                "confirmation-bound AATs when require_pop=True)"
+                "confirmation-bound AATs when require_pop=True). To accept "
+                "this AAT in bearer mode (NOT recommended for production), "
+                "pass require_pop=False explicitly."
             )
         # verify_pop treats the AAT claim dict + token the same as a passport:
         # validates cnf.jkt thumbprint match AND verifies the KB-JWT signature
-        # + nonce freshness. Failure raises PermissionError.
+        # + nonce freshness. Non-dict / missing-jkt cnf payloads also raise
+        # PermissionError here, defending against type-confusion bypass.
         verify_pop(claims, token, holder_public_key, kb_jwt)
     if parent_claims is not None:
         _assert_child_grant_narrows_parent(claims, parent_claims)

@@ -125,8 +125,20 @@ func Verify(raw string, issuerPubKey ed25519.PublicKey, opts *VerifyOptions) (*V
 		result.Valid = false
 		result.Errors = append(result.Errors, fmt.Sprintf("credential not valid before %s", time.Unix(cred.Claims.NotBefore, 0).UTC()))
 	}
+	// Round 4 hardening (FIX-R4-2, 2026-04-28): a future iat is a
+	// hard error, not a warning. Round-3 hostile audit flagged that
+	// emitting a warning while leaving result.Valid=true mirrors the
+	// same iat-skew bypass pattern the Python side closed in FIX-R3-A
+	// — a briefly-compromised signer could mint credentials with iat
+	// far in the future that the verifier accepts forever. The skew
+	// tolerance defined as `skewSec` (clock-drift slack) still
+	// applies; anything beyond that is rejected.
 	if cred.Claims.IssuedAt > now.Unix()+skewSec {
-		result.Warnings = append(result.Warnings, "credential issued in the future — clock skew?")
+		result.Valid = false
+		result.Errors = append(result.Errors, fmt.Sprintf(
+			"credential iat lies more than %ds in the future "+
+				"(iat=%d, now=%d, skew=%ds) — refusing to accept",
+			skewSec, cred.Claims.IssuedAt, now.Unix(), skewSec))
 	}
 
 	// Step 7: Verify required VIBAP layers are present
@@ -170,9 +182,26 @@ func Verify(raw string, issuerPubKey ed25519.PublicKey, opts *VerifyOptions) (*V
 		}
 	}
 
-	// Step 9: Verify Token Status List (revocation check)
+	// Step 9: Verify Token Status List (revocation check).
+	//
+	// FAIL CLOSED. If the credential carries a status claim, the caller
+	// MUST either (a) provide a StatusClient that can resolve it, or
+	// (b) explicitly opt out via opts.SkipStatusCheck. Treating "missing
+	// StatusClient" as a warning leaves a revoked credential accepted as
+	// Valid=true, which is a real cap-bypass — the comprehensive audit
+	// of 2026-04-28 flagged this as the only CRITICAL finding.
+	//
+	// If the deployment genuinely has no revocation infrastructure, the
+	// caller can set SkipStatusCheck = true to acknowledge the risk
+	// explicitly. Silent skip is no longer an option.
 	if cred.Claims.Status != nil && !opts.SkipStatusCheck {
-		if opts.StatusClient != nil {
+		if opts.StatusClient == nil {
+			result.Valid = false
+			result.Errors = append(result.Errors,
+				"credential has status claim but no StatusClient was provided; "+
+					"set opts.StatusClient to enable revocation checking, or "+
+					"set opts.SkipStatusCheck=true to explicitly opt out")
+		} else {
 			status, err := opts.StatusClient.CheckStatus(cred, issuerPubKey)
 			if err != nil {
 				result.Valid = false
@@ -181,8 +210,6 @@ func Verify(raw string, issuerPubKey ed25519.PublicKey, opts *VerifyOptions) (*V
 				result.Valid = false
 				result.Errors = append(result.Errors, fmt.Sprintf("credential status: %s", status))
 			}
-		} else {
-			result.Warnings = append(result.Warnings, "credential has status claim but no StatusClient provided — skipping revocation check")
 		}
 	}
 

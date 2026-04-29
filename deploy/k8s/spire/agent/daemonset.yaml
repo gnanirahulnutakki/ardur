@@ -23,10 +23,38 @@ spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       priorityClassName: system-node-critical
+      # Pod-level securityContext (FIX-9, 2026-04-28): drop-by-default
+      # posture so the SPIRE agent daemon runs without root or extra
+      # capabilities even when hostPID/hostNetwork expose more of the
+      # node than a plain workload pod. Container-level overrides below.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: spire-agent
+        # FIX-9 (2026-04-28): production deployments MUST replace this
+        # tag-pinned reference with a digest-pinned one. Tag mutability
+        # at the registry is a supply-chain attack surface for security
+        # software. Resolve the current digest with:
+        #   skopeo inspect docker://ghcr.io/spiffe/spire-agent:1.14.2 \
+        #     --format '{{.Digest}}'
+        # Then replace ":1.14.2" below with "@sha256:<digest>".
         image: ghcr.io/spiffe/spire-agent:1.14.2
         imagePullPolicy: IfNotPresent
+        # Container-level securityContext (FIX-9, 2026-04-28). The
+        # SPIRE agent communicates via Unix domain sockets and does not
+        # require root, write access to /, or any Linux capability
+        # beyond the default set the runtime provides.
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
         args:
         - -expandEnv
         - -config

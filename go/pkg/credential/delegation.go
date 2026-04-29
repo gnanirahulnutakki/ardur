@@ -210,6 +210,22 @@ func VerifyPassport(token string, publicKey crypto.PublicKey) (*PassportClaims, 
 	if claims.ExpiresAt < now {
 		return nil, fmt.Errorf("passport expired")
 	}
+	// Round 5 hardening (FIX-R5-H3, 2026-04-28): bound iat into the
+	// future as well. Round-4 audit flagged that the SD-JWT-VC verifier
+	// in verify.go was the only Go verifier closing the future-iat
+	// bypass; VerifyPassport (this function) was missed. A briefly-
+	// compromised signer mints {iat=year_3000, exp=year_3001}; without
+	// this check the verifier accepts both as future-dated and the
+	// passport is valid indefinitely from the verifier's perspective.
+	// passportIatSkewSec mirrors the skewSec used by Verify (30s) so
+	// legitimate clock drift across nodes still verifies cleanly.
+	const passportIatSkewSec int64 = 30
+	if claims.IssuedAt > now+passportIatSkewSec {
+		return nil, fmt.Errorf(
+			"passport iat lies more than %ds in the future "+
+				"(iat=%d, now=%d) — refusing to accept",
+			passportIatSkewSec, claims.IssuedAt, now)
+	}
 	if strings.TrimSpace(claims.JWTID) == "" {
 		return nil, fmt.Errorf("passport missing jti")
 	}

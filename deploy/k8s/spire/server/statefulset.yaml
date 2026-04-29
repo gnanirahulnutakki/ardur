@@ -23,7 +23,11 @@ spec:
     spec:
       serviceAccountName: spire-server
       terminationGracePeriodSeconds: 30
+      # Pod-level securityContext (FIX-9 hardening, 2026-04-28).
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
@@ -38,6 +42,11 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: spire-server
+        # FIX-9 (2026-04-28): production deployments MUST replace this
+        # tag-pinned reference with a digest-pinned one. Resolve via:
+        #   skopeo inspect docker://ghcr.io/spiffe/spire-server:1.14.2 \
+        #     --format '{{.Digest}}'
+        # Then replace ":1.14.2" with "@sha256:<digest>".
         image: ghcr.io/spiffe/spire-server:1.14.2
         imagePullPolicy: IfNotPresent
         args:
@@ -95,11 +104,17 @@ spec:
           limits:
             cpu: "1"
             memory: 1Gi
+        # Round 3 (2026-04-28): brought to parity with the agent + CSI
+        # driver hardening. The /run/spire/data PVC is the only path the
+        # server writes to; everything else is fine on a read-only root.
         securityContext:
           allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
           capabilities:
             drop: ["ALL"]
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
       volumes:
       - name: spire-config
         configMap:

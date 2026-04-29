@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestExtractStatus2Bit(t *testing.T) {
@@ -285,6 +287,101 @@ func TestParseStatusListTokenWrongKey(t *testing.T) {
 	_, err := ParseStatusListToken(jwt, wrongPub)
 	if err == nil {
 		t.Fatal("expected signature verification error")
+	}
+}
+
+// TestParseStatusListTokenFutureIatRejected pins FIX-R5-H4 (round-5
+// audit, 2026-04-29). Round-3's bounded-iat-skew gate landed on the
+// SD-JWT-VC verifier; round-4 audit found the status-list verifier
+// missed it. Round-5 added the gate at status.go:217-228; this test
+// guards against a revert that would silently re-open the same iat-
+// future bypass round-5 just closed.
+func TestParseStatusListTokenFutureIatRejected(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Build a status-list JWT with iat one hour in the future — well
+	// past the 30s clock-drift tolerance the verifier allows.
+	farFuture := time.Now().Unix() + 3600
+
+	compressed, err := CompressStatusList(
+		[]StatusValue{StatusValid}, 2,
+	)
+	if err != nil {
+		t.Fatalf("CompressStatusList: %v", err)
+	}
+	header := StatusListHeader{
+		Algorithm: "EdDSA",
+		Type:      MediaTypeStatusListJWT,
+		KeyID:     "test-status-key",
+	}
+	claims := StatusListClaims{
+		Issuer:   "https://vibap.example.com",
+		Subject:  "https://vibap.example.com/status/1",
+		IssuedAt: farFuture,
+		StatusList: StatusListPayload{
+			BitsPerStatus: 2,
+			List:          compressed,
+		},
+	}
+	headerJSON, _ := json.Marshal(header)
+	claimsJSON, _ := json.Marshal(claims)
+	signingInput := base64.RawURLEncoding.EncodeToString(headerJSON) +
+		"." + base64.RawURLEncoding.EncodeToString(claimsJSON)
+	sig := ed25519.Sign(priv, []byte(signingInput))
+	jwt := signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
+
+	_, err = ParseStatusListToken(jwt, pub)
+	if err == nil {
+		t.Fatal("ParseStatusListToken accepted a status list with iat far in the future; FIX-R5-H4 must reject")
+	}
+	if !strings.Contains(err.Error(), "iat lies more than") {
+		t.Errorf("error = %q, want it to contain 'iat lies more than'", err.Error())
+	}
+}
+
+// TestParseStatusListTokenIatWithinSkewWindowAccepted complements the
+// rejection test above: an iat 15s in the future (within the 30s
+// tolerance) must still be accepted, so the fix doesn't accidentally
+// reject legitimate cross-node clock drift.
+func TestParseStatusListTokenIatWithinSkewWindowAccepted(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slightFuture := time.Now().Unix() + 15
+
+	compressed, err := CompressStatusList(
+		[]StatusValue{StatusValid}, 2,
+	)
+	if err != nil {
+		t.Fatalf("CompressStatusList: %v", err)
+	}
+	header := StatusListHeader{
+		Algorithm: "EdDSA",
+		Type:      MediaTypeStatusListJWT,
+		KeyID:     "test-status-key",
+	}
+	claims := StatusListClaims{
+		Issuer:   "https://vibap.example.com",
+		Subject:  "https://vibap.example.com/status/1",
+		IssuedAt: slightFuture,
+		StatusList: StatusListPayload{
+			BitsPerStatus: 2,
+			List:          compressed,
+		},
+	}
+	headerJSON, _ := json.Marshal(header)
+	claimsJSON, _ := json.Marshal(claims)
+	signingInput := base64.RawURLEncoding.EncodeToString(headerJSON) +
+		"." + base64.RawURLEncoding.EncodeToString(claimsJSON)
+	sig := ed25519.Sign(priv, []byte(signingInput))
+	jwt := signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
+
+	if _, err := ParseStatusListToken(jwt, pub); err != nil {
+		t.Errorf("status list with iat=now+15s rejected: %v", err)
 	}
 }
 

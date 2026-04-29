@@ -6,6 +6,12 @@
 __pycache__/
 *.pyc
 
+# Local environment files - never commit secrets.
+# Matches .env, .env.local, .env.development, .env.production, etc.
+.env
+.env.*
+!.env.example
+
 # Python packaging side-effects from `pip install -e .`
 *.egg-info/
 

@@ -26,7 +26,20 @@ func main() {
 	sink := governance.NewLoggingActionSink()
 
 	service := governance.NewSessionService(store, engine, sink)
-	handler := governance.NewHandler(service)
+	// FIX-R5-H2 (2026-04-29): construct the auth-aware handler when a
+	// token is configured. Validate() refuses to start unless either
+	// (a) RequireAuth is true AND a 32+ byte token is supplied, or
+	// (b) RequireAuth is false (explicit dev-mode opt-out via env).
+	var handler *governance.Handler
+	if cfg.RequireAuth {
+		handler = governance.NewHandlerWithAuth(service, cfg.AuthToken)
+	} else {
+		logger.Warn(
+			"bearer-token auth DISABLED via ARDUR_GOVERNOR_NO_REQUIRE_AUTH; " +
+				"every /v1/* endpoint accepts unauthenticated requests. " +
+				"Use only for local development.")
+		handler = governance.NewHandler(service)
+	}
 
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,

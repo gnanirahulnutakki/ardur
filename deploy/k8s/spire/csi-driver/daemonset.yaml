@@ -19,8 +19,19 @@ spec:
         app.kubernetes.io/part-of: ardur
     spec:
       serviceAccountName: spiffe-csi-driver
+      # Pod-level seccomp/runtime-default to reduce kernel attack
+      # surface even though the CSI driver requires privileged mode.
+      # (FIX-9 hardening, 2026-04-28.)
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: spiffe-csi-driver
+        # FIX-9 (2026-04-28): production deployments MUST digest-pin.
+        # Resolve via:
+        #   skopeo inspect docker://ghcr.io/spiffe/spiffe-csi-driver:0.2.10 \
+        #     --format '{{.Digest}}'
+        # Then replace ":0.2.10" with "@sha256:<digest>".
         image: ghcr.io/spiffe/spiffe-csi-driver:0.2.10
         imagePullPolicy: IfNotPresent
         args:
@@ -49,8 +60,18 @@ spec:
           mountPath: /var/lib/kubelet/pods
           mountPropagation: Bidirectional
       - name: node-driver-registrar
+        # FIX-9 (2026-04-28): production deployments MUST digest-pin.
+        # Resolve via:
+        #   skopeo inspect docker://registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.13.0 \
+        #     --format '{{.Digest}}'
+        # Then replace ":v2.13.0" with "@sha256:<digest>".
         image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.13.0
         imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
         args:
         - -csi-address=/spiffe-csi/csi.sock
         - -kubelet-registration-path=/var/lib/kubelet/plugins/csi.spiffe.io/csi.sock

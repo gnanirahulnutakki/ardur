@@ -24,6 +24,66 @@ DEFAULT_AUDIENCE = "vibap-proxy"
 DELEGATION_CHAIN_CLAIM = "delegation_chain"
 MAX_DELEGATION_DEPTH = 16
 
+# Bounded-iat skew window applied to every JWT we verify (passport, AAT,
+# Mission Declaration, status list, and receipt).
+#
+# Round-2 audit (2026-04-28) flagged that FIX-6 closed the iat-future
+# bypass only in receipt.verify_receipt — leaving AAT, MD, and passport
+# verifiers wide open to "iat=year_3000, exp=year_3001" forgeries. PyJWT's
+# default iat verification is also defensive but uses zero leeway and
+# raises "not yet valid" (ImmatureSignatureError), which collides with
+# legitimate clock drift across nodes. This helper provides a single
+# explicit bound; each verifier disables PyJWT's verify_iat and calls
+# this instead so the security choice is visible at every JWT decode.
+DEFAULT_IAT_FUTURE_SKEW_S = 300       # 5 min — clock-drift tolerance
+DEFAULT_IAT_PAST_SKEW_S = 30 * 86400  # 30 days — long-lived caches OK,
+                                       # archival replay handled by jti
+                                       # replay caches at the verifier
+                                       # boundary, not iat alone.
+
+
+def assert_iat_in_window(
+    iat: Any,
+    *,
+    future_skew_s: int | None = DEFAULT_IAT_FUTURE_SKEW_S,
+    past_skew_s: int | None = DEFAULT_IAT_PAST_SKEW_S,
+    now: float | None = None,
+    field_name: str = "iat",
+) -> None:
+    """Validate that ``iat`` lies within a bounded window around ``now``.
+
+    Raises :class:`jwt.InvalidTokenError` (so callers can catch the same
+    exception family they catch for signature/claim errors). Set either
+    skew to ``None`` (or ``0``) to disable that side of the bound — only
+    do this in archival-replay contexts where legitimately old tokens
+    must be re-verified.
+
+    The check is fail-closed: a non-integer ``iat``, or one outside the
+    window, raises immediately. This is how round-3 (2026-04-28) closes
+    the JWT iat-future-skew bypass that FIX-6 only addressed in receipts.
+    """
+    try:
+        iat_int = int(iat)
+    except (TypeError, ValueError) as exc:
+        raise jwt.InvalidTokenError(
+            f"{field_name} must be an integer epoch second"
+        ) from exc
+    if isinstance(iat, bool):  # bool is an int subclass — reject explicitly.
+        raise jwt.InvalidTokenError(
+            f"{field_name} must be an integer epoch second, not bool"
+        )
+    now_ts = float(time.time() if now is None else now)
+    if future_skew_s and iat_int > now_ts + future_skew_s:
+        raise jwt.InvalidTokenError(
+            f"{field_name} lies more than {future_skew_s}s in the future "
+            f"(iat={iat_int}, now={int(now_ts)})"
+        )
+    if past_skew_s and iat_int < now_ts - past_skew_s:
+        raise jwt.InvalidTokenError(
+            f"{field_name} lies more than {past_skew_s}s in the past "
+            f"(iat={iat_int}, now={int(now_ts)})"
+        )
+
 
 def _default_home_dir() -> Path:
     explicit = os.environ.get("VIBAP_HOME")
@@ -567,13 +627,21 @@ def _decode_passport(
     public_key: ec.EllipticCurvePublicKey,
     audience: str = DEFAULT_AUDIENCE,
 ) -> dict[str, Any]:
-    return jwt.decode(
+    claims = jwt.decode(
         token,
         public_key,
         algorithms=[ALGORITHM],
         audience=audience,
-        options={"require": ["iss", "sub", "aud", "iat", "exp", "jti"]},
+        options={
+            "require": ["iss", "sub", "aud", "iat", "exp", "jti"],
+            # Round 3 (2026-04-28): we apply our own bounded-iat check
+            # below; PyJWT's zero-leeway iat check would collide with
+            # legitimate clock drift across nodes.
+            "verify_iat": False,
+        },
     )
+    assert_iat_in_window(claims.get("iat"), field_name="passport iat")
+    return claims
 
 
 def _token_sha256(token: str) -> str:

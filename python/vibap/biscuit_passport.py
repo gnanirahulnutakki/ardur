@@ -187,8 +187,34 @@ def verify_biscuit_passport(
     token: bytes,
     root_public_key: PublicKey,
     now: int | None = None,
+    *,
+    iat_future_skew_s: int | None = None,
+    iat_past_skew_s: int | None = None,
 ) -> PassportContext:
-    """Verify a Biscuit passport and return the effective context."""
+    """Verify a Biscuit passport and return the effective context.
+
+    Round-4 hardening (FIX-R4-1, 2026-04-28): the Biscuit format carries
+    its own ``iat`` fact at the authority block, distinct from the JWT
+    ``iat`` claim that :func:`vibap.passport.assert_iat_in_window` already
+    bounds. Without an explicit bound here, a briefly-compromised issuer
+    could mint passports with ``iat=year_3000, exp=year_3000+ttl`` that
+    pass the built-in ``$t <= exp`` Biscuit check forever (because the
+    verifier's wall-clock ``time($t)`` value is much smaller than the
+    forged ``exp``). We mirror the JWT-side defaults: ±300s future,
+    30 days past — set either to ``None`` to disable for archival replay.
+
+    The bound is applied AFTER Biscuit's own signature/policy
+    verification, so signature-forged tokens fail at the cryptographic
+    layer first; the iat gate guards against an authentic-but-future
+    token from a real signer.
+    """
+
+    if iat_future_skew_s is None:
+        from .passport import DEFAULT_IAT_FUTURE_SKEW_S
+        iat_future_skew_s = DEFAULT_IAT_FUTURE_SKEW_S
+    if iat_past_skew_s is None:
+        from .passport import DEFAULT_IAT_PAST_SKEW_S
+        iat_past_skew_s = DEFAULT_IAT_PAST_SKEW_S
 
     try:
         parsed = Biscuit.from_bytes(token, root_public_key)
@@ -211,9 +237,64 @@ def verify_biscuit_passport(
             _parse_block_source(parsed.block_source(index))
             for index in range(1, parsed.block_count())
         )
-        return _context_from_blocks(block_facts)
     except ValueError as exc:
         raise BiscuitVerifyError(str(exc)) from exc
+
+    # FIX-R5-H5 (round-5 hardening, 2026-04-28): walk EVERY block's iat
+    # through the bounded-skew gate BEFORE we attempt to build the
+    # PassportContext. The round-4 auditor's PoC: an attacker briefly
+    # compromises an issuer to mint a root with iat=year_3000,
+    # exp=year_3001, then appends a child block with iat=now via
+    # Biscuit's open-attenuation property. ``context.issued_at`` would
+    # end up as the leaf's iat (=now), so a leaf-only check passes.
+    # Walking every block's iat catches the far-future authority block.
+    # We run this BEFORE _context_from_blocks so the H5 gap is caught
+    # even when an attacker crafts a leaf block missing other required
+    # facts (jti / mission / etc.) — the iat-bound failure is the
+    # primary security signal for the audit's threat model.
+    # FIX-R6-8 (round-6, 2026-04-29): walk EVERY iat fact row in EVERY
+    # block, not just iat_facts[0]. Round-5 audit (LOW-1) noted that
+    # ``_extract_authority_block_facts`` queries the authorizer which
+    # may return iat rows from any block that asserted ``iat(...)``;
+    # if a future biscuit-auth library version reverses the iteration
+    # order, an attacker's far-future authority iat could hide behind
+    # a benign present-time iat at index 0. Iterating every row makes
+    # the bound robust to row-ordering changes upstream.
+    for block_index, block in enumerate(block_facts):
+        iat_facts = block.get("iat", [])
+        if not iat_facts:
+            if block_index == 0:
+                raise BiscuitVerifyError(
+                    "biscuit passport authority block missing iat fact"
+                )
+            continue
+        for fact_idx, fact_row in enumerate(iat_facts):
+            block_iat = fact_row[0]
+            if not isinstance(block_iat, int) or isinstance(block_iat, bool):
+                raise BiscuitVerifyError(
+                    f"biscuit passport block {block_index} iat row "
+                    f"{fact_idx} must be int, "
+                    f"got {type(block_iat).__name__}"
+                )
+            if iat_future_skew_s and block_iat > effective_now + iat_future_skew_s:
+                raise BiscuitVerifyError(
+                    f"biscuit passport block {block_index} iat lies "
+                    f"more than {iat_future_skew_s}s in the future "
+                    f"(iat={block_iat}, now={effective_now})"
+                )
+            if iat_past_skew_s and block_iat < effective_now - iat_past_skew_s:
+                raise BiscuitVerifyError(
+                    f"biscuit passport block {block_index} iat lies "
+                    f"more than {iat_past_skew_s}s in the past "
+                    f"(iat={block_iat}, now={effective_now})"
+                )
+
+    try:
+        context = _context_from_blocks(block_facts)
+    except ValueError as exc:
+        raise BiscuitVerifyError(str(exc)) from exc
+
+    return context
 
 
 def derive_child_biscuit(

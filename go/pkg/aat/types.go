@@ -1,6 +1,15 @@
 // Package aat defines the skeleton types for the Attenuating Authorization
 // Tokens (AAT) profile adopted by VIBAP.
 //
+// SECURITY-RELEVANT NOTICE — DO NOT USE THIS PACKAGE AS A VERIFIER (FIX-10
+// from S2 hostile audit, 2026-04-28). The AAT chain verifier in this
+// package is a fail-closed stub: VerifyChain returns VerdictDeny on every
+// call, regardless of inputs. Production callers MUST NOT depend on this
+// package's VerifyChain to enforce AAT §7. Until the TODO list in
+// chain_verify.go is closed, AAT enforcement happens in the Python
+// reference proxy (python/vibap/aat_adapter.py), not here. Importing this
+// package gives you the data types and the fail-closed stub, nothing more.
+//
 // Spec reference:
 //   - draft-niyikiza-oauth-attenuating-agent-tokens-00
 //   - Section 3: Token Types and Structure

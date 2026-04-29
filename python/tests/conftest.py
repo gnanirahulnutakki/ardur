@@ -10,13 +10,107 @@ from __future__ import annotations
 import os
 import socket
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from vibap.passport import MissionPassport, generate_keypair, issue_passport
 from vibap.proxy import GovernanceProxy
+
+
+# v0.1 spec required-members helper (FIX-3 from S2 audit, 2026-04-28).
+#
+# The Mission Declaration loader unconditionally enforces that the seven
+# audit-flagged required v0.1 members are present and well-shaped. Test
+# factories that mint MDs (test_mission_binding, test_aat_adapter,
+# test_http) merge this helper's output into ``extra_claims`` so the
+# minted MD survives the load-time guard.
+#
+# Because the loader runs ``mission_is_revoked`` on the MD whenever a
+# session is started, the helper's ``revocation_ref`` MUST resolve at
+# fetch time. ``v01_default_status_url(mission_id)`` and
+# ``v01_default_status_list_token(private_key, mission_id)`` produce a
+# matching never-revoked status-list response that tests can splice into
+# their ``_install_fetch_map`` calls.
+#
+# These defaults are deliberately benign / minimal — the goal is to
+# satisfy the schema without inadvertently widening test policy. Tests
+# that exercise specific values (e.g. revocation_ref index) can override.
+def v01_default_status_url(mission_id: str) -> str:
+    """Return the never-revoked status-list URL the helper points to.
+
+    Predictable per ``mission_id`` so tests can include exactly one entry
+    per mission in their fetch map.
+    """
+    # mission_id is typically an opaque URN; hash to keep URL paths sane.
+    import hashlib
+    digest = hashlib.sha256(mission_id.encode("utf-8")).hexdigest()[:16]
+    return f"https://issuer.example/status/v01-default-{digest}.jwt"
+
+
+def v01_default_status_list_token(private_key, mission_id: str) -> str:
+    """Mint a never-revoked status-list JWT for the helper's default URL.
+
+    Companion to :func:`v01_default_status_url`. Returns a status_list with
+    a 1-bit list whose only relevant bit (idx=0) is unset — i.e. the
+    mission referenced by the helper is reported as not revoked.
+    """
+    import base64
+    import json
+    import time
+    import zlib
+
+    import jwt
+
+    raw = bytes([0])  # 1 byte covers idx=0; bit at idx=0 is 0 → not revoked.
+    encoded = (
+        base64.urlsafe_b64encode(zlib.compress(raw)).rstrip(b"=").decode("ascii")
+    )
+    now = int(time.time())
+    claims = {
+        "iss": "test-status-authority",
+        "sub": "v01-default-status-list",
+        "iat": now,
+        "exp": now + 3600,
+        "status_list": {"bits": 1, "lst": encoded},
+    }
+    return jwt.encode(claims, private_key, algorithm="ES256")
+
+
+def v01_required_md_extras(
+    *,
+    mission_id: str,
+    revocation_ref: str | None = None,
+    conformance_profile: str = "Delegation-Core",
+    receipt_level: str = "minimal",
+    probing_rate_limit: int = 10,
+    approval_policy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the v0.1 spec extras the always-on loader guard requires.
+
+    ``approval_policy`` is intentionally NOT in the always-required set
+    (see :mod:`vibap.mission` ``_REQUIRED_V01_MEMBERS``), so the helper
+    omits it by default — including it would force every test tool call
+    to carry an ``operator_id`` to satisfy the proxy's approval gate.
+    Tests that exercise approval-rate-limit semantics
+    (``test_approval_governance``) pass it explicitly.
+    """
+    extras: dict[str, Any] = {
+        "mission_id": mission_id,
+        "receipt_policy": {"level": receipt_level},
+        "conformance_profile": conformance_profile,
+        "tool_manifest_digest": "sha-256:" + ("a" * 64),
+        "revocation_ref": (
+            revocation_ref
+            or f"{v01_default_status_url(mission_id)}#idx=0"
+        ),
+        "governed_memory_stores": [],
+        "probing_rate_limit": probing_rate_limit,
+    }
+    if approval_policy is not None:
+        extras["approval_policy"] = approval_policy
+    return extras
 
 
 @pytest.fixture(scope="session")

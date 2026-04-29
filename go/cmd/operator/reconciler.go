@@ -52,9 +52,15 @@ type AgentPassportReconciler struct {
 }
 
 // NewAgentPassportReconciler creates a reconciler with the signing key and issuer pipeline.
-// If signingKeyPath is empty AND the VIBAP_SIGNING_KEY_SECRET env var is not set, it
-// generates an ephemeral key with a warning. Production deployments MUST supply a key.
-func NewAgentPassportReconciler(c client.Client, scheme *runtime.Scheme, signingKeyPath, issuerURI string) (*AgentPassportReconciler, error) {
+//
+// FIX-R9-6 (round-9, 2026-04-29): when ``signingKeyPath`` is empty,
+// the constructor refuses to start unless ``allowEphemeralKey=true``
+// is passed explicitly. Round-8 audit (LOW-NEW-6) flagged that the
+// previous warn-only path silently issued credentials no consumer
+// could verify across pod restarts — same shape as the Authority's
+// ``--no-require-auth`` foot-gun, just with no opt-in flag making
+// the choice visible. Now ephemeral behaviour requires an opt-in.
+func NewAgentPassportReconciler(c client.Client, scheme *runtime.Scheme, signingKeyPath, issuerURI string, allowEphemeralKey bool) (*AgentPassportReconciler, error) {
 	var signingKey *credential.SigningKey
 
 	if signingKeyPath != "" {
@@ -64,8 +70,18 @@ func NewAgentPassportReconciler(c client.Client, scheme *runtime.Scheme, signing
 		}
 		signingKey = key
 	} else {
+		if !allowEphemeralKey {
+			return nil, fmt.Errorf(
+				"operator startup refused: --signing-key is empty and " +
+					"--allow-ephemeral-key was not set. Production " +
+					"deployments MUST supply a persistent signing key " +
+					"(credentials issued under an ephemeral key cannot " +
+					"be verified across pod restarts). Pass " +
+					"--allow-ephemeral-key only for explicit local-dev " +
+					"or single-pod test deployments")
+		}
 		setupLog := ctrl.Log.WithName("setup")
-		setupLog.Info("WARNING: no --signing-key provided; generating ephemeral key. Credentials will NOT survive operator restart. Set --signing-key for production.")
+		setupLog.Info("WARNING: no --signing-key provided; --allow-ephemeral-key set; generating ephemeral key. Credentials will NOT survive operator restart. DO NOT use in production.")
 		_, priv, err := ed25519.GenerateKey(nil)
 		if err != nil {
 			return nil, fmt.Errorf("generating ephemeral key: %w", err)

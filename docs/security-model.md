@@ -3,14 +3,39 @@
 Ardur security is based on least privilege, explicit declaration, runtime
 enforcement, and verifiable evidence.
 
-## Core security gates
+> **Conformance scope (2026-04-28 narrowing):** This page describes the
+> *design intent* of the protocol. The reference proxy in `python/vibap/`
+> implements the **Delegation-Core** profile of `verifier-contract-v0.1`,
+> not yet the **MIC-State** or **MIC-Evidence** profiles. See
+> `docs/specs/verifier-contract-v0.1.md` Section 13 ("Reference
+> Implementation Conformance Notes") for the precise gap. Deployments
+> needing the stronger profiles MUST add layers beyond the reference
+> proxy or wait for the hardening rounds that close 13.2.
+
+## Core security gates (enforced by the reference proxy)
 
 - tool calls must match declared tools
 - resource access must match declared scopes
 - delegated child authority must be a subset of parent authority
-- receipt chains must verify
-- attestations must verify
-- missing evidence must become `unknown`, not a false allow
+- per-session passport replay defense (jti single-use)
+- KB-JWT nonce replay store and AAT proof-of-possession default-on
+- per-session and per-mission revocation via signed status lists
+- receipt chains emit and verify (hash-linked, JWS-signed)
+- declared-telemetry absence yields `insufficient_evidence`, not a
+  false `compliant`
+- approval-rate-limit when the Mission Declaration declares an approval
+  policy
+
+## Design-only gates (NOT yet enforced by the reference proxy)
+
+These appear in `verifier-contract-v0.1.md` as `MUST` clauses but the
+reference Python proxy does not yet enforce them. Deployments that need
+them MUST layer additional verifiers:
+
+- runtime-observed `observed_manifest_digest == MD.tool_manifest_digest`
+- per-grant `last_seen_receipts` tracking and MIC-Evidence hidden-hop
+  detection
+- explicit invocation-envelope signature beyond the credential JWT
 
 ## Threats in scope
 
@@ -56,3 +81,12 @@ proven protections until their proof entries reach L5 for the claimed scope.
 
 When Ardur lacks evidence, it must deny or return `unknown` rather than
 claim safe success.
+
+## Honesty boundary
+
+This document and the comparison docs under `docs/comparisons/` describe
+what the protocol guarantees and what the reference proxy enforces today.
+"What the protocol guarantees" is wider than "what the reference proxy
+enforces today." The latter is the conservative claim — use it whenever
+you cite Ardur in a security context against a real adversary. The
+former is the design that the hardening roadmap is driving toward.

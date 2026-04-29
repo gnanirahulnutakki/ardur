@@ -14,6 +14,18 @@
 # uses the official `spire-agent` CLI instead (production sidecar-fetch
 # pattern). Same real Workload API, different real client.
 
+# FIX-9 (2026-04-28): production builds MUST digest-pin both base images.
+# Resolve current digests with:
+#   skopeo inspect docker://ghcr.io/spiffe/spire-agent:1.14.2 \
+#     --format '{{.Digest}}'
+#   skopeo inspect docker://docker.io/library/python:3.13-slim \
+#     --format '{{.Digest}}'
+# Then update the FROM lines to use "@sha256:<digest>" form. The
+# published demo images keep tag-pinned references for contributor
+# reproducibility; CI/release builds must swap to digest pinning so a
+# malicious tag re-push at the upstream registry can't poison the
+# governance demo.
+
 # Stage 1: pull the real spire-agent binary from the official image.
 FROM ghcr.io/spiffe/spire-agent:1.14.2 AS spire
 

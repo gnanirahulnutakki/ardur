@@ -708,6 +708,13 @@ func TestVerifyNotYetValid(t *testing.T) {
 	}
 }
 
+// TestVerifyFutureIssuedAt locks in FIX-R4-2 from the round-3 hostile
+// audit (2026-04-28): a credential whose iat lies more than skewSec in
+// the future is REJECTED, not warned about. The previous behaviour
+// emitted a "clock skew?" warning while leaving result.Valid=true,
+// which silently accepted credentials minted by a briefly-compromised
+// signer with iat far in the future. The current contract is symmetric
+// with the bounded-iat-skew gate Python uses (vibap.passport.assert_iat_in_window).
 func TestVerifyFutureIssuedAt(t *testing.T) {
 	key := testSigningKey(t)
 	cred, err := testBuilder(t).Build(key)
@@ -715,7 +722,8 @@ func TestVerifyFutureIssuedAt(t *testing.T) {
 		t.Fatalf("Build() error: %v", err)
 	}
 
-	// Set iat to future
+	// Set iat to 1 hour in the future — well beyond the skewSec
+	// clock-drift tolerance the verifier uses.
 	cred.Claims.IssuedAt = time.Now().Add(1 * time.Hour).Unix()
 
 	encoded, err := Encode(cred, key)
@@ -728,14 +736,99 @@ func TestVerifyFutureIssuedAt(t *testing.T) {
 		t.Fatalf("Verify() error: %v", err)
 	}
 
+	if result.Valid {
+		t.Errorf("expected result.Valid=false for future-iat credential, got Valid=true")
+	}
 	found := false
-	for _, w := range result.Warnings {
-		if strings.Contains(w, "clock skew") {
+	for _, e := range result.Errors {
+		if strings.Contains(e, "iat lies more than") {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected clock skew warning, got warnings: %v", result.Warnings)
+		t.Errorf("expected 'iat lies more than' error, got errors: %v", result.Errors)
+	}
+}
+
+// TestVerifyIssuedAtWithinSkewWindowAccepted complements the regression
+// above: an iat within skewSec of now should still be accepted, so the
+// fix doesn't accidentally reject legitimate clock drift across nodes.
+func TestVerifyIssuedAtWithinSkewWindowAccepted(t *testing.T) {
+	key := testSigningKey(t)
+	cred, err := testBuilder(t).Build(key)
+	if err != nil {
+		t.Fatalf("Build() error: %v", err)
+	}
+	// 15 seconds in the future — within the default skewSec tolerance
+	// (the Go verifier uses skewSec=30 by default; see verify.go).
+	cred.Claims.IssuedAt = time.Now().Add(15 * time.Second).Unix()
+	encoded, err := Encode(cred, key)
+	if err != nil {
+		t.Fatalf("Encode() error: %v", err)
+	}
+	result, err := Verify(encoded, key.PublicKey, nil)
+	if err != nil {
+		t.Fatalf("Verify() error: %v", err)
+	}
+	if !result.Valid {
+		t.Errorf("expected result.Valid=true for in-window iat, got false; errors=%v", result.Errors)
+	}
+}
+
+// TestVerifyRevocationFailsClosed locks in the 2026-04-28 audit's CRITICAL
+// fix: a credential carrying a status claim must NOT be accepted as Valid
+// when no StatusClient is provided. The previous behaviour appended a
+// warning and returned Valid=true, which silently accepted revoked
+// credentials in deployments that forgot to wire status checking.
+//
+// Two acceptable outcomes for a status-bearing credential:
+//   - StatusClient is set, the check runs, Valid reflects the result
+//   - SkipStatusCheck = true, the caller has explicitly opted out
+//
+// Anything else (no StatusClient AND no SkipStatusCheck) must mark the
+// result invalid. This test guards against silent regression to the
+// fail-open default.
+func TestVerifyRevocationFailsClosedWithoutStatusClient(t *testing.T) {
+	key := testSigningKey(t)
+	cred, err := testBuilder(t).
+		WithStatus("https://status.example.com/list/1", 7).
+		Build(key)
+	if err != nil {
+		t.Fatalf("Build() error: %v", err)
+	}
+
+	encoded, err := Encode(cred, key)
+	if err != nil {
+		t.Fatalf("Encode() error: %v", err)
+	}
+
+	// Caller does NOT provide a StatusClient and does NOT opt out via
+	// SkipStatusCheck. Must fail closed.
+	result, err := Verify(encoded, key.PublicKey, nil)
+	if err != nil {
+		t.Fatalf("Verify() error: %v", err)
+	}
+	if result.Valid {
+		t.Error("expected Valid=false when status claim present but no StatusClient and no SkipStatusCheck (audit CRITICAL: fail-open revocation)")
+	}
+	hasStatusErr := false
+	for _, e := range result.Errors {
+		if strings.Contains(e, "StatusClient") || strings.Contains(e, "status") {
+			hasStatusErr = true
+			break
+		}
+	}
+	if !hasStatusErr {
+		t.Errorf("expected an error mentioning StatusClient/status; got %v", result.Errors)
+	}
+
+	// Now opt out explicitly via SkipStatusCheck — must be accepted.
+	result2, err := Verify(encoded, key.PublicKey, &VerifyOptions{SkipStatusCheck: true})
+	if err != nil {
+		t.Fatalf("Verify() with SkipStatusCheck error: %v", err)
+	}
+	if !result2.Valid {
+		t.Errorf("expected Valid=true with SkipStatusCheck=true (explicit opt-out), got errors: %v", result2.Errors)
 	}
 }
 

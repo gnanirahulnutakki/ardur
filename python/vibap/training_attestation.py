@@ -534,19 +534,28 @@ def verify_bundle(
                 verified_roles=tuple(verified),
             )
 
-        # Age
+        # Age. Round-5 hardening (FIX-R5-H6, 2026-04-28): the future-iat
+        # bound runs UNCONDITIONALLY now, regardless of ``max_age_s``.
+        # Round-4 audit flagged that the previous `if max_age_s is not
+        # None:` gate meant a caller passing the default `max_age_s=None`
+        # got NO future-iat check — accepting `signed_at=year_3000`
+        # links indefinitely. The past-bound (`max_age_s`) remains
+        # opt-in because legitimate archival re-verification needs it
+        # disabled; the future-bound is always-on.
+        signed_at = int(claims["signed_at"])
+        future_age_s = signed_at - current
+        if future_age_s > 60:
+            return BundleVerdict(
+                verdict="INVALID",
+                reason=f"link {i}: signed_at is {future_age_s}s in the future",
+                verified_roles=tuple(verified),
+            )
         if max_age_s is not None:
-            age = current - int(claims["signed_at"])
+            age = current - signed_at
             if age > max_age_s:
                 return BundleVerdict(
                     verdict="INVALID",
                     reason=f"link {i}: stale ({age}s > {max_age_s}s)",
-                    verified_roles=tuple(verified),
-                )
-            if age < -60:
-                return BundleVerdict(
-                    verdict="INVALID",
-                    reason=f"link {i}: signed_at is {-age}s in the future",
                     verified_roles=tuple(verified),
                 )
 

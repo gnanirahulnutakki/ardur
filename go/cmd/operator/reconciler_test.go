@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,8 +30,59 @@ func testReconciler(objects ...runtime.Object) (*AgentPassportReconciler, error)
 	c := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(objects...).
 		WithStatusSubresource(&vibapv1alpha1.AgentPassport{}).
 		Build()
-	return NewAgentPassportReconciler(c, s, "", "https://test.vibap.io")
+	// FIX-R9-6: tests must explicitly opt in to the ephemeral-key
+	// path; production startup refuses without --signing-key.
+	return NewAgentPassportReconciler(c, s, "", "https://test.vibap.io", true)
 }
+
+// FIX-R10-1 (round-10, 2026-04-29): negative-path regression for the
+// FIX-R9-6 ephemeral-key opt-in gate. Round-9 audit (MED-NEW-1) caught
+// that all existing reconciler tests pass ``allowEphemeralKey=true``
+// — a revert that removed the refusal branch (``if !allowEphemeralKey``)
+// would not be caught by any test. This test pins production fail-
+// closed: with no signing-key path AND no ephemeral opt-in, the
+// constructor returns an error containing the operator-friendly
+// "startup refused" string.
+func TestNewAgentPassportReconciler_RefusesEphemeralKeyWithoutOptIn(t *testing.T) {
+	s := testScheme()
+	c := fake.NewClientBuilder().WithScheme(s).
+		WithStatusSubresource(&vibapv1alpha1.AgentPassport{}).
+		Build()
+
+	_, err := NewAgentPassportReconciler(c, s, "", "https://test.vibap.io", false)
+	if err == nil {
+		t.Fatal("expected NewAgentPassportReconciler to refuse without --signing-key and without --allow-ephemeral-key")
+	}
+	// Operator-facing error must name the explicit opt-in flag so
+	// deployments fail loudly with a clear remediation, not silently
+	// degrade or panic with a generic ed25519/cluster error.
+	expected := []string{"startup refused", "--allow-ephemeral-key"}
+	for _, want := range expected {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error message must mention %q; got: %v", want, err)
+		}
+	}
+}
+
+// FIX-R10-1b: complementary test — when the operator DOES pass the
+// flag, construction succeeds and yields a reconciler with the
+// ephemeral-key fingerprint. This confirms the opt-in path still
+// works after the negative-path is locked down.
+func TestNewAgentPassportReconciler_AcceptsEphemeralKeyWithOptIn(t *testing.T) {
+	s := testScheme()
+	c := fake.NewClientBuilder().WithScheme(s).
+		WithStatusSubresource(&vibapv1alpha1.AgentPassport{}).
+		Build()
+
+	r, err := NewAgentPassportReconciler(c, s, "", "https://test.vibap.io", true)
+	if err != nil {
+		t.Fatalf("expected acceptance with --allow-ephemeral-key=true; got: %v", err)
+	}
+	if r == nil {
+		t.Fatal("reconciler is nil despite no error")
+	}
+}
+
 
 func testPassport(name, ns string) *vibapv1alpha1.AgentPassport {
 	return &vibapv1alpha1.AgentPassport{

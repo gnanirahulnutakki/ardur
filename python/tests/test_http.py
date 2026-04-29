@@ -32,6 +32,12 @@ from vibap.passport import ALGORITHM, MissionPassport, issue_passport, verify_pa
 from vibap.proxy import GovernanceProxy, serve_proxy
 from vibap.receipt import verify_chain
 
+from tests.conftest import (
+    v01_default_status_list_token,
+    v01_default_status_url,
+    v01_required_md_extras,
+)
+
 
 def _build_server_thread(proxy: GovernanceProxy, private_key, port: int):
     """Start serve_proxy in a background daemon thread bound to 127.0.0.1:port.
@@ -648,10 +654,28 @@ class _AATResponse:
         return False
 
 
-def _install_aat_fetch_map(monkeypatch, mapping: dict[str, str]) -> None:
+def _install_aat_fetch_map(
+    monkeypatch,
+    mapping: dict[str, str],
+    *,
+    private_key=None,
+    mission_ids: list[str] | None = None,
+) -> None:
+    """As :func:`tests.test_aat_adapter._install_fetch_map`, but for the
+    HTTP integration tests. Pass ``private_key`` + ``mission_ids`` to
+    auto-include the never-revoked status-list responses for each
+    mission's helper-default revocation URL (FIX-3, 2026-04-28)."""
+    full_mapping: dict[str, str] = dict(mapping)
+    if private_key is not None and mission_ids:
+        for mission_id in mission_ids:
+            url = v01_default_status_url(mission_id)
+            full_mapping.setdefault(
+                url, v01_default_status_list_token(private_key, mission_id)
+            )
+
     def fake_urlopen(request, timeout=0, context=None):  # noqa: ANN001, ARG001
         url = request.full_url if hasattr(request, "full_url") else str(request)
-        return _AATResponse(mapping[url])
+        return _AATResponse(full_mapping[url])
 
     monkeypatch.setattr(mission_module, "urlopen", fake_urlopen)
 
@@ -672,7 +696,7 @@ def _issue_aat_md(private_key, *, mission_id: str) -> str:
         mission,
         private_key,
         ttl_s=300,
-        extra_claims={"mission_id": mission_id},
+        extra_claims=v01_required_md_extras(mission_id=mission_id),
     )
 
 
@@ -718,7 +742,12 @@ class TestHTTPAATInterop:
         md_url = "https://issuer.example/md/aat-http.jwt"
         md_token = _issue_aat_md(private_key, mission_id=mission_id)
         md = load_mission_declaration(md_token, public_key)
-        _install_aat_fetch_map(monkeypatch, {md_url: md_token})
+        _install_aat_fetch_map(
+            monkeypatch,
+            {md_url: md_token},
+            private_key=private_key,
+            mission_ids=[mission_id],
+        )
         aat_jti = str(uuid.uuid4())
         aat_token = _issue_aat_http_token(
             private_key,
@@ -731,9 +760,16 @@ class TestHTTPAATInterop:
             tools=["read"],
         )
 
+        # require_pop=False is an explicit opt-out: the test factory above
+        # mints a cnf-bearing AAT, but this test is exercising the HTTP
+        # session/evaluate/delegate path, not RFC 7800 PoP. Since 2026-04-28
+        # the proxy defaults require_pop=True for cnf-bearing AATs, so the
+        # opt-out has to be visible in the request body. PoP coverage lives
+        # in test_aat_adapter.py::TestAATProofOfPossession; HTTP-side
+        # PoP coverage is the new TestHTTPAATPoP class below.
         status, start = _post(
             base + "/session/start",
-            {"token_type": "aat", "token": aat_token},
+            {"token_type": "aat", "token": aat_token, "require_pop": False},
         )
         assert status == 200
         assert start["session_id"] == aat_jti
@@ -768,6 +804,88 @@ class TestHTTPAATInterop:
         assert [claim["tool"] for claim in claims] == ["read", "delegate_passport"]
         assert {claim["grant_id"] for claim in claims} == {aat_jti}
         assert claims[0]["evidence_proof_ref"]["mission_digest"] == md.payload_digest
+
+
+# --- Round-3 audit (2026-04-28): the round-2 audit flagged that the only
+# HTTP /sessions PoP test was the require_pop=False opt-out path. The
+# fail-closed default + the kb_jwt size bound were untested. These
+# regressions pin the new HTTP-edge guards so future refactors can't
+# silently drop them.
+
+class TestHTTPAATPoP:
+    def test_cnf_aat_without_pop_inputs_fails_closed_at_http_edge(
+        self, http_proxy, private_key, public_key, monkeypatch
+    ):
+        """Posting a cnf-bearing AAT with no require_pop override
+        defaults to fail-closed. The HTTP layer surfaces a 4xx because
+        start_session_from_aat raises PermissionError."""
+        base, proxy = http_proxy
+        mission_id = "urn:ardur:mission:aat:http-pop-default"
+        md_url = "https://issuer.example/md/aat-pop-default.jwt"
+        md_token = _issue_aat_md(private_key, mission_id=mission_id)
+        md = load_mission_declaration(md_token, public_key)
+        _install_aat_fetch_map(
+            monkeypatch,
+            {md_url: md_token},
+            private_key=private_key,
+            mission_ids=[mission_id],
+        )
+        aat_token = _issue_aat_http_token(
+            private_key,
+            mission_ref={
+                "uri": md_url,
+                "mission_id": mission_id,
+                "mission_digest": md.payload_digest,
+            },
+            tools=["read"],
+        )
+        status, body = _post(
+            base + "/session/start",
+            # No require_pop, no holder_public_key_pem, no kb_jwt → fail closed.
+            {"token_type": "aat", "token": aat_token},
+        )
+        # The handler returns 4xx; the exact code depends on how
+        # PermissionError is mapped. Either 400 or 403 is acceptable —
+        # what we care about is the closed default.
+        assert status in (400, 403), f"expected 4xx, got {status}: {body}"
+        assert "PoP" in body.get("error", "") or "PoP" in str(body)
+
+    def test_kb_jwt_size_cap_rejects_oversize_payload(
+        self, http_proxy, private_key, public_key, monkeypatch
+    ):
+        """An attacker-supplied kb_jwt larger than 8KB should be rejected
+        at the HTTP edge before the proxy attempts to parse / verify it."""
+        base, proxy = http_proxy
+        mission_id = "urn:ardur:mission:aat:http-kb-size"
+        md_url = "https://issuer.example/md/aat-kb-size.jwt"
+        md_token = _issue_aat_md(private_key, mission_id=mission_id)
+        md = load_mission_declaration(md_token, public_key)
+        _install_aat_fetch_map(
+            monkeypatch,
+            {md_url: md_token},
+            private_key=private_key,
+            mission_ids=[mission_id],
+        )
+        aat_token = _issue_aat_http_token(
+            private_key,
+            mission_ref={
+                "uri": md_url,
+                "mission_id": mission_id,
+                "mission_digest": md.payload_digest,
+            },
+            tools=["read"],
+        )
+        oversize_kb_jwt = "A" * (16 * 1024)  # 16KB, exceeds 8KB cap
+        status, body = _post(
+            base + "/session/start",
+            {
+                "token_type": "aat",
+                "token": aat_token,
+                "kb_jwt": oversize_kb_jwt,
+            },
+        )
+        assert status == 400, f"expected 400, got {status}: {body}"
+        assert "MAX_KB_JWT_BYTES" in body.get("error", "")
 
     def test_delegate_reserves_budget_across_siblings(
         self, http_proxy, private_key
@@ -979,3 +1097,353 @@ class TestHTTPAATInterop:
         assert status == 200
         assert body["child_claims"]["max_tool_calls"] == 3
         assert body["parent_calls_remaining_at_delegation"] == 3
+
+
+# --- FIX-R8-2 (round-8, 2026-04-29): bearer-auth regression tests for
+# the Python proxy. Round-7 audit (MED-NEW-2) flagged that the Python
+# proxy at ``proxy.py:4669`` had ZERO tests of its bearer-auth path,
+# while Go's Authority and Governor each have 4. A revert that flipped
+# ``if not require_auth: return True`` or removed the
+# ``hmac.compare_digest`` would not be caught. These tests mirror the
+# Go regressions: missing-header → 401, wrong-token → 401, correct-
+# token → not-401, public paths remain unauthenticated.
+
+def _build_authenticated_server_thread(
+    proxy: GovernanceProxy, private_key, port: int, *, api_token: str,
+):
+    """Variant of ``_build_server_thread`` that runs with require_auth=True
+    and a fixed token, so tests can exercise the bearer-auth path."""
+    import signal as _signal
+    original = _signal.signal
+    _signal.signal = lambda *_a, **_kw: None  # type: ignore[assignment]
+
+    def run() -> None:
+        serve_proxy(
+            proxy=proxy,
+            private_key=private_key,
+            host="127.0.0.1",
+            port=port,
+            require_auth=True,
+            api_token=api_token,
+        )
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{port}"
+    deadline = time.time() + 5
+    last_exc = None
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(base + "/health", timeout=0.5) as resp:
+                if resp.status == 200:
+                    break
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            time.sleep(0.05)
+    else:
+        raise RuntimeError(f"proxy never became healthy: {last_exc}")
+    return thread, base, lambda: setattr(_signal, "signal", original)
+
+
+@pytest.fixture
+def authed_http_proxy(proxy, private_key, unused_tcp_port):
+    token = "auth-test-token-32-bytes-A-B-C-D-E"
+    thread, base, shutdown = _build_authenticated_server_thread(
+        proxy, private_key, unused_tcp_port, api_token=token,
+    )
+    yield base, proxy, token
+    shutdown()
+
+
+def _post_with_auth(url: str, payload: dict, token: str | None):
+    data = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if token is not None:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.status, json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8")
+        try:
+            return exc.code, json.loads(body)
+        except ValueError:
+            return exc.code, {"raw": body}
+
+
+class TestPythonProxyBearerAuth:
+    def test_missing_authorization_header_rejected(self, authed_http_proxy):
+        base, _, _ = authed_http_proxy
+        status, body = _post_with_auth(base + "/issue", {}, token=None)
+        assert status == 401
+        assert "missing or malformed Authorization" in body.get("error", "")
+
+    def test_wrong_token_rejected(self, authed_http_proxy):
+        base, _, _ = authed_http_proxy
+        status, body = _post_with_auth(
+            base + "/issue", {}, token="attacker-supplied-wrong-token-32",
+        )
+        assert status == 401
+        assert "invalid bearer token" in body.get("error", "")
+
+    def test_correct_token_passes_auth(self, authed_http_proxy):
+        base, _, token = authed_http_proxy
+        # Empty body lands in the issue handler's validation path (400);
+        # the test confirms we passed the auth layer (not 401).
+        status, body = _post_with_auth(base + "/issue", {}, token=token)
+        assert status != 401, f"expected non-401, got {status}: {body}"
+
+    def test_public_paths_remain_unauthenticated(self, authed_http_proxy):
+        base, _, _ = authed_http_proxy
+        for path in ("/health", "/healthz", "/.well-known/jwks.json"):
+            with urllib.request.urlopen(base + path, timeout=2) as resp:
+                assert resp.status == 200, f"public path {path} returned {resp.status}"
+
+    def test_length_leak_normalized_via_hash_then_compare(self, authed_http_proxy):
+        """Round-8 FIX-R8-1: SHA-256 normalizes both presented and
+        expected tokens to 32 bytes, defeating the length oracle. We
+        exercise three wrong-token lengths and confirm all three
+        produce 401 — pinning the rejection contract for tokens of
+        diverse lengths so a regression to direct ``hmac.compare_digest``
+        on raw bytes can't sneak through unflagged."""
+        base, _, _ = authed_http_proxy
+        for bad in ("x", "y" * 64, "z" * 1024):
+            status, body = _post_with_auth(base + "/issue", {}, token=bad)
+            assert status == 401, f"length-{len(bad)} bad token must 401, got {status}"
+            assert "invalid bearer token" in body.get("error", "")
+
+    def test_lowercase_bearer_scheme_accepted(self, authed_http_proxy):
+        """The proxy normalizes scheme via ``.lower().startswith("bearer ")``
+        — RFC 9110 says scheme is case-insensitive. Pin that contract."""
+        base, _, token = authed_http_proxy
+        data = json.dumps({}).encode("utf-8")
+        req = urllib.request.Request(
+            base + "/issue",
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"bearer {token}",  # lowercase
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                assert resp.status != 401
+        except urllib.error.HTTPError as exc:
+            assert exc.code != 401, f"lowercase bearer rejected: {exc.code}"
+
+
+# --- FIX-R9-2 (round-9, 2026-04-29) — DE-RIG REGRESSION TEST.
+#
+# Round-8 audit caught that ``TestPythonProxyBearerAuth`` does NOT pin
+# the round-8 SHA-256 length-oracle closure, only the rejection
+# contract: reverting the SHA-256 hash-then-compare to direct
+# ``hmac.compare_digest`` keeps every behavioral test green because
+# ``hmac.compare_digest`` returns False on length-mismatched inputs
+# (just leaks length via timing). The test name promised mutation-
+# resistance the implementation can't provide without timing
+# measurements (which are flaky in CI).
+#
+# Honest fix: a structural / source-text test that asserts the
+# SHA-256 normalization is actually in the source. This is brittle —
+# a refactor that splits the function or renames variables breaks
+# the test — but it's the only way to mutation-pin a timing-oracle
+# closure without flaky timing tests. The test names the specific
+# anti-pattern (raw ``compare_digest(provided, api_token_bytes)``)
+# that round-8 audit identified as the regression vector.
+
+class TestPythonProxyBearerAuthSourceShape:
+    """Source-shape regressions that pin the SHA-256 length-oracle
+    closure (round-8 FIX-R8-1) at the code-text level. These tests
+    fire when a refactor reverts the hash-then-compare without
+    explicitly migrating to an alternative length-independent compare.
+    Brittle by design — a deliberate refactor must update both the
+    code AND the test."""
+
+    def test_check_auth_source_contains_sha256_normalization(self):
+        """The Python proxy bearer-auth path must SHA-256-normalize
+        both presented and expected tokens before comparison."""
+        import inspect
+        from vibap.proxy import serve_proxy
+
+        src = inspect.getsource(serve_proxy)
+        # Pin the canonical pattern: hash both sides BEFORE compare_digest.
+        assert "hashlib.sha256(provided)" in src or \
+            "hashlib.sha256(provided.encode" in src or \
+            "sha256(provided)" in src, (
+            "FIX-R8-1 regression: bearer-auth must hash the presented "
+            "token before constant-time compare to defeat the length "
+            "oracle. The pattern 'hashlib.sha256(provided)...' is "
+            "missing from serve_proxy source. See round-8 audit "
+            "MED-NEW-1 / round-9 FIX-R9-2."
+        )
+        assert "api_token_hash" in src, (
+            "FIX-R8-1 regression: expected-token hash precomputation "
+            "missing. ``api_token_hash`` should be precomputed once "
+            "from sha256(api_token_bytes)."
+        )
+        # Anti-pattern: raw bytes compared via hmac.compare_digest.
+        # The round-8-revert pattern has the form
+        # ``compare_digest(provided, api_token_bytes)`` — flag it.
+        assert "compare_digest(provided, api_token_bytes)" not in src, (
+            "FIX-R8-1 regression: bearer-auth reverted to raw-bytes "
+            "compare_digest, leaking expected-token length via timing. "
+            "Use compare_digest(provided_hash, api_token_hash) instead."
+        )
+
+    def test_check_auth_uses_compare_digest_on_hashes(self):
+        """The compare_digest call must operate on the precomputed
+        hashes, not on raw bytes."""
+        import inspect
+        from vibap.proxy import serve_proxy
+
+        src = inspect.getsource(serve_proxy)
+        # The two acceptable shapes (allowing minor refactor flexibility):
+        acceptable = [
+            "compare_digest(provided_hash, api_token_hash)",
+            "compare_digest(api_token_hash, provided_hash)",
+        ]
+        if not any(pattern in src for pattern in acceptable):
+            raise AssertionError(
+                "FIX-R8-1 regression: compare_digest must be called on "
+                "the SHA-256 digests of provided and api_token. "
+                f"Expected one of {acceptable!r} in serve_proxy source."
+            )
+
+
+# --- FIX-R10-2 + FIX-R10-3 (round-10, 2026-04-29): behavioral regressions
+# for R9-1 (Python VIBAP_API_TOKEN env trim) and R9-5 (strict ASCII
+# bearer) that round-9 audit (LOW-NEW-1, LOW-NEW-2) flagged as
+# untested. The Go side has TestLoadFromEnvTrimsAuthToken (R9-3); the
+# Python side now has the symmetric coverage. A revert from
+# ``env_token_raw.strip()`` to ``env_token_raw`` would silently mean
+# whitespace-padded VIBAP_API_TOKEN values pass startup but no
+# client-presented bearer can match — the operator-confusion failure
+# mode R9-1 closed.
+
+class TestPythonProxyCliTokenStrip:
+    """FIX-R11-1 (round-11, 2026-04-29): close round-10 audit's
+    LOW-R10-A finding — the R10-4 ``--api-token`` CLI strip shipped
+    without a behavioral test. The R10-2 env-strip test
+    (``TestPythonProxyEnvTokenStrip`` below) sets ``VIBAP_API_TOKEN``,
+    which takes precedence over the CLI argument at ``proxy.py:4538``,
+    so ``api_token.strip()`` at line 4548 was untested. This test
+    explicitly disables the env var so the CLI branch is exercised."""
+
+    def test_whitespace_padded_cli_token_authenticates_after_trim(
+        self, proxy, private_key, unused_tcp_port, monkeypatch
+    ):
+        """Round-10 LOW-R10-A: the CLI-supplied token must be
+        ``.strip()``-ed symmetric with the env-loaded path. Without
+        R10-4's strip(), an operator running ``--api-token "  abc  "``
+        (e.g. from a YAML ``command:`` block) creates a proxy where no
+        client can authenticate."""
+        # Ensure env var is not set so the CLI path is taken.
+        monkeypatch.delenv("VIBAP_API_TOKEN", raising=False)
+        canonical_token = "cli-test-token-32-bytes-DEFGHIJ"
+        thread, base, shutdown = _build_authenticated_server_thread(
+            proxy, private_key, unused_tcp_port,
+            api_token=f"   {canonical_token}   ",
+        )
+        try:
+            status, body = _post_with_auth(
+                base + "/issue", {}, token=canonical_token,
+            )
+            assert status != 401, (
+                f"R10-4 regression: trimmed CLI token authentication "
+                f"failed; status={status} body={body}. "
+                "If CLI loader doesn't strip(), the proxy compares "
+                "padded-token against client-supplied trimmed-token, "
+                "never matching."
+            )
+        finally:
+            shutdown()
+
+
+class TestPythonProxyEnvTokenStrip:
+    def test_whitespace_padded_env_token_authenticates_after_trim(
+        self, proxy, private_key, unused_tcp_port, monkeypatch
+    ):
+        """R9-1 contract: an operator who sets VIBAP_API_TOKEN with
+        leading/trailing whitespace (e.g. via a YAML-quoted secret)
+        creates a proxy where clients CAN authenticate using the
+        trimmed token. Without R9-1's strip(), no client could
+        authenticate."""
+        # Set the env BEFORE constructing the server thread.
+        canonical_token = "padded-test-token-32-bytes-XXYY-Z"
+        monkeypatch.setenv("VIBAP_API_TOKEN", f"  {canonical_token}  ")
+
+        thread, base, shutdown = _build_authenticated_server_thread(
+            proxy, private_key, unused_tcp_port,
+            api_token="ignored-arg-because-env-takes-precedence",
+        )
+        try:
+            # Client presents the canonical (trimmed) token — must succeed.
+            status, body = _post_with_auth(
+                base + "/issue", {}, token=canonical_token,
+            )
+            assert status != 401, (
+                f"R9-1 regression: trimmed env token authentication "
+                f"failed; status={status} body={body}. "
+                "If env loader doesn't strip(), the proxy compares "
+                "padded-token-with-whitespace against client-supplied "
+                "trimmed-token, never matching."
+            )
+        finally:
+            shutdown()
+
+
+class TestPythonProxyStrictAscii:
+    def test_non_ascii_bearer_token_rejected_with_explicit_message(
+        self, authed_http_proxy
+    ):
+        """R9-5 contract: a non-ASCII bearer header is REJECTED with
+        an explicit ``bearer token must be ASCII`` message, not
+        silently mapped to `?` characters (the round-8 anti-pattern).
+        A revert to ``encode("ascii", errors="replace")`` would
+        silently re-introduce the asymmetric handling and this test
+        would fail."""
+        base, _, _ = authed_http_proxy
+        # Build a request with a non-ASCII bearer (Latin-1 é encoded
+        # as UTF-8 bytes 0xC3 0xA9). HTTP header values are bytes per
+        # RFC 7230; we send the raw bytes directly via http.client to
+        # bypass urllib's automatic encoding helpers.
+        import http.client
+        from urllib.parse import urlparse
+
+        parsed = urlparse(base)
+        conn = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=2)
+        # Use a non-ASCII char (é) — utf-8 encoded — in the bearer.
+        bad_token = "tok-with-é-non-ascii"
+        # The HTTP layer will refuse non-ASCII in headers in some Python
+        # versions; use latin-1 encoding (RFC 7230's ISO-8859-1 default)
+        # so the request actually reaches the server.
+        try:
+            conn.request(
+                "POST",
+                "/issue",
+                body=b"{}",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {bad_token}".encode("latin-1"),
+                },
+            )
+            resp = conn.getresponse()
+            body_bytes = resp.read()
+            assert resp.status == 401, (
+                f"non-ASCII bearer token must be 401; got {resp.status}"
+            )
+            body = json.loads(body_bytes.decode("utf-8"))
+            assert "ASCII" in body.get("error", ""), (
+                f"R9-5 regression: error must explicitly name ASCII; "
+                f"got: {body}"
+            )
+        except http.client.HTTPException as exc:
+            # If the underlying http.client refuses to send the header
+            # with non-ASCII bytes, that's a different fail-closed
+            # outcome — also acceptable (client-side rejection).
+            # We only fail if the server SILENTLY accepts and serves.
+            pass
+        finally:
+            conn.close()

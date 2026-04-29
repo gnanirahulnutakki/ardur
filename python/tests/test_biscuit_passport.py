@@ -612,3 +612,138 @@ def test_mission_passport_round_trips_holder_spiffe_id() -> None:
 
     assert mission.holder_spiffe_id == "spiffe://example.org/agent/root"
     assert mission.to_dict()["holder_spiffe_id"] == "spiffe://example.org/agent/root"
+
+
+# --- Round-4 audit (FIX-R4-1, 2026-04-28): the round-3 hostile audit
+# verified by PoC that ``verify_biscuit_passport`` accepted iat in the
+# far future — the same threat model FIX-R3-A closed for JWT but
+# unaddressed for the parallel Biscuit credential format. These tests
+# pin the bounded-iat-skew gate added to the Biscuit verifier.
+
+class TestBiscuitPassportIatSkewGuard:
+    @staticmethod
+    def _make_mission():
+        return MissionPassport(
+            agent_id="biscuit-agent",
+            mission="iat-skew test",
+            allowed_tools=["read"],
+            forbidden_tools=[],
+            resource_scope=[],
+            max_tool_calls=5,
+            max_duration_s=60,
+            holder_spiffe_id="spiffe://example.org/agent/iat-skew",
+        )
+
+    def test_verify_rejects_far_future_iat(self):
+        import time as _time
+
+        kp = KeyPair()
+        far_future = int(_time.time()) + 365 * 86400
+        token = issue_biscuit_passport(
+            self._make_mission(),
+            kp.private_key,
+            issuer_spiffe_id="spiffe://example.org/issuer",
+            ttl_s=600,
+            now=far_future,
+        )
+        with pytest.raises(
+            BiscuitVerifyError,
+            # Match either the legacy leaf-only message or the round-5
+            # per-block message — both are valid fail-closed outcomes.
+            match=r"biscuit passport (?:block \d+ )?iat lies more than",
+        ):
+            verify_biscuit_passport(token, kp.public_key)
+
+    def test_verify_accepts_iat_within_clock_drift(self):
+        import time as _time
+
+        kp = KeyPair()
+        slight_future = int(_time.time()) + 60  # within ±300s default
+        token = issue_biscuit_passport(
+            self._make_mission(),
+            kp.private_key,
+            issuer_spiffe_id="spiffe://example.org/issuer",
+            ttl_s=600,
+            now=slight_future,
+        )
+        # Should not raise.
+        ctx = verify_biscuit_passport(token, kp.public_key)
+        assert ctx.issued_at == slight_future
+
+    def test_verify_rejects_multi_row_iat_with_far_future_in_one_row(self):
+        """FIX-R6-8 + FIX-R7-2 (round-7, 2026-04-29) regression. R6-8
+        changed the per-block walk from ``iat_facts[0][0]`` (only the
+        first row) to iterating every row. Without iterating, an
+        attacker could append a benign present-time iat to a block
+        that already carries a far-future iat; the future iat hides
+        behind the first-row-only check. This test constructs that
+        exact attack — a child block with TWO iat facts, one
+        legitimate, one far-future — and confirms rejection."""
+        import time as _time
+
+        from biscuit_auth import Biscuit, BlockBuilder, Fact
+
+        kp = KeyPair()
+        present_now = int(_time.time())
+        # Mint a normal root (present-time iat).
+        root_token_bytes = issue_biscuit_passport(
+            self._make_mission(),
+            kp.private_key,
+            issuer_spiffe_id="spiffe://example.org/issuer",
+            ttl_s=600,
+            now=present_now,
+        )
+        # Append a child block with TWO iat facts: a benign present-
+        # time iat (which the round-5 single-row check would have
+        # accepted) AND a far-future iat (which round-6 must catch).
+        far_future = present_now + 365 * 86400
+        root_biscuit = Biscuit.from_bytes(root_token_bytes, kp.public_key)
+        child_block = BlockBuilder()
+        child_block.add_fact(Fact(f"iat({present_now})"))
+        child_block.add_fact(Fact(f"iat({far_future})"))
+        attacker_token = root_biscuit.append(child_block).to_bytes()
+
+        with pytest.raises(
+            BiscuitVerifyError,
+            match=r"biscuit passport block 1 iat lies more than",
+        ):
+            verify_biscuit_passport(attacker_token, kp.public_key)
+
+    def test_verify_rejects_far_future_root_with_present_child(self):
+        """H5 (round-4 audit) regression: the attack is an attacker who
+        briefly compromised an issuer to mint a ROOT block with
+        iat=year_3000, exp=year_3001, then uses Biscuit's open-
+        attenuation property (any holder can append) to add a CHILD
+        block with iat=now via the low-level ``Biscuit.append`` API.
+        A leaf-only iat check accepts because ``context.issued_at``
+        resolves to the present-time leaf. Round-5 walks every block;
+        the far-future authority block must be rejected."""
+        import time as _time
+
+        from biscuit_auth import Biscuit, BlockBuilder, Fact
+
+        kp = KeyPair()
+        far_future = int(_time.time()) + 365 * 86400
+        root_token_bytes = issue_biscuit_passport(
+            self._make_mission(),
+            kp.private_key,
+            issuer_spiffe_id="spiffe://example.org/issuer",
+            ttl_s=10 * 365 * 86400,
+            now=far_future,
+        )
+        # Parse the root and append a child block directly via Biscuit's
+        # open-attenuation API — bypassing derive_child_biscuit, which
+        # itself runs verify_biscuit_passport (and would correctly reject
+        # the far-future root before any child gets appended).
+        root_biscuit = Biscuit.from_bytes(root_token_bytes, kp.public_key)
+        present_now = int(_time.time())
+        child_block = BlockBuilder()
+        # Add a present-time iat fact so the leaf "looks fresh".
+        child_block.add_fact(Fact(f"iat({present_now})"))
+        attacker_token = root_biscuit.append(child_block).to_bytes()
+
+        with pytest.raises(
+            BiscuitVerifyError,
+            match=r"biscuit passport block 0 iat lies more than",
+        ):
+            verify_biscuit_passport(attacker_token, kp.public_key)

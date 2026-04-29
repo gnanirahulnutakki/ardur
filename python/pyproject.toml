@@ -29,6 +29,12 @@ classifiers = [
 dependencies = [
     "PyJWT>=2.12.0",
     "cryptography>=41.0",
+    # jsonschema moved out of [dev] on 2026-04-28: the Mission Declaration
+    # loader now validates fetched MDs against the v0.1 spec at the network
+    # boundary (FIX-3 from S2 hostile audit). Validation is a security
+    # boundary, not an opt-in dev convenience, so the validator must be
+    # present in every install.
+    "jsonschema>=4.0",
 ]
 
 [project.optional-dependencies]
@@ -36,7 +42,6 @@ dev = [
     "pytest>=8.0",
     "cedarpy>=4.0",
     "z3-solver>=4.16",
-    "jsonschema>=4.0",
     "biscuit-python==0.4.0",
     "spiffe>=0.2,<0.3",
     "mcp>=1.23.0",
@@ -58,3 +63,10 @@ Discussions = "https://github.com/gnanirahulnutakki/ardur/discussions"
 
 [tool.setuptools.packages.find]
 include = ["vibap*"]
+
+# Ship the embedded spec schemas (under vibap/_specs/) so that
+# jsonschema-based validation of Mission Declarations works after a
+# plain `pip install ardur` — the runtime cannot rely on the source
+# docs/specs/ directory being on disk.
+[tool.setuptools.package-data]
+"vibap._specs" = ["*.json"]

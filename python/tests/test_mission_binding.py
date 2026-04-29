@@ -15,6 +15,8 @@ from vibap.mission import MissionStatusUnavailableError, load_mission_declaratio
 from vibap.passport import MissionPassport, issue_passport
 from vibap.proxy import Decision
 
+from tests.conftest import v01_required_md_extras
+
 
 def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
@@ -70,10 +72,10 @@ def _issue_md(private_key, *, mission_id: str, revocation_ref: str) -> str:
         mission,
         private_key,
         ttl_s=120,
-        extra_claims={
-            "mission_id": mission_id,
-            "revocation_ref": revocation_ref,
-        },
+        extra_claims=v01_required_md_extras(
+            mission_id=mission_id,
+            revocation_ref=revocation_ref,
+        ),
     )
 
 
@@ -407,3 +409,481 @@ def test_fetch_accepts_public_ip_literal():
     """M1 sanity: a public IP literal must NOT be blocked by _assert_public_target."""
     from vibap.mission import _assert_public_target
     _assert_public_target("https://8.8.8.8/foo")  # should not raise
+
+
+# --- FIX-3 from S2 hostile audit (2026-04-28): MD loader fail-closed
+# -------------------------------------------------------------------
+# Before this change, the loader silently treated missing required v0.1
+# members as "use safe defaults" — exactly the silent-permit pattern the
+# project guards against. These tests lock in that the always-on guard
+# now rejects MDs missing any of the six audit-flagged spec members.
+
+class TestMissionDeclarationSchemaGuard:
+    @pytest.mark.parametrize(
+        "missing_field",
+        # probing_rate_limit was removed from the always-required list in
+        # the round-3 audit (2026-04-28) because the runtime never
+        # consumes the value; it remains required under strict_schema=True.
+        # See _REQUIRED_V01_MEMBERS in vibap/mission.py for the rationale.
+        [
+            "receipt_policy",
+            "conformance_profile",
+            "tool_manifest_digest",
+            "revocation_ref",
+            "governed_memory_stores",
+        ],
+    )
+    def test_load_fails_closed_on_missing_required_member(
+        self, private_key, public_key, missing_field
+    ):
+        from tests.conftest import v01_required_md_extras
+
+        mission = MissionPassport(
+            agent_id="md-authority",
+            mission="schema guard test",
+            allowed_tools=["read"],
+            forbidden_tools=[],
+            resource_scope=[],
+            max_tool_calls=2,
+            max_duration_s=60,
+            delegation_allowed=False,
+            max_delegation_depth=0,
+        )
+        extras = v01_required_md_extras(mission_id="urn:test:guard")
+        # Drop the field this parametrization is asserting must be required.
+        extras.pop(missing_field, None)
+        md_token = issue_passport(mission, private_key, ttl_s=60, extra_claims=extras)
+
+        with pytest.raises(
+            mission_module.MissionBindingError,
+            match=f"missing required v0.1 member: {missing_field}",
+        ):
+            load_mission_declaration(md_token, public_key)
+
+    def test_load_fails_closed_on_invalid_conformance_profile(
+        self, private_key, public_key
+    ):
+        from tests.conftest import v01_required_md_extras
+
+        mission = MissionPassport(
+            agent_id="md-authority",
+            mission="bad profile test",
+            allowed_tools=["read"],
+            forbidden_tools=[],
+            resource_scope=[],
+            max_tool_calls=2,
+            max_duration_s=60,
+            delegation_allowed=False,
+            max_delegation_depth=0,
+        )
+        extras = v01_required_md_extras(
+            mission_id="urn:test:bad-profile",
+            conformance_profile="NotARealProfile",
+        )
+        md_token = issue_passport(mission, private_key, ttl_s=60, extra_claims=extras)
+
+        with pytest.raises(
+            mission_module.MissionBindingError,
+            match="conformance_profile",
+        ):
+            load_mission_declaration(md_token, public_key)
+
+    def test_load_fails_closed_on_invalid_tool_manifest_digest(
+        self, private_key, public_key
+    ):
+        from tests.conftest import v01_required_md_extras
+
+        mission = MissionPassport(
+            agent_id="md-authority",
+            mission="bad digest test",
+            allowed_tools=["read"],
+            forbidden_tools=[],
+            resource_scope=[],
+            max_tool_calls=2,
+            max_duration_s=60,
+            delegation_allowed=False,
+            max_delegation_depth=0,
+        )
+        extras = v01_required_md_extras(mission_id="urn:test:bad-digest")
+        extras["tool_manifest_digest"] = "sha-256:not-hex"  # wrong shape
+        md_token = issue_passport(mission, private_key, ttl_s=60, extra_claims=extras)
+
+        with pytest.raises(
+            mission_module.MissionBindingError,
+            match="tool_manifest_digest",
+        ):
+            load_mission_declaration(md_token, public_key)
+
+    def test_load_fails_closed_on_mic_evidence_with_minimal_receipts(
+        self, private_key, public_key
+    ):
+        """Profile/receipt-level interaction: MIC-Evidence forbids minimal receipts."""
+        from tests.conftest import v01_required_md_extras
+
+        mission = MissionPassport(
+            agent_id="md-authority",
+            mission="mic-evidence test",
+            allowed_tools=["read"],
+            forbidden_tools=[],
+            resource_scope=[],
+            max_tool_calls=2,
+            max_duration_s=60,
+            delegation_allowed=False,
+            max_delegation_depth=0,
+        )
+        extras = v01_required_md_extras(
+            mission_id="urn:test:mic-vs-minimal",
+            conformance_profile="MIC-Evidence",
+            receipt_level="minimal",
+        )
+        md_token = issue_passport(mission, private_key, ttl_s=60, extra_claims=extras)
+
+        with pytest.raises(
+            mission_module.MissionBindingError,
+            match="MIC-Evidence",
+        ):
+            load_mission_declaration(md_token, public_key)
+
+    def test_strict_schema_rejects_legacy_field_mixing(
+        self, private_key, public_key
+    ):
+        """Opt-in strict_schema=True applies the full v0.1 schema, which has
+        ``additionalProperties: false`` at the root. Existing MDs from
+        :func:`issue_passport` carry legacy fields like ``allowed_tools``
+        — they must be rejected when the caller opts into strict mode."""
+        from tests.conftest import v01_required_md_extras
+
+        mission = MissionPassport(
+            agent_id="md-authority",
+            mission="strict schema test",
+            allowed_tools=["read"],
+            forbidden_tools=[],
+            resource_scope=[],
+            max_tool_calls=2,
+            max_duration_s=60,
+            delegation_allowed=False,
+            max_delegation_depth=0,
+        )
+        extras = v01_required_md_extras(mission_id="urn:test:strict")
+        md_token = issue_passport(mission, private_key, ttl_s=60, extra_claims=extras)
+
+        with pytest.raises(
+            mission_module.MissionBindingError,
+            match="violates v0.1 schema",
+        ) as excinfo:
+            load_mission_declaration(md_token, public_key, strict_schema=True)
+        assert excinfo.value.reason == "schema_invalid"
+
+
+# --- FIX-7 from S2 hostile audit (2026-04-28): SSRF DNS TOCTOU defense
+# ---------------------------------------------------------------------
+# Before this change, _assert_public_target validated the hostname's
+# resolved IPs were public, then urlopen re-resolved at connect time —
+# leaving a TOCTOU window where DNS could rebind to 169.254.169.254
+# between the check and the connection. The fix is _pinned_urlopen +
+# _PinnedIPHTTPSConnection: resolve once, validate once, connect to the
+# exact IP that passed validation.
+
+class TestPinnedIPSSRFDefense:
+    def test_resolve_to_pinned_public_ip_rejects_all_private_dns(
+        self, monkeypatch
+    ):
+        """If every IP a hostname resolves to is private, the pinned-IP
+        helper must raise — never silently return a private IP for the
+        connection to walk into."""
+        from vibap import mission as mission_module
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            # All-private resolution (IMDS + RFC1918)
+            return [
+                (None, None, None, None, ("169.254.169.254", port)),
+                (None, None, None, None, ("10.0.0.1", port)),
+            ]
+
+        monkeypatch.setattr(mission_module.socket, "getaddrinfo", fake_getaddrinfo)
+        with pytest.raises(
+            mission_module.MissionBindingError,
+            match="all resolved IPs",
+        ):
+            mission_module._resolve_to_pinned_public_ip("evil.example", 443)
+
+    def test_resolve_to_pinned_public_ip_picks_first_public_ip(
+        self, monkeypatch
+    ):
+        """Mixed resolution → return the first public IP, skipping any
+        leading private entries that would have been rejected."""
+        from vibap import mission as mission_module
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            return [
+                (None, None, None, None, ("10.0.0.1", port)),       # private, skip
+                (None, None, None, None, ("8.8.8.8", port)),        # public, take
+                (None, None, None, None, ("169.254.169.254", port)),
+            ]
+
+        monkeypatch.setattr(mission_module.socket, "getaddrinfo", fake_getaddrinfo)
+        ip = mission_module._resolve_to_pinned_public_ip("mixed.example", 443)
+        assert ip == "8.8.8.8"
+
+    def test_pinned_urlopen_uses_resolved_ip_not_dns_at_connect(
+        self, monkeypatch
+    ):
+        """Production path: _pinned_urlopen resolves once, validates,
+        then constructs a _PinnedIPHTTPSConnection with that IP. Any
+        re-resolution happening at connect time would defeat FIX-7's
+        TOCTOU defense, so this test asserts the connection class
+        ignores the hostname for the actual TCP layer.
+
+        We mock create_connection to capture what address the
+        connection would have used, and confirm it's the pinned IP.
+        """
+        from vibap import mission as mission_module
+
+        # Force resolution to a known public IP
+        monkeypatch.setattr(
+            mission_module,
+            "_resolve_to_pinned_public_ip",
+            lambda host, port: "203.0.113.7",  # TEST-NET-3, RFC 5737
+        )
+
+        captured = {}
+
+        def fake_create_connection(addr, timeout=None):
+            captured["addr"] = addr
+            captured["timeout"] = timeout
+            raise OSError("intercepted-for-test")
+
+        monkeypatch.setattr(
+            mission_module.socket, "create_connection", fake_create_connection
+        )
+
+        with pytest.raises(mission_module.URLError):
+            mission_module._pinned_urlopen(
+                "https://attacker.example/path", timeout=5.0
+            )
+        # Confirm the TCP layer used the pinned IP, not the hostname.
+        assert captured["addr"] == ("203.0.113.7", 443)
+
+
+class TestPinnedURLOpenResponseSemantics:
+    """Round-4 (FIX-R4-8): the round-3 prompt added redirect-rejection +
+    HTTPError-on-non-2xx hardening to ``_pinned_urlopen``, but no
+    regression test pinned the new behavior. A refactor that removed
+    those branches (or misordered the comparisons) would not be caught.
+    These tests close that gap by mocking the underlying HTTPS
+    connection at the response level."""
+
+    @staticmethod
+    def _stub_pinned_connection(monkeypatch, *, status, headers=None, body=b""):
+        """Replace _PinnedIPHTTPSConnection with a stub that returns a
+        deterministic response. Avoids real network or pinned-IP DNS."""
+
+        class _StubResponse:
+            def __init__(self):
+                self.status = status
+                self._body = body
+                self._closed = False
+
+            def read(self, size: int = -1) -> bytes:
+                return self._body if size < 0 else self._body[:size]
+
+            def getheader(self, name, default=None):
+                return (headers or {}).get(name, default)
+
+            def getheaders(self):
+                return list((headers or {}).items())
+
+            def close(self):
+                self._closed = True
+
+        class _StubConn:
+            def __init__(self, *a, **kw):
+                self.requested = None
+
+            def request(self, method, path, headers=None):
+                self.requested = (method, path, headers)
+
+            def getresponse(self):
+                return _StubResponse()
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(
+            mission_module, "_PinnedIPHTTPSConnection", _StubConn
+        )
+        # And short-circuit IP resolution so the test does not touch DNS.
+        monkeypatch.setattr(
+            mission_module,
+            "_resolve_to_pinned_public_ip",
+            lambda host, port: "203.0.113.99",
+        )
+
+    def test_redirect_3xx_rejected_with_clear_message(self, monkeypatch):
+        self._stub_pinned_connection(
+            monkeypatch,
+            status=302,
+            headers={"Location": "https://elsewhere.example/new"},
+        )
+        with pytest.raises(
+            mission_module.URLError, match="refused redirect"
+        ):
+            mission_module._pinned_urlopen(
+                "https://example.test/md.jwt", timeout=5.0
+            )
+
+    def test_status_4xx_raises_httperror(self, monkeypatch):
+        self._stub_pinned_connection(
+            monkeypatch, status=404, body=b"not found"
+        )
+        with pytest.raises(
+            urllib.error.HTTPError, match="HTTP 404"
+        ):
+            mission_module._pinned_urlopen(
+                "https://example.test/md.jwt", timeout=5.0
+            )
+
+    def test_status_5xx_raises_httperror(self, monkeypatch):
+        self._stub_pinned_connection(
+            monkeypatch, status=503, body=b"upstream sad"
+        )
+        with pytest.raises(
+            urllib.error.HTTPError, match="HTTP 503"
+        ):
+            mission_module._pinned_urlopen(
+                "https://example.test/md.jwt", timeout=5.0
+            )
+
+    def test_status_200_passes_through(self, monkeypatch):
+        body = b"hello"
+        self._stub_pinned_connection(monkeypatch, status=200, body=body)
+        resp = mission_module._pinned_urlopen(
+            "https://example.test/md.jwt", timeout=5.0
+        )
+        with resp as response:
+            assert response.read() == body
+
+
+# --- Round-3 audit (2026-04-28) follow-on: bounded iat gate generalized
+# from receipts to MD/status-list/AAT/passport. Round-2 audit flagged
+# that FIX-6 only protected receipts; an attacker who briefly captured a
+# signer could mint MDs/passports/AATs with iat=year_3000 + exp=year_3001
+# that the verifier accepted forever. These tests pin the
+# generalization so the gap doesn't reopen silently.
+
+class _ShimResponse:
+    """Minimal urlopen-like response shim for status-list mock tests."""
+
+    def __init__(self, body: bytes | str) -> None:
+        self._body = body.encode() if isinstance(body, str) else body
+
+    def read(self, size: int = -1) -> bytes:
+        return self._body if size < 0 else self._body[:size]
+
+    def __enter__(self) -> "_ShimResponse":
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        return False
+
+
+class TestStatusListIatSkewGuard:
+    """Status-list JWTs flow through ``mission_is_revoked``. The round-3
+    audit pointed out the test class header above advertised this case
+    but never wrote it. Round-4 closes that gap (FIX-R4-7)."""
+
+    def test_status_list_with_iat_in_far_future_fails_closed(
+        self, private_key, public_key, monkeypatch
+    ):
+        mission = MissionPassport(
+            agent_id="md-authority",
+            mission="status-list iat-skew test",
+            allowed_tools=["read"],
+            forbidden_tools=[],
+            resource_scope=[],
+            max_tool_calls=2,
+            max_duration_s=60,
+            delegation_allowed=False,
+            max_delegation_depth=0,
+        )
+        status_url = "https://issuer.example/status/skew-test.jwt"
+        md_token = issue_passport(
+            mission,
+            private_key,
+            ttl_s=60,
+            extra_claims=v01_required_md_extras(
+                mission_id="urn:test:status-list-iat",
+                revocation_ref=f"{status_url}#idx=0",
+            ),
+        )
+        md = load_mission_declaration(md_token, public_key)
+
+        # Mint a status list whose iat is far in the future.
+        far_future = int(time.time()) + 365 * 86400
+        future_status_claims = {
+            "iss": "status-authority",
+            "sub": "status-list",
+            "iat": far_future,
+            "exp": far_future + 300,
+            "status_list": {
+                "bits": 1,
+                "lst": _b64url(zlib.compress(b"\x00")),
+            },
+        }
+        future_status_token = jwt.encode(
+            future_status_claims, private_key, algorithm="ES256"
+        )
+
+        monkeypatch.setattr(
+            mission_module,
+            "urlopen",
+            lambda req, **kw: _ShimResponse(future_status_token),
+        )
+        with pytest.raises(
+            mission_module.MissionBindingError,
+            match="status list iat lies more than",
+        ):
+            mission_module.mission_is_revoked(md, public_key)
+
+
+class TestMissionDeclarationIatSkewGuard:
+    def test_md_with_iat_in_far_future_fails_closed(
+        self, private_key, public_key
+    ):
+        from tests.conftest import v01_required_md_extras
+
+        mission = MissionPassport(
+            agent_id="md-authority",
+            mission="far-future iat",
+            allowed_tools=["read"],
+            forbidden_tools=[],
+            resource_scope=[],
+            max_tool_calls=2,
+            max_duration_s=60,
+            delegation_allowed=False,
+            max_delegation_depth=0,
+        )
+        far_future = int(time.time()) + 365 * 86400
+        # issue_passport sets iat=now; mint manually to inject far-future iat.
+        claims: dict[str, object] = {
+            "iss": "md-authority",
+            "sub": "md-authority",
+            "aud": "vibap-proxy",
+            "iat": far_future,
+            "exp": far_future + 600,
+            "jti": "md-far-future",
+            **v01_required_md_extras(mission_id="urn:test:far-future"),
+            "allowed_tools": list(mission.allowed_tools),
+            "forbidden_tools": list(mission.forbidden_tools),
+            "resource_scope": list(mission.resource_scope),
+            "max_tool_calls": mission.max_tool_calls,
+            "max_duration_s": mission.max_duration_s,
+            "delegation_allowed": mission.delegation_allowed,
+            "max_delegation_depth": mission.max_delegation_depth,
+        }
+        token = jwt.encode(claims, private_key, algorithm="ES256")
+        with pytest.raises(
+            mission_module.MissionBindingError,
+            match="MD iat lies more than",
+        ):
+            load_mission_declaration(token, public_key)
