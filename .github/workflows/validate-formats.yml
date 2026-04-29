@@ -96,23 +96,18 @@ jobs:
           for embedded in python/vibap/_specs/*.schema.json; do
             base=$(basename "$embedded" .schema.json)
             # Convert e.g. ``mission_declaration_v01`` →
-            # ``mission-declaration-v0.1`` using a portable Python helper.
-            # Round-5 (FIX-R5-M2, 2026-04-28): heredoc is now QUOTED
-            # (``<<'PY'``) so shell variable interpolation cannot inject
-            # Python code via a maliciously-named PR file. ``$base`` is
-            # passed via argv (sys.argv[1]) instead of being embedded in
-            # the script source. This closes the round-4 M2 finding.
-            canonical_base=$(python3 - "$base" <<'PY'
-import re, sys
-b = sys.argv[1]
-m = re.match(r'^(.*)_v(\d)(\d)$', b)
-if m:
-    out = f"{m.group(1).replace('_', '-')}-v{m.group(2)}.{m.group(3)}"
-else:
-    out = b.replace('_', '-')
-sys.stdout.write(out)
-PY
-)
+            # ``mission-declaration-v0.1`` using portable shell tools.
+            # Step 1: ``tr '_' '-'`` rewrites every underscore as a hyphen
+            #   (``mission_declaration_v01`` → ``mission-declaration-v01``).
+            # Step 2: sed inserts the dot between major + minor version
+            #   digits (``-v01`` → ``-v0.1``).
+            # No heredoc-in-YAML — the round-5 FIX-R5-M2 shell-injection
+            # concern doesn't apply here because ``$base`` is the basename
+            # of a checked-in file already validated by the directory glob.
+            # No Python interpreter spawn either; simpler and portable
+            # across BSD sed (macOS) and GNU sed (Linux CI).
+            canonical_base=$(printf '%s' "$base" | tr '_' '-' \
+              | sed 's/-v\([0-9]\)\([0-9]\)$/-v\1.\2/')
             canonical="docs/specs/${canonical_base}.schema.json"
             if [ ! -f "$canonical" ]; then
               echo "::error file=$embedded::no canonical pair found at $canonical"
