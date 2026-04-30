@@ -1,0 +1,594 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ardur.dev/vibap/spec/eu-ai-act-attestation-export-v0.1.schema.json",
+  "title": "EU AI Act Article 12 Attestation Export v0.1",
+  "description": "Manifest object for an Ardur evidence export that supports EU AI Act Article 12 record-keeping workflows. This schema validates the manifest projection, not the detached signed receipts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "export_id",
+    "generated_at",
+    "export_period",
+    "regulatory_scope",
+    "system",
+    "retention",
+    "integrity",
+    "events",
+    "attachments"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "ardur.eu_ai_act.article12_export.v0.1"
+      ]
+    },
+    "export_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "export_period": {
+      "$ref": "#/$defs/period"
+    },
+    "regulatory_scope": {
+      "$ref": "#/$defs/regulatoryScope"
+    },
+    "system": {
+      "$ref": "#/$defs/system"
+    },
+    "retention": {
+      "$ref": "#/$defs/retention"
+    },
+    "integrity": {
+      "$ref": "#/$defs/integrity"
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/attachment"
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pathString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:/=-]+$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha-256:[0-9a-f]{64}$"
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "regulatoryScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "law",
+        "primary_article",
+        "related_articles",
+        "operator_role",
+        "high_risk_basis"
+      ],
+      "properties": {
+        "law": {
+          "type": "string",
+          "enum": [
+            "Regulation (EU) 2024/1689"
+          ]
+        },
+        "primary_article": {
+          "type": "string",
+          "enum": [
+            "Article 12"
+          ]
+        },
+        "related_articles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "Article 14",
+              "Article 19",
+              "Article 26",
+              "Article 72",
+              "Article 79"
+            ]
+          }
+        },
+        "operator_role": {
+          "type": "string",
+          "enum": [
+            "provider",
+            "deployer",
+            "authorized_representative",
+            "importer",
+            "distributor",
+            "unknown"
+          ]
+        },
+        "high_risk_basis": {
+          "type": "string",
+          "enum": [
+            "annex_i",
+            "annex_iii",
+            "not_declared",
+            "unknown"
+          ]
+        },
+        "annex_iii_point": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classification_ref": {
+          "$ref": "#/$defs/pathString"
+        }
+      }
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system_id",
+        "system_version",
+        "deployment_id",
+        "intended_purpose"
+      ],
+      "properties": {
+        "system_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "system_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "deployment_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "intended_purpose": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_retention_days",
+        "retention_period_start",
+        "retention_period_end",
+        "policy_ref"
+      ],
+      "properties": {
+        "minimum_retention_days": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "retention_period_start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "retention_period_end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "policy_ref": {
+          "$ref": "#/$defs/pathString"
+        },
+        "exception_ref": {
+          "$ref": "#/$defs/pathString"
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonicalization",
+        "hash_alg",
+        "manifest_digest",
+        "signature_format",
+        "trust_anchor_ref"
+      ],
+      "properties": {
+        "canonicalization": {
+          "type": "string",
+          "enum": [
+            "JCS"
+          ]
+        },
+        "hash_alg": {
+          "type": "string",
+          "enum": [
+            "sha-256"
+          ]
+        },
+        "manifest_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "signature_format": {
+          "type": "string",
+          "enum": [
+            "JWS",
+            "COSE"
+          ]
+        },
+        "trust_anchor_ref": {
+          "$ref": "#/$defs/pathString"
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "receipt_ref",
+        "trace_id",
+        "run_nonce",
+        "observed_at",
+        "actor",
+        "verifier_id",
+        "tool",
+        "action_class",
+        "target",
+        "resource_family",
+        "side_effect_class",
+        "invocation_digest",
+        "arguments_hash",
+        "verdict",
+        "evidence_level",
+        "article12_tags",
+        "privacy"
+      ],
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "receipt_ref": {
+          "$ref": "#/$defs/pathString"
+        },
+        "trace_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "run_nonce": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "parent_receipt_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "parent_receipt_hash": {
+          "$ref": "#/$defs/digest"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "verifier_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "tool": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "action_class": {
+          "type": "string",
+          "enum": [
+            "search",
+            "read",
+            "write",
+            "query",
+            "delegate",
+            "send",
+            "summarize",
+            "observe"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "resource_family": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "side_effect_class": {
+          "type": "string",
+          "enum": [
+            "none",
+            "internal_write",
+            "external_send",
+            "state_change"
+          ]
+        },
+        "invocation_digest": {
+          "$ref": "#/$defs/digestObject"
+        },
+        "arguments_hash": {
+          "$ref": "#/$defs/digest"
+        },
+        "result_hash": {
+          "$ref": "#/$defs/digestObject"
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "compliant",
+            "violation",
+            "insufficient_evidence"
+          ]
+        },
+        "evidence_level": {
+          "type": "string",
+          "enum": [
+            "self_signed",
+            "counter_signed",
+            "transparency_logged"
+          ]
+        },
+        "policy_decisions_ref": {
+          "$ref": "#/$defs/pathString"
+        },
+        "article12_tags": {
+          "$ref": "#/$defs/article12Tags"
+        },
+        "annex_iii_1a_fields": {
+          "$ref": "#/$defs/annexIII1AFields"
+        },
+        "privacy": {
+          "$ref": "#/$defs/privacy"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "actor_type"
+      ],
+      "properties": {
+        "actor_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "actor_type": {
+          "type": "string",
+          "enum": [
+            "agent",
+            "human",
+            "service",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "digestObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alg",
+        "value"
+      ],
+      "properties": {
+        "alg": {
+          "type": "string",
+          "enum": [
+            "sha-256"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "article12Tags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "risk_or_substantial_modification_signal",
+        "post_market_monitoring_relevant",
+        "deployer_operation_monitoring_relevant"
+      ],
+      "properties": {
+        "risk_or_substantial_modification_signal": {
+          "type": "boolean"
+        },
+        "post_market_monitoring_relevant": {
+          "type": "boolean"
+        },
+        "deployer_operation_monitoring_relevant": {
+          "type": "boolean"
+        }
+      }
+    },
+    "annexIII1AFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "use_period",
+        "reference_database",
+        "matched_input_data",
+        "human_result_verification"
+      ],
+      "properties": {
+        "use_period": {
+          "$ref": "#/$defs/period"
+        },
+        "reference_database": {
+          "$ref": "#/$defs/referenceDatabase"
+        },
+        "matched_input_data": {
+          "$ref": "#/$defs/matchedInputData"
+        },
+        "human_result_verification": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/humanResultVerification"
+          }
+        }
+      }
+    },
+    "referenceDatabase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "database_id",
+        "database_version",
+        "database_digest"
+      ],
+      "properties": {
+        "database_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "database_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "database_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "matchedInputData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "included",
+        "digest"
+      ],
+      "properties": {
+        "included": {
+          "type": "boolean"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "redaction_reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "humanResultVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "person_ref",
+        "verified_at",
+        "decision",
+        "authority_ref"
+      ],
+      "properties": {
+        "person_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "verified_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "confirmed",
+            "rejected",
+            "overridden"
+          ]
+        },
+        "authority_ref": {
+          "$ref": "#/$defs/pathString"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_included",
+        "redaction_profile"
+      ],
+      "properties": {
+        "raw_payload_included": {
+          "type": "boolean"
+        },
+        "redaction_profile": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "personal_data_categories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attachment_id",
+        "kind",
+        "path",
+        "digest"
+      ],
+      "properties": {
+        "attachment_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "receipt",
+            "detached_evidence",
+            "redaction_profile",
+            "trust_anchor",
+            "verification_report_template"
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/pathString"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  }
+}

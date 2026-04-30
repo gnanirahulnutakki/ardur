@@ -18,8 +18,10 @@ The MCEP acronym was expanded as "Mission-bound Cryptographic Evidence Protocol"
 | [Execution Receipt EAT/CWT Profile](./execution-receipt-eat-profile-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied |
 | [IDM Extension Profile](./idm-extension-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied (`application/ardur.idm+jwt`) |
 | [Revocation Model](./revocation-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied |
+| [EU AI Act Article 12 Attestation Export](./eu-ai-act-attestation-export-v0.1.md) | **draft** | Evidence-export profile; does not assert legal compliance |
 | [Mission Declaration schema](./mission-declaration-v0.1.schema.json) | **migrated** | JSON Schema; `$id` rebased to ardur.dev |
 | [Execution Receipt schema](./execution-receipt-v0.1.schema.json) | **migrated** | JSON Schema; `$id` rebased to ardur.dev |
+| [EU AI Act Article 12 Attestation Export schema](./eu-ai-act-attestation-export-v0.1.schema.json) | **draft** | JSON Schema for the export manifest projection |
 
 ## Protocol identifier rename (clean break, applied 2026-04-27)
 
@@ -44,6 +46,7 @@ The clean-break rationale: there are no v0.1 receipts, passports, or attestation
 6. [Conformance Profiles](./conformance-profiles-v0.1.md) — tiered conformance matrix (Delegation-Core, MIC-State, MIC-Evidence, IDM Extension)
 7. [Revocation Model](./revocation-v0.1.md) — layered revocation across delegation, session, credential, and transparency-log layers
 8. [IDM Extension Profile](./idm-extension-v0.1.md) — Intent-Declaration-Manifest experimental profile
+9. [EU AI Act Article 12 Attestation Export](./eu-ai-act-attestation-export-v0.1.md) — optional evidence packaging profile for regulated deployments
 
 ## Relationship to adjacent standards
 

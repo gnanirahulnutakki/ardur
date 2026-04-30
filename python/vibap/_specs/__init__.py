@@ -10,6 +10,8 @@ To re-sync after editing the canonical doc:
 
     cp docs/specs/mission-declaration-v0.1.schema.json \\
        python/vibap/_specs/mission_declaration_v01.schema.json
+    cp docs/specs/eu-ai-act-attestation-export-v0.1.schema.json \\
+       python/vibap/_specs/eu_ai_act_attestation_export_v01.schema.json
 """
 
 from __future__ import annotations
@@ -28,5 +30,14 @@ def mission_declaration_v01_schema() -> dict:
     """
     raw = files(__package__).joinpath(
         "mission_declaration_v01.schema.json"
+    ).read_text(encoding="utf-8")
+    return json.loads(raw)
+
+
+@lru_cache(maxsize=1)
+def eu_ai_act_attestation_export_v01_schema() -> dict:
+    """Return the parsed EU AI Act Article 12 export v0.1 JSON Schema."""
+    raw = files(__package__).joinpath(
+        "eu_ai_act_attestation_export_v01.schema.json"
     ).read_text(encoding="utf-8")
     return json.loads(raw)

@@ -7,6 +7,7 @@ Working examples of Ardur governing AI agents across the major frameworks. Some 
 | Example | Status | Runtime dependency |
 |---------|--------|-------------------|
 | [missions/](missions/) | runnable | None — JSON files only |
+| [article12-attestation-export/](article12-attestation-export/) | fixture | None — JSON fixture |
 | [langchain-quickstart/](langchain-quickstart/) | runnable | `python/` editable install + LangChain + an LLM provider |
 | [langgraph-quickstart/](langgraph-quickstart/) | runnable | `python/` editable install + LangGraph + an LLM provider |
 | [autogen-quickstart/](autogen-quickstart/) | runnable | `python/` editable install + AutoGen v0.4+ + an LLM provider |

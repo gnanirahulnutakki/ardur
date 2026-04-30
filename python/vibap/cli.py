@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Sequence
 
 from . import __version__
+from .article12_export import verify_article12_export
 from .passport import MissionPassport, generate_keypair, issue_passport, load_mission_file, verify_passport
 from .proxy import GovernanceProxy, serve_proxy
 
@@ -92,6 +93,20 @@ def cmd_attest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_article12_verify(args: argparse.Namespace) -> int:
+    report = verify_article12_export(
+        args.manifest,
+        bundle_root=args.bundle_root,
+        schema_path=args.schema,
+    )
+    _print_json(report)
+    if report["result"] in {"verified", "verified_with_redactions"}:
+        return 0
+    if report["result"] == "incomplete_evidence":
+        return 2
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ardur",
@@ -148,6 +163,28 @@ def build_parser() -> argparse.ArgumentParser:
     attest.add_argument("--state-dir", type=Path, help="directory containing persisted sessions")
     attest.add_argument("--log-path", type=Path, help="JSONL audit log path")
     attest.set_defaults(func=cmd_attest)
+
+    article12_verify = subparsers.add_parser(
+        "article12-verify",
+        help="verify an EU AI Act Article 12 export manifest offline",
+    )
+    article12_verify.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("manifest.json"),
+        help="manifest.json path (default: ./manifest.json)",
+    )
+    article12_verify.add_argument(
+        "--bundle-root",
+        type=Path,
+        help="bundle root for referenced attachments (default: manifest parent)",
+    )
+    article12_verify.add_argument(
+        "--schema",
+        type=Path,
+        help="override schema path; defaults to the packaged v0.1 schema",
+    )
+    article12_verify.set_defaults(func=cmd_article12_verify)
 
     return parser
 

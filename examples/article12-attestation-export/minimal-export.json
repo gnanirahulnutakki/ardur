@@ -1,0 +1,99 @@
+{
+  "schema_version": "ardur.eu_ai_act.article12_export.v0.1",
+  "export_id": "urn:uuid:4c13a7e1-7a8c-4fc5-aec1-7bb3f9caa012",
+  "generated_at": "2026-04-30T00:00:00Z",
+  "export_period": {
+    "start": "2026-04-01T00:00:00Z",
+    "end": "2026-04-30T00:00:00Z"
+  },
+  "regulatory_scope": {
+    "law": "Regulation (EU) 2024/1689",
+    "primary_article": "Article 12",
+    "related_articles": [
+      "Article 19",
+      "Article 26",
+      "Article 72"
+    ],
+    "operator_role": "deployer",
+    "high_risk_basis": "not_declared",
+    "classification_ref": "classification/example-classification.md"
+  },
+  "system": {
+    "system_id": "example-governed-agent",
+    "system_version": "0.1.0",
+    "deployment_id": "example-deployment",
+    "intended_purpose": "Demonstrate the Article 12 export manifest format with fixture data."
+  },
+  "retention": {
+    "minimum_retention_days": 183,
+    "retention_period_start": "2026-04-01T00:00:00Z",
+    "retention_period_end": "2026-10-01T00:00:00Z",
+    "policy_ref": "retention/example-policy.md"
+  },
+  "integrity": {
+    "canonicalization": "JCS",
+    "hash_alg": "sha-256",
+    "manifest_digest": "sha-256:3cac0ef08c34d7d0e1a8acfbe7a92c89a2dec6e62d0f8c88110c4e1dc2dc831d",
+    "signature_format": "JWS",
+    "trust_anchor_ref": "trust-anchor.json"
+  },
+  "events": [
+    {
+      "event_id": "receipt-example-001",
+      "receipt_ref": "receipts/receipt-example-001.jwt",
+      "trace_id": "trace-example-001",
+      "run_nonce": "run-nonce-example-001",
+      "observed_at": "2026-04-12T10:15:30Z",
+      "started_at": "2026-04-12T10:15:29Z",
+      "ended_at": "2026-04-12T10:15:31Z",
+      "actor": {
+        "actor_id": "agent:example-governed-agent",
+        "actor_type": "agent"
+      },
+      "verifier_id": "verifier:example-local",
+      "tool": "crm.read",
+      "action_class": "read",
+      "target": "crm://customers/example-record",
+      "resource_family": "customer-records",
+      "side_effect_class": "none",
+      "invocation_digest": {
+        "alg": "sha-256",
+        "value": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "arguments_hash": "sha-256:2222222222222222222222222222222222222222222222222222222222222222",
+      "result_hash": {
+        "alg": "sha-256",
+        "value": "3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "verdict": "compliant",
+      "evidence_level": "self_signed",
+      "policy_decisions_ref": "detached-evidence/policy-decisions-example-001.json",
+      "article12_tags": {
+        "risk_or_substantial_modification_signal": false,
+        "post_market_monitoring_relevant": true,
+        "deployer_operation_monitoring_relevant": true
+      },
+      "privacy": {
+        "raw_payload_included": false,
+        "redaction_profile": "digest-only",
+        "personal_data_categories": [
+          "customer_id"
+        ]
+      }
+    }
+  ],
+  "attachments": [
+    {
+      "attachment_id": "trust-anchor",
+      "kind": "trust_anchor",
+      "path": "trust-anchor.json",
+      "digest": "sha-256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "attachment_id": "receipt-example-001",
+      "kind": "receipt",
+      "path": "receipts/receipt-example-001.jwt",
+      "digest": "sha-256:5555555555555555555555555555555555555555555555555555555555555555"
+    }
+  ]
+}
