@@ -270,9 +270,100 @@ else:
 "
 ```
 
+## 2026-04-30 follow-up — alert #51
+
+After PR #8 merged to `main` on 2026-04-30, the post-merge CodeQL
+analysis on the new `main` ref surfaced one additional alert that
+the previous SARIF (against the pre-merge tree) had not flagged.
+Triaged and dismissed on the same day.
+
+| Alert | Rule | Sec sev | Rule sev | Disposition | Class |
+|---|---|---|---|---|---|
+| #51 | `py/weak-sensitive-data-hashing` | high | warning | false positive | Bearer-token length normalization, not password hashing |
+
+### #51 — `py/weak-sensitive-data-hashing` (HIGH security severity)
+
+- **File:** `python/vibap/proxy.py:4582`
+  (`api_token_hash = hashlib.sha256(api_token_bytes).digest()`)
+- **Rule message:** *"Sensitive data (password) is used in a hashing
+  algorithm (SHA256) that is insecure for password hashing, since
+  it is not a computationally expensive hash function."*
+- **Disposition:** False positive
+- **Justification (verbatim, 280-char limit):** *"SHA-256 normalizes
+  32-byte bearer length pre `hmac.compare_digest`, defeating
+  `_tscmp` length-oracle. Token is machine-generated high-entropy
+  bearer, not user password. KDF use would break constant-time
+  invariant. R7/R8 audit reviewed (`proxy.py:4571-4580` comment)."*
+- **Extended reasoning:**
+  CodeQL's `py/weak-sensitive-data-hashing` rule fires on the
+  surface shape — `hashlib.sha256(...)` near a variable named like
+  a "password" — without semantic context for what the hash is
+  *for*. The actual security predicate at this site is the
+  defense the Round-7 / Round-8 audit added against a
+  length-oracle attack on `hmac.compare_digest`:
+
+  - CPython's `_tscmp` (the C function backing
+    `hmac.compare_digest`) iterates `min(len_a, len_b)` and
+    short-circuits on length mismatch, leaking the expected
+    token's length to a remote attacker who controls the
+    presented token.
+  - Hashing both sides through SHA-256 first normalizes them to a
+    fixed 32 bytes; the constant-time compare then runs on
+    fixed-length inputs and the length-oracle is closed.
+  - The token being hashed is `api_token` — a 256-bit
+    machine-generated bearer (from `_generate_api_token()`), not a
+    user-supplied low-entropy password. SHA-256 is the *correct*
+    primitive for length normalization of high-entropy material.
+
+  Replacing SHA-256 with a slow KDF (bcrypt, scrypt, Argon2,
+  PBKDF2) here would actively make things worse:
+
+  - Variable timing of KDFs would *break* the constant-time-compare
+    invariant the entire R7/R8 fix exists to preserve.
+  - KDF cost-per-call multiplies on every authenticated request.
+    The bearer-auth path is on the hot path of every proxy call.
+  - There is no rainbow-table or brute-force concern for 256-bit
+    random tokens; KDFs solve a problem this code doesn't have.
+
+  The audit cycle's terminal-round verdict (round 11, 2026-04-29)
+  explicitly endorsed this design:
+
+  > *"the public-surface authentication and credential-issuance
+  > code is consistently fail-closed at every entry point:
+  > SHA-256-normalized constant-time bearer compare on
+  > Authority/Governor/Python proxy …"*
+
+  The same SHA-256 normalization was previously landed on the Go
+  side (R7) for `cmd/authority` + `pkg/governance`. R8 closed the
+  symmetric gap on the Python proxy that R7's audit had flagged
+  as `MED-NEW-1`.
+
+- **Why CodeQL didn't fire on this in the pre-merge SARIF:** the
+  alert was created in the database on 2026-04-29 16:09:17Z but
+  surfaced in PR #8's view only after the post-merge CodeQL run
+  uploaded SARIF against `refs/heads/main`. The pre-merge view
+  scoped to `refs/heads/dev` had the alert but in a state that
+  the PR-diff filter didn't classify as "new in this PR." This is
+  a known-shape of GitHub Code Scanning: alerts move between
+  per-ref states as analyses run, and a dismissed-or-not-yet-
+  surfaced alert against one ref can re-surface as "open" against
+  another ref when the same code lands there. The `dismissed`
+  state set here applies repository-wide.
+
+  **Same-rule alerts on related token-fingerprint sites:** none
+  flagged at time of dismissal. `_passport_token_hash` at
+  `python/vibap/passport.py:257` uses the same
+  `hashlib.sha256(token).digest()` pattern for replay-cache and
+  log-fingerprint computation; CodeQL's data-flow analysis did
+  not classify the input there as `password`-tainted, so no
+  alert. If that classification ever changes, the same
+  reasoning above applies (high-entropy machine-generated token,
+  not user password) and the dismissal will be added here.
+
 ---
 
 *Prepared 2026-04-29 by the maintainer; mirrored from the GitHub
 Code Scanning audit trail. Update this file (do not delete entries)
 if any dismissal is later reversed or if new dismissals land —
-the convention is append-only with dated rows.*
+the convention is append-only with dated rows. 2026-04-30 follow-up
+section appended for alert #51 surfaced post-merge.*
