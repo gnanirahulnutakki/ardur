@@ -6,6 +6,17 @@
 __pycache__/
 *.pyc
 
+# AI-agent / LLM working context — handoff prompts, work logs, checkpoints,
+# and other artefacts produced by Claude / Codex / Gemini / Cursor / etc.
+# while collaborating on this repo. NEVER commit these — they often carry
+# session-internal context, draft prose, secret-equivalent reasoning, and
+# files written for the next agent's eyes only. Keep them out of the
+# public tree by default.
+.ai-context/
+.agent-context/
+HANDOFF.md
+workdone-so-far.md
+
 # Local environment files - never commit secrets.
 # Matches .env, .env.local, .env.development, .env.production, etc.
 .env
