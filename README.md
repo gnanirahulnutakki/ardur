@@ -12,7 +12,7 @@ imports, mission examples, and framework example stubs. Broader proof surfaces,
 packaging, and production deployment material are still being tightened before
 they are presented as release-ready.
 
-[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Docs](docs/README.md)
+[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md)
 
 ## Why Ardur
 
@@ -46,6 +46,8 @@ This repo currently includes:
 - curated Python and Go runtime imports under `python/` and `go/`
 - JSON-only mission examples plus framework example stubs under `examples/`
 - selected archival terminal recordings (the rerunnable proof path lands with the next public drop — see [MEDIA.md](MEDIA.md))
+- a journey-log [article series](docs/articles/README.md) — Article 06 (Public Import Discipline) and Article 05 (Proof Media That Actually Means Something) are the first-wave shippers
+- a public audit trail at [`docs/audit/`](docs/audit/) mirroring the GitHub Code Scanning dismissal record so triage decisions are auditable from the repo tree without GitHub credentials
 
 ## What Is Coming Next
 
