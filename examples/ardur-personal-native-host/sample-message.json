@@ -1,0 +1,53 @@
+{
+  "type": "ardur.personal.host_observation.v0.1",
+  "forwarded_at": "2026-04-30T00:00:00Z",
+  "browser_receipt": {
+    "schema_version": "ardur.personal.browser_receipt.v0.1",
+    "receipt_id": "sample-browser-receipt",
+    "previous_receipt_hash": null,
+    "observed_at": "2026-04-30T00:00:00Z",
+    "extension": {
+      "extension_id": "sampleextensionid",
+      "version": "0.1.0",
+      "ruleset_version": "2026-04-30"
+    },
+    "page": {
+      "origin": "https://example.test",
+      "tab_id": 1,
+      "tab_session_id": "sample-tab-session",
+      "frame_id": 0
+    },
+    "event": {
+      "kind": "dom_observed",
+      "action_class": "observe",
+      "target": "main",
+      "content_digest": "sha-256:0000000000000000000000000000000000000000000000000000000000000000",
+      "raw_content_included": false
+    },
+    "policy": {
+      "preset_id": "digest-only-observation",
+      "rule_id": "digest-observe-allow",
+      "verdict": "allowed"
+    },
+    "user_decision": {
+      "decision": "none",
+      "decided_at": null
+    },
+    "integrity": {
+      "canonicalization": "JCS",
+      "hash_alg": "sha-256",
+      "sign_alg": "ECDSA-P256-SHA256",
+      "signer_key_id": "browser-local-p256-v1",
+      "signature": "invalid"
+    }
+  },
+  "browser_signer": {
+    "key_id": "browser-local-p256-v1",
+    "public_jwk": {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "y": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    }
+  }
+}

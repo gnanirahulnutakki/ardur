@@ -7,6 +7,8 @@ Working examples of Ardur governing AI agents across the major frameworks. Some 
 | Example | Status | Runtime dependency |
 |---------|--------|-------------------|
 | [missions/](missions/) | runnable | None — JSON files only |
+| [ardur-personal-extension/](ardur-personal-extension/) | prototype | Browser with Manifest V3 extension support |
+| [ardur-personal-native-host/](ardur-personal-native-host/) | prototype | `python/` editable install + browser native messaging |
 | [langchain-quickstart/](langchain-quickstart/) | runnable | `python/` editable install + LangChain + an LLM provider |
 | [langgraph-quickstart/](langgraph-quickstart/) | runnable | `python/` editable install + LangGraph + an LLM provider |
 | [autogen-quickstart/](autogen-quickstart/) | runnable | `python/` editable install + AutoGen v0.4+ + an LLM provider |

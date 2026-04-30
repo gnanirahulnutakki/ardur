@@ -172,6 +172,19 @@ grep -RInE \
 For runtime changes:
 - Exit code 0 on the full pytest suite
 - Exit code 0 on the relevant Go build/test command when touching `go/`
+- When touching the Ardur Personal extension, run
+  `node examples/ardur-personal-extension/scripts/smoke.mjs` with Chrome for
+  Testing or Chromium available. This is not a required CI gate yet because it
+  depends on a browser binary, but it is the local proof that the unpacked MV3
+  extension loads, injects, signs a digest-only receipt, captures explicit-
+  consent Session Review excerpts, and excludes receipt-level raw page content.
+- When touching the native host, run
+  `PYTHONPATH=python python3 -m pytest python/tests/test_ardur_personal_native_host.py -q`.
+  Also run
+  `WITH_NATIVE_HOST=1 node examples/ardur-personal-extension/scripts/smoke.mjs`
+  when you need end-to-end proof across Chrome native messaging and the Python
+  host. Native smoke also verifies that a signed Session Review is forwarded and
+  recorded by the host.
 - Known-failing / known-collecting-error count has not grown
 - No `xfail` flipped to pass-or-fail without an explicit reason
 - The pytest summary line (`N passed, M skipped, K xfailed`) pasted into the commit body so a reviewer can see the delta vs the known baseline without re-running

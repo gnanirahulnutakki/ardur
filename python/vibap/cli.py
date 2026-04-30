@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Sequence
 
 from . import __version__
+from .ardur_personal_native_host import (
+    build_native_host_manifest,
+    handle_native_host_message,
+    run_native_host,
+)
 from .passport import MissionPassport, generate_keypair, issue_passport, load_mission_file, verify_passport
 from .proxy import GovernanceProxy, serve_proxy
 
@@ -92,6 +98,45 @@ def cmd_attest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_personal_native_host(args: argparse.Namespace) -> int:
+    caller_origin = _native_caller_origin(args.browser_args)
+    if args.once_json:
+        message = json.loads(args.once_json.read_text(encoding="utf-8"))
+        response = handle_native_host_message(
+            message,
+            storage_dir=args.storage_dir,
+            keys_dir=args.keys_dir,
+            caller_origin=caller_origin,
+        )
+        _print_json(response)
+        return 0 if response.get("ok") else 1
+    run_native_host(
+        sys.stdin.buffer,
+        sys.stdout.buffer,
+        storage_dir=args.storage_dir,
+        keys_dir=args.keys_dir,
+        caller_origin=caller_origin,
+    )
+    return 0
+
+
+def _native_caller_origin(browser_args: Sequence[str] | None) -> str | None:
+    for value in browser_args or []:
+        if value.startswith("chrome-extension://"):
+            return value
+    return None
+
+
+def cmd_personal_native_manifest(args: argparse.Namespace) -> int:
+    manifest = build_native_host_manifest(
+        args.host_path,
+        args.extension_id,
+        browser=args.browser,
+    )
+    _print_json(manifest)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ardur",
@@ -148,6 +193,51 @@ def build_parser() -> argparse.ArgumentParser:
     attest.add_argument("--state-dir", type=Path, help="directory containing persisted sessions")
     attest.add_argument("--log-path", type=Path, help="JSONL audit log path")
     attest.set_defaults(func=cmd_attest)
+
+    personal_native_host = subparsers.add_parser(
+        "personal-native-host",
+        help="run the Ardur Personal native messaging host",
+    )
+    personal_native_host.add_argument(
+        "--storage-dir",
+        type=Path,
+        help="native-host evidence directory (default: $ARDUR_PERSONAL_HOST_DIR or VIBAP home)",
+    )
+    personal_native_host.add_argument(
+        "--keys-dir",
+        type=Path,
+        help="native-host signing key directory (default: storage-dir/keys)",
+    )
+    personal_native_host.add_argument(
+        "--once-json",
+        type=Path,
+        help="development mode: process a plain JSON message file and print JSON response",
+    )
+    personal_native_host.add_argument("browser_args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
+    personal_native_host.set_defaults(func=cmd_personal_native_host)
+
+    personal_native_manifest = subparsers.add_parser(
+        "personal-native-manifest",
+        help="print a native messaging host manifest",
+    )
+    personal_native_manifest.add_argument(
+        "--host-path",
+        type=Path,
+        required=True,
+        help="absolute or relative path to the native host executable/wrapper",
+    )
+    personal_native_manifest.add_argument(
+        "--extension-id",
+        required=True,
+        help="Chrome extension id or Firefox add-on id allowed to call the host",
+    )
+    personal_native_manifest.add_argument(
+        "--browser",
+        choices=["chrome", "chrome-for-testing", "chromium", "edge", "firefox"],
+        default="chrome",
+        help="manifest flavor to print",
+    )
+    personal_native_manifest.set_defaults(func=cmd_personal_native_manifest)
 
     return parser
 

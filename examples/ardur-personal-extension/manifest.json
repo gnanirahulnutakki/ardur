@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Ardur Personal",
+  "description": "Local-first observation and consent layer for supported AI-tool activity.",
+  "version": "0.1.0",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "declarativeNetRequest"
+  ],
+  "optional_permissions": [
+    "nativeMessaging"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "host_permissions": [],
+  "action": {
+    "default_title": "Ardur Personal",
+    "default_popup": "src/popup.html"
+  },
+  "background": {
+    "service_worker": "src/service_worker.js"
+  }
+}

@@ -32,6 +32,7 @@ A heads-up on the CLI name: `ardur` is the canonical entrypoint going forward. `
 python/
 ├── vibap/                  # Core runtime package
 │   ├── attestation.py      # Per-session attestation issuance + verify
+│   ├── ardur_personal_native_host.py # Native messaging host prototype
 │   ├── backends/           # Policy-engine adapters (Cedar, native, forbid-rules)
 │   ├── biscuit_passport.py # Biscuit AAT/DG implementation
 │   ├── cli.py              # ardur CLI entrypoint
