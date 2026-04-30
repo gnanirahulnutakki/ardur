@@ -11,7 +11,7 @@ verify, or a limitation we've named.
 | 02 | The Mission Declaration Pattern | draft | — |
 | 03 | Partial Visibility And The `unknown` State | draft | — |
 | 04 | Delegation Without Authority Inflation | draft | — |
-| 05 | Proof Media That Actually Means Something | draft | yes |
+| **05** | **Proof Media That Actually Means Something** | **published** | **yes** |
 | **06** | **Public Import Discipline** | **published** | **yes** |
 | 07 | Public Branch Discipline For Security Software | draft | — |
 
