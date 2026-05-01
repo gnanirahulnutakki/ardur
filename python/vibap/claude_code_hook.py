@@ -298,15 +298,56 @@ def _evaluate_native_policy(
     return final, decisions
 
 
+def _emit_chained_receipt(
+    *,
+    decision_enum: Any,
+    event: Any,
+    decisions: list,
+    reason: str,
+    trace_id: str,
+    keys_dir: Path | None,
+) -> Any:
+    """Build, sign, and append one receipt to the per-trace chain.
+
+    Shared by the allow and deny paths (and PostToolUse in Task 8) so the
+    chain semantics — parent-hash linking, signed-JWT serialisation,
+    file-locked append — are written once.
+    """
+    from .receipt import build_receipt, sign_receipt
+
+    private_key = load_private_key(keys_dir=keys_dir)
+    state = resolve_chain_state(trace_id=trace_id)
+    parent_hash = previous_receipt_hash(state)
+    receipt_obj = build_receipt(
+        decision_enum,
+        event,
+        parent_hash,
+        policy_decisions=[d.to_dict() for d in decisions],
+        reason=reason,
+    )
+    signed = sign_receipt(receipt_obj, private_key)
+    append_receipt(state, signed)
+    return receipt_obj
+
+
 def handle_pre_tool_use(
     hook_input: dict[str, Any],
     *,
     keys_dir: Path | None = None,
 ) -> dict[str, Any]:
-    """PreToolUse hook handler — allow path. Deny path lands in Task 7."""
+    """PreToolUse hook handler.
+
+    Returns a Claude-Code hook-protocol JSON dict:
+      - on Permit: ``{"continue": True, "systemMessage": "..."}`` plus a
+        signed Execution Receipt appended to the per-trace chain;
+      - on Deny / fail-closed: ``{"continue": False, "stopReason": "..."}``
+        plus a non-compliant receipt appended to the chain;
+      - on Mission-load failure (no passport, signature mismatch, …):
+        ``{"continue": False, "stopReason": "ardur: <reason>"}`` and NO
+        receipt (no trace context to chain into).
+    """
     from .claude_code_telemetry import map_tool_call
-    from .proxy import Decision
-    from .receipt import build_receipt, sign_receipt
+    from .proxy import Decision, PolicyEvent
 
     try:
         claims = load_active_passport(keys_dir=keys_dir)
@@ -330,28 +371,58 @@ def handle_pre_tool_use(
     final, decisions = _evaluate_native_policy(event, claims)
 
     if final == "Deny":
-        # Placeholder deny response — Task 7 lands the full chained-deny
-        # receipt path. Returning a structured continue:false here keeps
-        # the hook process from crashing on a denied tool call before
-        # Task 7 ships.
+        denier = next(
+            (d for d in decisions if d.decision == "Deny"),
+            None,
+        )
+        reasons = list(denier.reasons) if denier else ["denied by composed policy"]
+        reason_text = "; ".join(reasons)
+
+        # Reconstruct the event with the actual deny verdict so the
+        # receipt's ER claims reflect what really happened. Preserve
+        # `denial_reason` from the original event so any DenialReason
+        # the backend set propagates into receipt.internal_denial_code
+        # rather than collapsing to the "unknown" fallback.
+        deny_event = PolicyEvent(
+            timestamp=event.timestamp,
+            step_id=event.step_id,
+            actor=event.actor,
+            verifier_id=event.verifier_id,
+            tool_name=event.tool_name,
+            arguments=event.arguments,
+            action_class=event.action_class,
+            target=event.target,
+            resource_family=event.resource_family,
+            side_effect_class=event.side_effect_class,
+            decision=Decision.DENY,
+            reason=reason_text,
+            passport_jti=event.passport_jti,
+            trace_id=event.trace_id,
+            denial_reason=event.denial_reason,
+            budget_delta=event.budget_delta,
+        )
+        _emit_chained_receipt(
+            decision_enum=Decision.DENY,
+            event=deny_event,
+            decisions=decisions,
+            reason=reason_text,
+            trace_id=trace_id,
+            keys_dir=keys_dir,
+        )
         return {
             "continue": False,
-            "stopReason": "ardur: blocked (full deny-path implementation pending)",
+            "stopReason": f"ardur: blocked — {reason_text}",
         }
 
-    # Allow: build + sign + chain receipt.
-    private_key = load_private_key(keys_dir=keys_dir)
-    state = resolve_chain_state(trace_id=trace_id)
-    parent_hash = previous_receipt_hash(state)
-    receipt_obj = build_receipt(
-        Decision.PERMIT,
-        event,
-        parent_hash,
-        policy_decisions=[d.to_dict() for d in decisions],
+    # Allow: build + sign + chain receipt via the shared helper.
+    receipt_obj = _emit_chained_receipt(
+        decision_enum=Decision.PERMIT,
+        event=event,
+        decisions=decisions,
         reason="allowed by composed policy",
+        trace_id=trace_id,
+        keys_dir=keys_dir,
     )
-    signed = sign_receipt(receipt_obj, private_key)
-    append_receipt(state, signed)
     return {
         "continue": True,
         "systemMessage": f"ardur: allowed (receipt {receipt_obj.receipt_id})",
