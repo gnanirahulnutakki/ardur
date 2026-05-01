@@ -150,3 +150,37 @@ def test_chain_per_trace_does_not_collide(tmp_path):
     append_receipt(state_b, "b-only.jwt")
     assert previous_receipt_hash(state_a) == "sha-256:" + hashlib.sha256("a-only.jwt".encode()).hexdigest()
     assert previous_receipt_hash(state_b) == "sha-256:" + hashlib.sha256("b-only.jwt".encode()).hexdigest()
+
+
+def test_allow_path_returns_continue_true_and_chains_receipt(tmp_path, monkeypatch):
+    token, _ = _issue_test_passport(tmp_path)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    from vibap.claude_code_hook import handle_pre_tool_use
+
+    hook_input = {
+        "session_id": "sess-1",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": {"file_path": "/tmp/x.txt"},
+    }
+    output = handle_pre_tool_use(hook_input, keys_dir=tmp_path)
+
+    assert output["continue"] is True
+    assert "receipt" in output["systemMessage"].lower()
+
+    # Receipt was appended to the chain.
+    receipts = list((tmp_path / "chain").rglob("receipts.jsonl"))
+    assert len(receipts) == 1
+    lines = receipts[0].read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+
+    # First receipt in a fresh chain must have parent_receipt_hash=None
+    # (signals "root receipt"). Inspect the JWT claims without verifying
+    # the signature — the test isn't asserting receipt validity here, just
+    # the chain semantics.
+    import jwt as pyjwt
+    claims = pyjwt.decode(lines[0].strip(), options={"verify_signature": False})
+    assert claims.get("parent_receipt_hash") is None
