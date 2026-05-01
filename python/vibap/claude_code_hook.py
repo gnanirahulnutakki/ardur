@@ -12,8 +12,10 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import os
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,7 @@ import jwt
 from .passport import (
     DEFAULT_HOME,
     generate_keypair,
+    load_private_key,
     resolve_keys_dir,
     verify_passport,
 )
@@ -202,3 +205,154 @@ def load_active_passport(*, keys_dir: Path | None = None) -> dict[str, Any]:
         f"all candidate passports failed verification (last error: {last_error}); "
         f"sources tried: {[label for label, _ in sources]}"
     )
+
+
+# ─── PreToolUse handler ───────────────────────────────────────────────────────
+
+HOOK_VERIFIER_ID = "ardur-claude-code-hook"
+
+
+def _trace_id_from_claims(claims: dict[str, Any]) -> str:
+    override = os.environ.get("ARDUR_TRACE_ID", "").strip()
+    if override:
+        return override
+    return str(claims.get("jti", "trace-unknown"))
+
+
+def _build_policy_event(
+    *,
+    claims: dict[str, Any],
+    tool_name: str,
+    arguments: dict[str, Any],
+    trace_id: str,
+) -> Any:
+    """Build a PolicyEvent for a PreToolUse hook call.
+
+    ``budget_delta`` on the event is intentionally None: the proxy treats
+    the event-level ``budget_delta`` as a structured bookkeeping object
+    (``{"bucket": ..., "delta": ...}``), distinct from the raw integer
+    weight the telemetry mapper places in ``arguments["budget_delta"]``.
+    The integer in arguments still feeds the receipt's argument hash so
+    no information is lost; mission-bound budget tracking lives in the
+    proxy session state, not in the hook adapter.
+    """
+    from .proxy import Decision, PolicyEvent, _receipt_step_id
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return PolicyEvent(
+        timestamp=timestamp,
+        # Reuse the proxy's deterministic step-id derivation so that
+        # replayed identical calls produce identical step_ids — preserves
+        # cross-tool deduplication semantics with the rest of the runtime.
+        step_id=_receipt_step_id(
+            str(claims.get("jti", "")),
+            timestamp,
+            tool_name,
+            arguments,
+        ),
+        actor=str(claims.get("sub", "unknown")),
+        verifier_id=HOOK_VERIFIER_ID,
+        tool_name=tool_name,
+        arguments=arguments,
+        action_class=arguments["action_class"],
+        target=arguments["target"],
+        resource_family=arguments["resource_family"],
+        side_effect_class=arguments["side_effect_class"],
+        decision=Decision.PERMIT,
+        reason="pending policy evaluation",
+        passport_jti=str(claims.get("jti", "")),
+        trace_id=trace_id,
+        budget_delta=None,
+    )
+
+
+def _evaluate_native_policy(
+    event: Any,
+    claims: dict[str, Any],
+) -> "tuple[str, list[Any]]":
+    """Run the native backend; return (final_decision_str, decisions_list).
+
+    Only the native backend runs here — forbid_rules and other additional
+    backends are driven by mission-declared ``additional_policies`` in the
+    full proxy, not as a default. Calling forbid_rules without a valid
+    mission-provided policy_spec (including a SHA-256 integrity hash) would
+    unconditionally Deny every call.
+    """
+    from .policy_backend import compose_decisions, get_backend, timed_evaluate
+
+    native_backend = get_backend("native")
+    decision = timed_evaluate(
+        native_backend,
+        tool_name=event.tool_name,
+        arguments=event.arguments,
+        principal=event.actor,
+        target=event.target,
+        # Match the proxy's shared_context shape: key is "passport", not
+        # "passport_claims". The NativeBackend reads context["passport"] to
+        # access allowed_tools, forbidden_tools, resource_scope, etc.
+        context={"passport": claims, "session": {}},
+        policy_spec={},
+    )
+    decisions = [decision]
+    final, _denier = compose_decisions(decisions)
+    return final, decisions
+
+
+def handle_pre_tool_use(
+    hook_input: dict[str, Any],
+    *,
+    keys_dir: Path | None = None,
+) -> dict[str, Any]:
+    """PreToolUse hook handler — allow path. Deny path lands in Task 7."""
+    from .claude_code_telemetry import map_tool_call
+    from .proxy import Decision
+    from .receipt import build_receipt, sign_receipt
+
+    try:
+        claims = load_active_passport(keys_dir=keys_dir)
+    except MissionLoadError as exc:
+        return {
+            "continue": False,
+            "stopReason": f"ardur: {exc}",
+        }
+
+    tool_name = str(hook_input.get("tool_name", ""))
+    tool_input_dict = dict(hook_input.get("tool_input", {}) or {})
+    arguments = map_tool_call(tool_name=tool_name, tool_input=tool_input_dict)
+
+    trace_id = _trace_id_from_claims(claims)
+    event = _build_policy_event(
+        claims=claims,
+        tool_name=tool_name,
+        arguments=arguments,
+        trace_id=trace_id,
+    )
+    final, decisions = _evaluate_native_policy(event, claims)
+
+    if final == "Deny":
+        # Placeholder deny response — Task 7 lands the full chained-deny
+        # receipt path. Returning a structured continue:false here keeps
+        # the hook process from crashing on a denied tool call before
+        # Task 7 ships.
+        return {
+            "continue": False,
+            "stopReason": "ardur: blocked (full deny-path implementation pending)",
+        }
+
+    # Allow: build + sign + chain receipt.
+    private_key = load_private_key(keys_dir=keys_dir)
+    state = resolve_chain_state(trace_id=trace_id)
+    parent_hash = previous_receipt_hash(state)
+    receipt_obj = build_receipt(
+        Decision.PERMIT,
+        event,
+        parent_hash,
+        policy_decisions=[d.to_dict() for d in decisions],
+        reason="allowed by composed policy",
+    )
+    signed = sign_receipt(receipt_obj, private_key)
+    append_receipt(state, signed)
+    return {
+        "continue": True,
+        "systemMessage": f"ardur: allowed (receipt {receipt_obj.receipt_id})",
+    }
