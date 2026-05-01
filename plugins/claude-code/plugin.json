@@ -1,0 +1,17 @@
+{
+  "name": "ardur-claude-code-hook",
+  "version": "0.1.0",
+  "description": "Ardur runtime governance for Claude Code: mission-bound enforcement and signed Execution Receipts on every tool call.",
+  "hooks": [
+    {
+      "event": "PreToolUse",
+      "matcher": ".*",
+      "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre_tool_use"
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": ".*",
+      "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post_tool_use"
+    }
+  ]
+}
