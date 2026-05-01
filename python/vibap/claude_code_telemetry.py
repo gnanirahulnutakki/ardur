@@ -37,13 +37,27 @@ DECLARED_TELEMETRY_FIELDS: tuple[str, ...] = (
 
 _VISIBILITY_FULL = "full"  # proxy._missing_declared_telemetry requires this exact string.
 _PROVENANCE = "claude_code_tool_input"
+_UNKNOWN_TARGET = "<unknown>"
+
+
+def _safe_str(value: Any, *, default: str = "") -> str:
+    """Coerce ``value`` to a string, treating None as the default.
+
+    ``str(None)`` returns the literal string ``"None"`` which passes the
+    proxy's non-empty gate but produces misleading audit receipts
+    (``target="None"`` instead of ``target="<unknown>"``). This helper
+    keeps the audit trail honest about missing fields.
+    """
+    if value is None:
+        return default
+    return str(value)
 
 
 def _read_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
-    file_path = str(tool_input.get("file_path", "")).strip()
+    file_path = _safe_str(tool_input.get("file_path")).strip()
     return {
         "action_class": "read",
-        "target": file_path or "<unknown>",
+        "target": file_path or _UNKNOWN_TARGET,
         "resource_family": "filesystem",
         "content_class": "user_input",
         "content_provenance": _PROVENANCE,
@@ -55,8 +69,161 @@ def _read_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _filesystem_write_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Shared mapping for Write and Edit. Both are bounded filesystem
+    writes with ``file_path`` as the target.
+
+    If Write or Edit ever need to diverge (e.g. different sensitivity for
+    in-place mutation vs. full overwrite), split into two functions and
+    update ``_TOOL_MAPPERS`` to point at them separately.
+    """
+    file_path = _safe_str(tool_input.get("file_path")).strip()
+    return {
+        "action_class": "write",
+        "target": file_path or _UNKNOWN_TARGET,
+        "resource_family": "filesystem",
+        "content_class": "user_input",
+        "content_provenance": _PROVENANCE,
+        "side_effect_class": "filesystem_write",
+        "visibility": _VISIBILITY_FULL,
+        "sensitivity": "medium",
+        "instruction_bearing": False,
+        "budget_delta": 2,
+    }
+
+
+def _filesystem_search_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Shared mapping for Glob and Grep. Both are read-only filesystem
+    searches with target derived from ``path:pattern``."""
+    path = _safe_str(tool_input.get("path"), default="<cwd>") or "<cwd>"
+    pattern = _safe_str(tool_input.get("pattern"))
+    return {
+        "action_class": "search",
+        "target": f"{path}:{pattern}",
+        "resource_family": "filesystem",
+        "content_class": "user_input",
+        "content_provenance": _PROVENANCE,
+        "side_effect_class": "none",
+        "visibility": _VISIBILITY_FULL,
+        "sensitivity": "low",
+        "instruction_bearing": False,
+        "budget_delta": 1,
+    }
+
+
+def _bash_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    command = _safe_str(tool_input.get("command"))[:128]
+    return {
+        "action_class": "execute",
+        "target": command or _UNKNOWN_TARGET,
+        "resource_family": "shell",
+        "content_class": "user_instruction",
+        "content_provenance": _PROVENANCE,
+        "side_effect_class": "process_launch",
+        "visibility": _VISIBILITY_FULL,
+        "sensitivity": "high",
+        "instruction_bearing": True,
+        "budget_delta": 5,
+    }
+
+
+def _task_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    subagent_type = _safe_str(tool_input.get("subagent_type"), default="<unknown>") or "<unknown>"
+    description = _safe_str(tool_input.get("description"))[:64]
+    return {
+        "action_class": "dispatch",
+        "target": f"{subagent_type}:{description}",
+        "resource_family": "agent",
+        "content_class": "user_instruction",
+        "content_provenance": _PROVENANCE,
+        "side_effect_class": "subagent_launch",
+        "visibility": _VISIBILITY_FULL,
+        "sensitivity": "medium",
+        "instruction_bearing": True,
+        "budget_delta": 10,
+    }
+
+
+def _webfetch_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    url = _safe_str(tool_input.get("url"))
+    return {
+        "action_class": "fetch",
+        "target": url or _UNKNOWN_TARGET,
+        "resource_family": "network",
+        "content_class": "user_input",
+        "content_provenance": _PROVENANCE,
+        "side_effect_class": "network_read",
+        "visibility": _VISIBILITY_FULL,
+        "sensitivity": "medium",
+        "instruction_bearing": False,
+        "budget_delta": 3,
+    }
+
+
+def _websearch_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    query = _safe_str(tool_input.get("query"))[:128]
+    return {
+        "action_class": "search",
+        "target": query or _UNKNOWN_TARGET,
+        "resource_family": "network",
+        "content_class": "user_input",
+        "content_provenance": _PROVENANCE,
+        "side_effect_class": "network_read",
+        "visibility": _VISIBILITY_FULL,
+        "sensitivity": "low",
+        "instruction_bearing": False,
+        "budget_delta": 2,
+    }
+
+
+def _notebook_edit_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    notebook_path = _safe_str(tool_input.get("notebook_path")) or _UNKNOWN_TARGET
+    cell_id = _safe_str(tool_input.get("cell_id"))
+    return {
+        "action_class": "write",
+        "target": f"{notebook_path}#{cell_id}",
+        "resource_family": "filesystem",
+        "content_class": "user_input",
+        "content_provenance": _PROVENANCE,
+        "side_effect_class": "filesystem_write",
+        "visibility": _VISIBILITY_FULL,
+        "sensitivity": "medium",
+        "instruction_bearing": False,
+        "budget_delta": 2,
+    }
+
+
+def _mcp_fallback_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    target = (
+        _safe_str(tool_input.get("uri"))
+        or _safe_str(tool_input.get("name"))
+        or "<mcp>"
+    )
+    return {
+        "action_class": "invoke",
+        "target": target,
+        "resource_family": "external_tool",
+        "content_class": "user_input",
+        "content_provenance": _PROVENANCE,
+        "side_effect_class": "network_read",
+        "visibility": _VISIBILITY_FULL,
+        "sensitivity": "medium",
+        "instruction_bearing": False,
+        "budget_delta": 3,
+    }
+
+
 _TOOL_MAPPERS: dict[str, ToolMapper] = {
     "Read": _read_mapping,
+    "Write": _filesystem_write_mapping,
+    "Edit": _filesystem_write_mapping,
+    "Glob": _filesystem_search_mapping,
+    "Grep": _filesystem_search_mapping,
+    "Bash": _bash_mapping,
+    "Task": _task_mapping,
+    "WebFetch": _webfetch_mapping,
+    "WebSearch": _websearch_mapping,
+    "NotebookEdit": _notebook_edit_mapping,
 }
 
 
@@ -66,13 +233,11 @@ def map_tool_call(*, tool_name: str, tool_input: Mapping[str, Any]) -> dict[str,
     Returns a new dict containing the original ``tool_input`` keys PLUS
     the 11 declared-telemetry fields. ``tool_name`` is also injected so
     proxy.DECLARED_TELEMETRY_FIELDS is fully satisfied.
+
+    Unknown tools (e.g. MCP tools following the ``mcp__<server>__<tool>``
+    naming convention) fall back to the MCP mapper rather than raising.
     """
-    mapper = _TOOL_MAPPERS.get(tool_name)
-    if mapper is None:
-        # Task 3 will register the remaining built-ins and replace this
-        # ValueError with an MCP-tool fallback; until then, raising keeps
-        # any accidental call against an unknown tool loud rather than silent.
-        raise ValueError(f"no telemetry mapping registered for tool {tool_name!r}")
+    mapper = _TOOL_MAPPERS.get(tool_name, _mcp_fallback_mapping)
     arguments: dict[str, Any] = dict(tool_input)
     arguments.update(mapper(tool_input))
     arguments["tool_name"] = tool_name
