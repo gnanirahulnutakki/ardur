@@ -252,11 +252,13 @@ def test_post_tool_use_chains_to_pre_and_records_result_hash(tmp_path, monkeypat
     # Chain integrity: the post receipt must reference the pre receipt's
     # JWT hash as its parent. This is the core invariant the receipt chain
     # is built around — without it, an auditor cannot verify ordering.
+    # parent_receipt_hash is stored as bare 64-char hex (no "sha-256:" prefix)
+    # so that verify_chain can compare it directly against its own computed hash.
     import hashlib as _hashlib
     import jwt as pyjwt
     pre_jwt = lines[0].strip()
     post_jwt = lines[1].strip()
-    expected_parent = "sha-256:" + _hashlib.sha256(pre_jwt.encode("utf-8")).hexdigest()
+    expected_parent = _hashlib.sha256(pre_jwt.encode("utf-8")).hexdigest()
     post_claims = pyjwt.decode(post_jwt, options={"verify_signature": False})
     assert post_claims.get("parent_receipt_hash") == expected_parent
     assert post_claims.get("verdict") == "compliant"
@@ -295,3 +297,44 @@ def test_main_pre_reads_stdin_writes_stdout(tmp_path, monkeypatch):
     assert result.returncode == 0, f"stderr: {result.stderr}"
     output = json.loads(result.stdout)
     assert output["continue"] is True
+
+
+def test_three_call_session_chain_verifies(tmp_path, monkeypatch):
+    private_key, public_key = generate_keypair(keys_dir=tmp_path)
+    # Mission allows Read but forbids Bash.
+    mission = MissionPassport(
+        agent_id="alice",
+        mission="test mission",
+        allowed_tools=["Read"],
+        forbidden_tools=["Bash"],
+        resource_scope=["/tmp/*"],
+        max_tool_calls=10,
+        max_duration_s=600,
+    )
+    token = issue_passport(mission, private_key, ttl_s=3600)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    from vibap.claude_code_hook import handle_pre_tool_use, handle_post_tool_use
+
+    # Call 1: Read (allowed) — pre + post.
+    handle_pre_tool_use({"tool_name": "Read", "tool_input": {"file_path": "/tmp/a.txt"}}, keys_dir=tmp_path)
+    handle_post_tool_use({"tool_name": "Read", "tool_input": {"file_path": "/tmp/a.txt"}, "tool_response": {"content": "a", "exit_code": 0}}, keys_dir=tmp_path)
+
+    # Call 2: Bash (denied) — pre only (post never fires when blocked).
+    out = handle_pre_tool_use({"tool_name": "Bash", "tool_input": {"command": "echo hi"}}, keys_dir=tmp_path)
+    assert out["continue"] is False
+
+    # Call 3: Read (allowed) — pre + post.
+    handle_pre_tool_use({"tool_name": "Read", "tool_input": {"file_path": "/tmp/b.txt"}}, keys_dir=tmp_path)
+    handle_post_tool_use({"tool_name": "Read", "tool_input": {"file_path": "/tmp/b.txt"}, "tool_response": {"content": "b", "exit_code": 0}}, keys_dir=tmp_path)
+
+    receipts = list((tmp_path / "chain").rglob("receipts.jsonl"))
+    assert len(receipts) == 1
+    lines = [l.strip() for l in receipts[0].read_text(encoding="utf-8").splitlines() if l.strip()]
+    # 5 entries: Pre1 + Post1 + Deny2 + Pre3 + Post3
+    assert len(lines) == 5
+
+    from vibap.receipt import verify_chain
+    verify_chain(lines, public_key)  # raises ReceiptChainError if chain is broken

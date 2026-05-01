@@ -299,6 +299,21 @@ def _evaluate_native_policy(
     return final, decisions
 
 
+def _strip_hash_prefix(hash_value: str | None) -> str | None:
+    """Strip the ``sha-256:`` prefix that ``previous_receipt_hash`` prepends.
+
+    ``previous_receipt_hash`` returns ``"sha-256:<hex>"`` for human readability,
+    but the receipt schema and ``verify_chain`` expect a bare 64-char hex digest.
+    This shim bridges the two conventions without changing the public API of
+    either helper.
+    """
+    if hash_value is None:
+        return None
+    if hash_value.startswith("sha-256:"):
+        return hash_value[len("sha-256:"):]
+    return hash_value
+
+
 def _emit_chained_receipt(
     *,
     decision_enum: Any,
@@ -321,12 +336,19 @@ def _emit_chained_receipt(
 
     private_key = load_private_key(keys_dir=keys_dir)
     state = resolve_chain_state(trace_id=trace_id)
-    parent_hash = previous_receipt_hash(state)
+    # Strip the "sha-256:" prefix: previous_receipt_hash returns a prefixed
+    # string for readability, but build_receipt / verify_chain expect a bare
+    # 64-char hex digest in parent_receipt_hash.
+    parent_hash = _strip_hash_prefix(previous_receipt_hash(state))
     receipt_obj = build_receipt(
         decision_enum,
         event,
         parent_hash,
-        policy_decisions=[d.to_dict() for d in decisions],
+        # Pass None so build_receipt calls _signed_policy_decisions internally,
+        # which normalises to the schema-valid {"backend","decision","reason"}
+        # shape. The raw PolicyDecision.to_dict() output carries extra fields
+        # ("label", "reasons") that fail the receipt schema validator.
+        policy_decisions=None,
         reason=reason,
     )
     signed = sign_receipt(receipt_obj, private_key)
@@ -503,12 +525,13 @@ def handle_post_tool_use(
     # appends in one shot, but we need result_hash in the signed payload.
     private_key = load_private_key(keys_dir=keys_dir)
     state = resolve_chain_state(trace_id=trace_id)
-    parent_hash = previous_receipt_hash(state)
+    # Strip the "sha-256:" prefix for the same reason as _emit_chained_receipt.
+    parent_hash = _strip_hash_prefix(previous_receipt_hash(state))
     receipt_obj = build_receipt(
         Decision.PERMIT,
         event,
         parent_hash,
-        policy_decisions=[],
+        policy_decisions=None,
         reason="post-call observation",
     )
     receipt_obj.result_hash = _result_hash(tool_response)
