@@ -184,3 +184,35 @@ def test_allow_path_returns_continue_true_and_chains_receipt(tmp_path, monkeypat
     import jwt as pyjwt
     claims = pyjwt.decode(lines[0].strip(), options={"verify_signature": False})
     assert claims.get("parent_receipt_hash") is None
+
+
+def test_deny_path_returns_continue_false_with_stop_reason(tmp_path, monkeypatch):
+    # Reuse the canonical test helper; it already sets forbidden_tools=["Bash"].
+    token, _ = _issue_test_passport(tmp_path)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    from vibap.claude_code_hook import handle_pre_tool_use
+    output = handle_pre_tool_use(
+        {
+            "session_id": "sess-1",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf /"},
+        },
+        keys_dir=tmp_path,
+    )
+
+    assert output["continue"] is False
+    assert "ardur:" in output["stopReason"].lower()
+    receipts = list((tmp_path / "chain").rglob("receipts.jsonl"))
+    assert len(receipts) == 1
+    lines = receipts[0].read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+
+    # Audit trail: the appended receipt MUST carry a non-compliant verdict.
+    # Inspect without verifying signature — we only care about chain semantics.
+    import jwt as pyjwt
+    claims = pyjwt.decode(lines[0].strip(), options={"verify_signature": False})
+    assert claims.get("verdict") == "violation"
