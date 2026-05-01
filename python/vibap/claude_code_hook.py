@@ -515,3 +515,46 @@ def handle_post_tool_use(
     signed = sign_receipt(receipt_obj, private_key)
     append_receipt(state, signed)
     return {"continue": True}
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point. Reads hook input JSON from stdin, writes hook
+    output JSON to stdout. Exit code is 0 on success (handler returned
+    a dict), 1 on JSON-parse failure or unhandled exception."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(prog="vibap.claude_code_hook")
+    parser.add_argument(
+        "phase",
+        choices=["pre", "post"],
+        help="hook lifecycle phase being invoked",
+    )
+    parser.add_argument(
+        "--keys-dir",
+        type=Path,
+        default=None,
+        help="signing keys directory (default: $VIBAP_KEYS_DIR or DEFAULT_HOME/keys)",
+    )
+    args = parser.parse_args(argv)
+
+    raw = sys.stdin.read()
+    try:
+        hook_input = json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"ardur: invalid hook input JSON: {exc}\n")
+        return 1
+
+    handler = handle_pre_tool_use if args.phase == "pre" else handle_post_tool_use
+    try:
+        output = handler(hook_input, keys_dir=args.keys_dir)
+    except Exception as exc:  # pylint: disable=broad-except
+        sys.stderr.write(f"ardur: hook handler crashed: {exc}\n")
+        return 1
+    print(json.dumps(output))
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    raise SystemExit(main(sys.argv[1:]))
