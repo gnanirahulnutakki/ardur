@@ -9,7 +9,11 @@ receipt to the per-trace JSONL chain.
 
 from __future__ import annotations
 
+import fcntl
+import hashlib
 import os
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +28,84 @@ from .passport import (
 
 
 PASSPORT_ENV_VAR = "ARDUR_MISSION_PASSPORT"
+
+CHAIN_DIR_ENV_VAR = "ARDUR_CC_HOOK_DIR"
+DEFAULT_CHAIN_DIR = DEFAULT_HOME / "claude-code-hook"
+CHAIN_FILENAME = "receipts.jsonl"
+
+
+@dataclass(frozen=True)
+class ChainState:
+    chain_dir: Path
+    trace_id: str
+
+    @property
+    def file(self) -> Path:
+        return self.chain_dir / self.trace_id / CHAIN_FILENAME
+
+    @property
+    def lock_file(self) -> Path:
+        return self.chain_dir / self.trace_id / ".lock"
+
+
+def resolve_chain_state(*, trace_id: str) -> ChainState:
+    base = Path(os.environ.get(CHAIN_DIR_ENV_VAR, str(DEFAULT_CHAIN_DIR))).expanduser()
+    state = ChainState(chain_dir=base, trace_id=trace_id)
+    state.file.parent.mkdir(parents=True, exist_ok=True)
+    return state
+
+
+@contextmanager
+def _locked(state: ChainState):
+    # Mirror the proxy.py lock pattern: open the lock file in ``a+b`` so the
+    # file is created on first use and we don't race against a stale-touch
+    # being deleted between ``.touch()`` and ``open()``. POSIX flock is
+    # advisory and per-process; that's sufficient for the per-call hook
+    # process model — see the README for the threaded-host caveat.
+    state.lock_file.parent.mkdir(parents=True, exist_ok=True)
+    fd = open(state.lock_file, "a+b")
+    try:
+        fcntl.flock(fd.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+        fd.close()
+
+
+def append_receipt(state: ChainState, signed_jwt: str) -> None:
+    """Atomically append a signed receipt JWT to the trace's chain log."""
+    with _locked(state):
+        with open(state.file, "a", encoding="utf-8") as f:
+            f.write(signed_jwt.strip() + "\n")
+
+
+def previous_receipt_hash(state: ChainState) -> str | None:
+    """Return ``sha-256:<hex>`` of the last appended JWT, or None if empty.
+
+    Returns None only when the chain file is genuinely absent or empty.
+    Permission errors and other unexpected I/O failures propagate — a
+    misconfigured chain directory should fail loudly, not silently emit
+    unchained receipts.
+    """
+    if not state.file.exists():
+        return None
+    with _locked(state):
+        with open(state.file, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            if size == 0:
+                return None
+            # Read the last 16KB to find the last full line. Receipt JWTs
+            # are bounded well below this; if a single receipt exceeds 16KB
+            # something has gone wrong upstream.
+            read_size = min(size, 16 * 1024)
+            f.seek(-read_size, os.SEEK_END)
+            tail = f.read(read_size).decode("utf-8", errors="replace")
+    lines = [line.strip() for line in tail.splitlines() if line.strip()]
+    if not lines:
+        return None
+    last_jwt = lines[-1]
+    return "sha-256:" + hashlib.sha256(last_jwt.encode("utf-8")).hexdigest()
 
 
 class MissionLoadError(RuntimeError):

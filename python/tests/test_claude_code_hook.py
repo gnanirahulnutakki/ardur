@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
 
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from vibap.claude_code_hook import load_active_passport, MissionLoadError
+from vibap.claude_code_hook import (
+    ChainState,
+    DEFAULT_CHAIN_DIR,
+    append_receipt,
+    load_active_passport,
+    MissionLoadError,
+    previous_receipt_hash,
+)
 from vibap.passport import (
     MissionPassport,
     generate_keypair,
@@ -111,3 +119,34 @@ def test_jwt_heuristic_does_not_misclassify_path_starting_with_ey(tmp_path, monk
     msg = str(exc_info.value).lower()
     assert "no active mission passport" in msg
     assert "failed verification" not in msg
+
+
+def test_empty_chain_returns_none(tmp_path):
+    state = ChainState(chain_dir=tmp_path, trace_id="trace-1")
+    assert previous_receipt_hash(state) is None
+
+
+def test_single_entry_returns_its_hash(tmp_path):
+    state = ChainState(chain_dir=tmp_path, trace_id="trace-1")
+    fake_jwt = "fake.signed.jwt"
+    append_receipt(state, fake_jwt)
+    expected = "sha-256:" + hashlib.sha256(fake_jwt.encode("utf-8")).hexdigest()
+    assert previous_receipt_hash(state) == expected
+
+
+def test_multi_entry_returns_last_hash(tmp_path):
+    state = ChainState(chain_dir=tmp_path, trace_id="trace-1")
+    append_receipt(state, "first.jwt.x")
+    append_receipt(state, "second.jwt.y")
+    append_receipt(state, "third.jwt.z")
+    expected = "sha-256:" + hashlib.sha256("third.jwt.z".encode("utf-8")).hexdigest()
+    assert previous_receipt_hash(state) == expected
+
+
+def test_chain_per_trace_does_not_collide(tmp_path):
+    state_a = ChainState(chain_dir=tmp_path, trace_id="trace-a")
+    state_b = ChainState(chain_dir=tmp_path, trace_id="trace-b")
+    append_receipt(state_a, "a-only.jwt")
+    append_receipt(state_b, "b-only.jwt")
+    assert previous_receipt_hash(state_a) == "sha-256:" + hashlib.sha256("a-only.jwt".encode()).hexdigest()
+    assert previous_receipt_hash(state_b) == "sha-256:" + hashlib.sha256("b-only.jwt".encode()).hexdigest()
