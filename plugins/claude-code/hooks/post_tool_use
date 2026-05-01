@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Ardur PostToolUse hook - delegates to the Python adapter.
+exec python3 -m vibap.claude_code_hook post "$@"
