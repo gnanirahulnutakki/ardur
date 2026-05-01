@@ -216,3 +216,52 @@ def test_deny_path_returns_continue_false_with_stop_reason(tmp_path, monkeypatch
     import jwt as pyjwt
     claims = pyjwt.decode(lines[0].strip(), options={"verify_signature": False})
     assert claims.get("verdict") == "violation"
+
+
+def test_post_tool_use_chains_to_pre_and_records_result_hash(tmp_path, monkeypatch):
+    token, _ = _issue_test_passport(tmp_path)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    # First, run PreToolUse to seed the chain.
+    from vibap.claude_code_hook import handle_pre_tool_use, handle_post_tool_use
+    handle_pre_tool_use(
+        {
+            "tool_name": "Read",
+            "tool_input": {"file_path": "/tmp/x.txt"},
+        },
+        keys_dir=tmp_path,
+    )
+
+    # Then PostToolUse for the same call.
+    output = handle_post_tool_use(
+        {
+            "tool_name": "Read",
+            "tool_input": {"file_path": "/tmp/x.txt"},
+            "tool_response": {"content": "file body", "exit_code": 0},
+        },
+        keys_dir=tmp_path,
+    )
+    assert output == {"continue": True}
+    receipts = list((tmp_path / "chain").rglob("receipts.jsonl"))
+    assert len(receipts) == 1
+    lines = receipts[0].read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2  # pre + post
+
+    # Chain integrity: the post receipt must reference the pre receipt's
+    # JWT hash as its parent. This is the core invariant the receipt chain
+    # is built around — without it, an auditor cannot verify ordering.
+    import hashlib as _hashlib
+    import jwt as pyjwt
+    pre_jwt = lines[0].strip()
+    post_jwt = lines[1].strip()
+    expected_parent = "sha-256:" + _hashlib.sha256(pre_jwt.encode("utf-8")).hexdigest()
+    post_claims = pyjwt.decode(post_jwt, options={"verify_signature": False})
+    assert post_claims.get("parent_receipt_hash") == expected_parent
+    assert post_claims.get("verdict") == "compliant"
+    # Result hash present and well-formed.
+    rh = post_claims.get("result_hash")
+    assert isinstance(rh, dict)
+    assert rh.get("alg") == "sha-256"
+    assert isinstance(rh.get("value"), str) and len(rh["value"]) == 64

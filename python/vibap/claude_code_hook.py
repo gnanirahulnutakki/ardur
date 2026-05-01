@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import json
 import os
 import uuid
 from contextlib import contextmanager
@@ -309,9 +310,12 @@ def _emit_chained_receipt(
 ) -> Any:
     """Build, sign, and append one receipt to the per-trace chain.
 
-    Shared by the allow and deny paths (and PostToolUse in Task 8) so the
-    chain semantics — parent-hash linking, signed-JWT serialisation,
-    file-locked append — are written once.
+    Shared by the PreToolUse allow and deny paths so the chain semantics —
+    parent-hash linking, signed-JWT serialisation, file-locked append —
+    are written once. PostToolUse inlines this sequence rather than using
+    the helper, because it must mutate ``receipt_obj.result_hash`` between
+    ``build_receipt`` and ``sign_receipt`` to land the digest inside the
+    signed payload.
     """
     from .receipt import build_receipt, sign_receipt
 
@@ -427,3 +431,87 @@ def handle_pre_tool_use(
         "continue": True,
         "systemMessage": f"ardur: allowed (receipt {receipt_obj.receipt_id})",
     }
+
+
+# ─── PostToolUse handler ──────────────────────────────────────────────────────
+
+
+def _result_hash(tool_response: dict[str, Any]) -> dict[str, str]:
+    # Match receipt._canonical_json: ``ensure_ascii=False`` keeps non-ASCII
+    # bytes UTF-8 in the canonical form so the digest matches across
+    # platforms / language boundaries. ``ensure_ascii=True`` (the default)
+    # would escape non-ASCII characters and produce a different digest
+    # than the verifier reconstructs.
+    canonical = json.dumps(
+        tool_response,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return {"alg": "sha-256", "value": digest}
+
+
+def handle_post_tool_use(
+    hook_input: dict[str, Any],
+    *,
+    keys_dir: Path | None = None,
+) -> dict[str, Any]:
+    """PostToolUse hook handler.
+
+    Emits a result-side Execution Receipt chained to the most recent
+    receipt in the per-trace chain. The receipt carries a digest of the
+    tool's response (``result_hash``) so an auditor can verify what came
+    back without storing the raw response. Pre-receipt verdict was
+    already classified by handle_pre_tool_use; PostToolUse is a
+    post-execution observation, so the verdict here is always
+    Decision.PERMIT (the call was permitted to run; whether it succeeded
+    is reflected in the result_hash).
+
+    Returns ``{"continue": True}``. PostToolUse cannot block — Claude
+    Code only honours blocking from PreToolUse.
+
+    Edge case: if there is no active mission passport (e.g. the user
+    revoked it between Pre and Post, or the env was never configured),
+    we silently no-op rather than emit an unchained receipt.
+    """
+    from .claude_code_telemetry import map_tool_call
+    from .proxy import Decision
+    from .receipt import build_receipt, sign_receipt
+
+    try:
+        claims = load_active_passport(keys_dir=keys_dir)
+    except MissionLoadError:
+        # No mission means no trace context to chain into. Silent no-op.
+        return {"continue": True}
+
+    tool_name = str(hook_input.get("tool_name", ""))
+    tool_input_dict = dict(hook_input.get("tool_input", {}) or {})
+    tool_response = dict(hook_input.get("tool_response", {}) or {})
+    arguments = map_tool_call(tool_name=tool_name, tool_input=tool_input_dict)
+
+    trace_id = _trace_id_from_claims(claims)
+    event = _build_policy_event(
+        claims=claims,
+        tool_name=tool_name,
+        arguments=arguments,
+        trace_id=trace_id,
+    )
+
+    # Build receipt directly so we can populate result_hash BEFORE
+    # sign_receipt. The shared _emit_chained_receipt helper signs and
+    # appends in one shot, but we need result_hash in the signed payload.
+    private_key = load_private_key(keys_dir=keys_dir)
+    state = resolve_chain_state(trace_id=trace_id)
+    parent_hash = previous_receipt_hash(state)
+    receipt_obj = build_receipt(
+        Decision.PERMIT,
+        event,
+        parent_hash,
+        policy_decisions=[],
+        reason="post-call observation",
+    )
+    receipt_obj.result_hash = _result_hash(tool_response)
+    signed = sign_receipt(receipt_obj, private_key)
+    append_receipt(state, signed)
+    return {"continue": True}
