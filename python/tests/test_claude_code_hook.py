@@ -265,3 +265,33 @@ def test_post_tool_use_chains_to_pre_and_records_result_hash(tmp_path, monkeypat
     assert isinstance(rh, dict)
     assert rh.get("alg") == "sha-256"
     assert isinstance(rh.get("value"), str) and len(rh["value"]) == 64
+
+
+def test_main_pre_reads_stdin_writes_stdout(tmp_path, monkeypatch):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    token, _ = _issue_test_passport(tmp_path)
+    env = {**os.environ}
+    env["ARDUR_MISSION_PASSPORT"] = token
+    env["VIBAP_HOME"] = str(tmp_path)
+    env["ARDUR_CC_HOOK_DIR"] = str(tmp_path / "chain")
+
+    hook_input = json.dumps({
+        "tool_name": "Read",
+        "tool_input": {"file_path": "/tmp/x.txt"},
+    })
+    repo_root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "vibap.claude_code_hook", "pre",
+         "--keys-dir", str(tmp_path)],
+        input=hook_input,
+        capture_output=True,
+        text=True,
+        env={**env, "PYTHONPATH": str(repo_root / "python")},
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    output = json.loads(result.stdout)
+    assert output["continue"] is True
