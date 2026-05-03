@@ -185,6 +185,17 @@ def test_allow_path_returns_continue_true_and_chains_receipt(tmp_path, monkeypat
     claims = pyjwt.decode(lines[0].strip(), options={"verify_signature": False})
     assert claims.get("parent_receipt_hash") is None
 
+    # C1: content-class telemetry fields are backfilled into the signed
+    # receipt payload. content_class and content_provenance survive from the
+    # mapper; instruction_bearing is the bool from the mapper.
+    assert claims.get("content_class") == "user_input"
+    assert claims.get("content_provenance") == {"source": "claude_code_tool_input"}
+    assert claims.get("instruction_bearing") is False
+
+    # C2: step_id carries the ":pre" phase suffix to disambiguate from
+    # the Post receipt for the same call.
+    assert claims.get("step_id", "").endswith(":pre")
+
 
 def test_deny_path_returns_continue_false_with_stop_reason(tmp_path, monkeypatch):
     # Reuse the canonical test helper; it already sets forbidden_tools=["Bash"].
@@ -259,6 +270,7 @@ def test_post_tool_use_chains_to_pre_and_records_result_hash(tmp_path, monkeypat
     pre_jwt = lines[0].strip()
     post_jwt = lines[1].strip()
     expected_parent = _hashlib.sha256(pre_jwt.encode("utf-8")).hexdigest()
+    pre_claims = pyjwt.decode(pre_jwt, options={"verify_signature": False})
     post_claims = pyjwt.decode(post_jwt, options={"verify_signature": False})
     assert post_claims.get("parent_receipt_hash") == expected_parent
     assert post_claims.get("verdict") == "compliant"
@@ -267,6 +279,18 @@ def test_post_tool_use_chains_to_pre_and_records_result_hash(tmp_path, monkeypat
     assert isinstance(rh, dict)
     assert rh.get("alg") == "sha-256"
     assert isinstance(rh.get("value"), str) and len(rh["value"]) == 64
+
+    # C2: Pre and Post receipts MUST have distinct step_ids — the deterministic
+    # base derivation hashes the same inputs, so without the phase suffix
+    # they would collide on calls that fall in the same wall-clock second.
+    assert pre_claims.get("step_id", "").endswith(":pre")
+    assert post_claims.get("step_id", "").endswith(":post")
+    assert pre_claims["step_id"] != post_claims["step_id"]
+
+    # C1: content-class telemetry fields appear on the post receipt too.
+    assert post_claims.get("content_class") == "user_input"
+    assert post_claims.get("content_provenance") == {"source": "claude_code_tool_input"}
+    assert post_claims.get("instruction_bearing") is False
 
 
 def test_main_pre_reads_stdin_writes_stdout(tmp_path, monkeypatch):
