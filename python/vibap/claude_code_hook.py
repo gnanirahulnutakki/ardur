@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import jwt
 
@@ -226,8 +226,17 @@ def _build_policy_event(
     tool_name: str,
     arguments: dict[str, Any],
     trace_id: str,
+    phase: str = "pre",
 ) -> Any:
-    """Build a PolicyEvent for a PreToolUse hook call.
+    """Build a PolicyEvent for a PreToolUse or PostToolUse hook call.
+
+    ``phase`` MUST be ``"pre"`` or ``"post"``. It is appended to the
+    deterministic step_id as ``":<phase>"`` so a Pre receipt and a Post
+    receipt for the same tool call carry distinct step_ids — without
+    this, the (passport_jti, timestamp, tool_name, arguments) key could
+    collide when both calls fall in the same wall-clock second with
+    identical arguments. Audit-correlation tooling can still pair them
+    via ``parent_receipt_hash`` chain linkage.
 
     ``budget_delta`` on the event is intentionally None: the proxy treats
     the event-level ``budget_delta`` as a structured bookkeeping object
@@ -240,17 +249,18 @@ def _build_policy_event(
     from .proxy import Decision, PolicyEvent, _receipt_step_id
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    base_step_id = _receipt_step_id(
+        str(claims.get("jti", "")),
+        timestamp,
+        tool_name,
+        arguments,
+    )
     return PolicyEvent(
         timestamp=timestamp,
-        # Reuse the proxy's deterministic step-id derivation so that
-        # replayed identical calls produce identical step_ids — preserves
-        # cross-tool deduplication semantics with the rest of the runtime.
-        step_id=_receipt_step_id(
-            str(claims.get("jti", "")),
-            timestamp,
-            tool_name,
-            arguments,
-        ),
+        # Reuse the proxy's deterministic step-id derivation, then
+        # append the phase so Pre and Post receipts cannot collide on
+        # step_id even if they hash the same base inputs.
+        step_id=f"{base_step_id}:{phase}",
         actor=str(claims.get("sub", "unknown")),
         verifier_id=HOOK_VERIFIER_ID,
         tool_name=tool_name,
@@ -265,6 +275,47 @@ def _build_policy_event(
         trace_id=trace_id,
         budget_delta=None,
     )
+
+
+def _backfill_telemetry_fields(receipt_obj: Any, arguments: Mapping[str, Any]) -> None:
+    """Copy content-class telemetry fields from ``arguments`` onto the
+    ``ExecutionReceipt`` first-class optional fields.
+
+    Backfilled fields: ``content_class``, ``content_provenance``,
+    ``instruction_bearing``. These are part of the 11 declared-telemetry
+    fields the proxy's fail-closed gate reads from ``arguments``. They
+    are NOT populated by ``build_receipt`` (which only knows the proxy-
+    event fields). Without this backfill, they pass the gate but never
+    land in the signed receipt payload that auditors verify.
+
+    Intentionally NOT backfilled: ``sensitivity``. The mapper's
+    ``sensitivity`` is a tool-risk level (``low``/``medium``/``high``);
+    the receipt schema's ``sensitivity`` is a data-classification level
+    (``public``/``internal``/``confidential``/``restricted``/
+    ``regulated``/``unknown``). The two concepts overlap by name only.
+    Conflating them would corrupt audit semantics. The mapper's value
+    still satisfies the proxy gate via ``arguments``; deriving a true
+    data-classification from a tool call is a separate concern that the
+    hook adapter cannot answer in v0.1.
+
+    Mutate-then-sign is safe because ``ExecutionReceipt`` is
+    ``@dataclass(slots=True)`` without ``frozen=True`` — slot assignment
+    is permitted post-construction. ``to_dict()`` includes these fields
+    when non-None, landing them in the signed JWT via ``sign_receipt``.
+    """
+    content_class = arguments.get("content_class")
+    if content_class:
+        receipt_obj.content_class = str(content_class)
+
+    provenance = arguments.get("content_provenance")
+    if provenance:
+        # The receipt schema models content_provenance as a dict; the mapper
+        # emits a flat string (the source name). Wrap to match the schema.
+        receipt_obj.content_provenance = {"source": str(provenance)}
+
+    instruction_bearing = arguments.get("instruction_bearing")
+    if instruction_bearing is not None:
+        receipt_obj.instruction_bearing = bool(instruction_bearing)
 
 
 def _evaluate_native_policy(
@@ -351,6 +402,11 @@ def _emit_chained_receipt(
         policy_decisions=None,
         reason=reason,
     )
+    # Backfill the four content-class telemetry fields from arguments onto
+    # the receipt's first-class optional fields. Without this, those fields
+    # pass the proxy gate (which reads them from arguments) but never land
+    # in the signed receipt payload that auditors verify.
+    _backfill_telemetry_fields(receipt_obj, event.arguments)
     signed = sign_receipt(receipt_obj, private_key)
     append_receipt(state, signed)
     return receipt_obj
@@ -518,6 +574,9 @@ def handle_post_tool_use(
         tool_name=tool_name,
         arguments=arguments,
         trace_id=trace_id,
+        # Phase suffix on step_id so Pre and Post receipts can never
+        # share an identifier even if they hash the same base inputs.
+        phase="post",
     )
 
     # Build receipt directly so we can populate result_hash BEFORE
@@ -534,6 +593,9 @@ def handle_post_tool_use(
         policy_decisions=None,
         reason="post-call observation",
     )
+    # Backfill the four content-class telemetry fields and the result digest
+    # before signing, so all five fields land in the canonical signed payload.
+    _backfill_telemetry_fields(receipt_obj, event.arguments)
     receipt_obj.result_hash = _result_hash(tool_response)
     signed = sign_receipt(receipt_obj, private_key)
     append_receipt(state, signed)
