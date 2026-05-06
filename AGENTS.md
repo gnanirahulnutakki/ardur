@@ -1,0 +1,98 @@
+# Ardur Agent Instructions
+
+These instructions are mandatory for coding agents working in this repository.
+
+## First Action In Every New Session
+
+Run the Conductor bootstrap before doing task-specific work:
+
+```bash
+./scripts/conductor-bootstrap.sh
+```
+
+Then read `.context/ARDUR_CONTEXT.md` and `.context/ardur-graph.md`. The JSON
+graph at `.context/ardur-graph.json` is the machine-readable map of the repo.
+
+If the bootstrap fails, stop and inspect the failure before editing files. A
+failed bootstrap usually means the local toolchain, branch state, or generated
+context is not trustworthy yet.
+
+## Workspace Contract
+
+- Work from the current branch. Do not rename it.
+- Use `origin/dev` as the default diff and PR base for normal development work.
+- Treat `dev` as the integration branch where new improvements land first.
+- Treat `main` as release-only: only tested, verified, public-facing work should
+  be promoted there from `dev`.
+- If a Conductor workspace was created from `origin/main`, keep the branch name
+  unchanged but target the resulting PR/merge at `dev` unless the user says this
+  is a release-promotion task.
+- Preserve user work in progress. Do not reset, checkout, clean, or revert
+  unrelated local changes unless the user explicitly asks for that operation.
+- Generated session and graph artifacts belong under `.context/`, which is
+  intentionally ignored by git.
+- Private/local skills belong under `.context/skills/`, `.agents/`, or
+  `.local-skills/` only. They must not be committed to the open source repo.
+
+## Repo Truth Hierarchy
+
+Use live repo state over stale prose.
+
+1. `git status`, branch refs, and the actual files in this checkout.
+2. `.github/workflows/` for the current CI surface.
+3. `README.md`, `STATUS.md`, `docs/public-import-plan.md`, `docs/TESTING.md`,
+   `docs/engineering-standards.md`, and `docs/decisions/`.
+4. Prior notes and generated `.context/` files, after checking their timestamp.
+
+If two sources conflict, cite the conflict and verify from the current tree.
+For example, this repo has changed quickly around Python and Go CI; the live
+workflow files are the authority for what currently runs.
+
+## Engineering Defaults
+
+- Agent-specific public guides live under `docs/agent-instructions/`:
+  `conductor.md`, `codex.md`, and `claude.md`. They share the same contract and
+  only differ where the runtime needs different startup or local-state handling.
+- Follow `docs/engineering-standards.md` for foundation, testing, review,
+  release, security, and AI-agent work rules.
+- Keep public claims evidence-backed: command, test, artifact, verifier path, or
+  explicit limitation.
+- Keep public product naming as `Ardur`. Preserve protocol/source names such as
+  `VIBAP`, `MCEP`, `SPIFFE`, `SPIRE`, `Biscuit`, `Cedar`, `AAT`, and `EAT`
+  where they describe real technical artifacts.
+- Do not hardcode secrets, local private paths, or generated credentials.
+- Prefer small, reviewable changes with targeted tests.
+- For runtime changes, run the relevant Python and/or Go checks before claiming
+  success.
+
+## Private Skills And Local Instructions
+
+Public, repo-safe agent instructions live in this tracked `AGENTS.md` file.
+Everything else is local-only:
+
+- `.context/skills/` for Conductor/session skills and notes.
+- `.agents/` for local agent runtimes that expect that folder name.
+- `.local-skills/` for imported or experimental local skills.
+- `.ai-context/`, `.agent-context/`, `.codex/`, and `.claude/` for
+  tool-specific private state.
+- `HANDOFF.md` and `workdone-so-far.md` for local-only handoff notes.
+
+Never force-add files from those paths. `scripts/check-local.sh --quick` and
+the `secret-scan` workflow both fail if any local-only agent path becomes
+tracked.
+
+## Local Commands
+
+```bash
+# Generate fresh Conductor context and graph.
+./scripts/conductor-bootstrap.sh
+
+# Create/update local Python dev env and check Go toolchain.
+./scripts/setup-dev.sh
+
+# Fast local validation.
+./scripts/check-local.sh --quick
+
+# Full local validation when the toolchain is ready.
+./scripts/check-local.sh --full
+```
