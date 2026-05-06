@@ -14,7 +14,7 @@ pip install -e python/
 ardur profile init --template read-only --path ARDUR.md
 ardur protect claude-code --profile ARDUR.md
 ardur doctor-claude-code
-claude --plugin-dir plugins/claude-code
+# Run the exact VIBAP_HOME=... claude --plugin-dir ... command printed above.
 ```
 
 The plugin uses Claude Code `PreToolUse` and `PostToolUse` hooks, signs real

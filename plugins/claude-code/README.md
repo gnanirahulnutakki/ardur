@@ -49,10 +49,12 @@ Turn protection on:
 ardur protect claude-code --profile ARDUR.md
 ```
 
-Start Claude Code with the command printed by Ardur, for example:
+Start Claude Code with the exact command printed by Ardur. It includes
+`VIBAP_HOME=...` so the hook can find the active passport and the Python
+environment where Ardur is installed. It will look like:
 
 ```bash
-claude --plugin-dir plugins/claude-code
+VIBAP_HOME=/path/to/.vibap claude --plugin-dir /path/to/plugins/claude-code
 ```
 
 ## Built-In Options

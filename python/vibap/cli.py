@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -248,6 +250,19 @@ def _validate_claude_code_plugin_dir(plugin_dir: Path) -> None:
         raise FileNotFoundError(f"Claude Code plugin is incomplete: {details}")
 
 
+def _write_private_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            fd = -1
+            handle.write(text)
+    finally:
+        if fd != -1:
+            os.close(fd)
+
+
 def claude_code_doctor(plugin_dir: Path | None = None, home: Path | None = None) -> dict[str, object]:
     plugin = (plugin_dir or _default_claude_plugin_dir()).expanduser().resolve()
     checks = _claude_code_plugin_checks(plugin)
@@ -299,7 +314,7 @@ def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
     if raw_scope is None:
         raise ValueError("ardur protect claude-code requires --scope or a profile with `Protect folder:`")
     scope = Path(raw_scope).expanduser().resolve()
-    home = Path(args.home).expanduser() if args.home else DEFAULT_HOME
+    home = Path(args.home).expanduser().resolve() if args.home else DEFAULT_HOME
     home.mkdir(parents=True, exist_ok=True)
     plugin_dir = Path(args.plugin_dir).expanduser().resolve()
     _validate_claude_code_plugin_dir(plugin_dir)
@@ -321,8 +336,10 @@ def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
     token = issue_passport(mission, private_key, ttl_s=args.ttl_s or max_duration_s)
     claims = verify_passport(token, public_key)
     active_passport = home / "active_mission.jwt"
-    active_passport.write_text(token + "\n", encoding="utf-8")
-    run_command = f"claude --plugin-dir {plugin_dir}"
+    _write_private_text(active_passport, token + "\n")
+    hook_python = home / "claude-code-hook-python"
+    _write_private_text(hook_python, sys.executable + "\n")
+    run_command = f"VIBAP_HOME={shlex.quote(str(home))} claude --plugin-dir {shlex.quote(str(plugin_dir))}"
     return {
         "ok": True,
         "agent": "claude-code",
@@ -331,6 +348,7 @@ def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
         "scope": str(scope),
         "home": str(home),
         "active_passport": str(active_passport),
+        "hook_python": str(hook_python),
         "plugin_dir": str(plugin_dir),
         "run_command": run_command,
         "allowed_tools": allowed_tools,
