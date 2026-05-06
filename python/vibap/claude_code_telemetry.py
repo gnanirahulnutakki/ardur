@@ -112,7 +112,7 @@ def _filesystem_search_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _bash_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
-    command = _safe_str(tool_input.get("command"))[:128]
+    command = _safe_str(tool_input.get("command"))
     return {
         "action_class": "execute",
         "target": command or _UNKNOWN_TARGET,
@@ -127,9 +127,26 @@ def _bash_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _task_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
-    subagent_type = _safe_str(tool_input.get("subagent_type"), default="<unknown>") or "<unknown>"
-    description = _safe_str(tool_input.get("description"))[:64]
+def _agent_dispatch_mapping(tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Map Claude Code subagent dispatch tools.
+
+    Claude Code has exposed this surface as both ``Task`` and ``Agent`` across
+    versions/contexts. Treat both as the same governed action so subagent
+    launches are always classified as agent dispatches instead of falling back
+    to the generic MCP/external-tool mapper.
+    """
+    subagent_type = (
+        _safe_str(tool_input.get("subagent_type"))
+        or _safe_str(tool_input.get("agent_type"))
+        or _safe_str(tool_input.get("type"))
+        or "<unknown>"
+    )
+    description = (
+        _safe_str(tool_input.get("description"))
+        or _safe_str(tool_input.get("prompt"))
+        or _safe_str(tool_input.get("task"))
+        or _safe_str(tool_input.get("request"))
+    )[:64]
     return {
         "action_class": "dispatch",
         "target": f"{subagent_type}:{description}",
@@ -220,7 +237,8 @@ _TOOL_MAPPERS: dict[str, ToolMapper] = {
     "Glob": _filesystem_search_mapping,
     "Grep": _filesystem_search_mapping,
     "Bash": _bash_mapping,
-    "Task": _task_mapping,
+    "Task": _agent_dispatch_mapping,
+    "Agent": _agent_dispatch_mapping,
     "WebFetch": _webfetch_mapping,
     "WebSearch": _websearch_mapping,
     "NotebookEdit": _notebook_edit_mapping,

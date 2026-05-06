@@ -79,8 +79,12 @@ def _locked(state: ChainState):
 def append_receipt(state: ChainState, signed_jwt: str) -> None:
     """Atomically append a signed receipt JWT to the trace's chain log."""
     with _locked(state):
-        with open(state.file, "a", encoding="utf-8") as f:
-            f.write(signed_jwt.strip() + "\n")
+        _append_receipt_unlocked(state, signed_jwt)
+
+
+def _append_receipt_unlocked(state: ChainState, signed_jwt: str) -> None:
+    with open(state.file, "a", encoding="utf-8") as f:
+        f.write(signed_jwt.strip() + "\n")
 
 
 def previous_receipt_hash(state: ChainState) -> str | None:
@@ -91,20 +95,24 @@ def previous_receipt_hash(state: ChainState) -> str | None:
     misconfigured chain directory should fail loudly, not silently emit
     unchained receipts.
     """
+    with _locked(state):
+        return _previous_receipt_hash_unlocked(state)
+
+
+def _previous_receipt_hash_unlocked(state: ChainState) -> str | None:
     if not state.file.exists():
         return None
-    with _locked(state):
-        with open(state.file, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            if size == 0:
-                return None
-            # Read the last 16KB to find the last full line. Receipt JWTs
-            # are bounded well below this; if a single receipt exceeds 16KB
-            # something has gone wrong upstream.
-            read_size = min(size, 16 * 1024)
-            f.seek(-read_size, os.SEEK_END)
-            tail = f.read(read_size).decode("utf-8", errors="replace")
+    with open(state.file, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        if size == 0:
+            return None
+        # Read the last 16KB to find the last full line. Receipt JWTs
+        # are bounded well below this; if a single receipt exceeds 16KB
+        # something has gone wrong upstream.
+        read_size = min(size, 16 * 1024)
+        f.seek(-read_size, os.SEEK_END)
+        tail = f.read(read_size).decode("utf-8", errors="replace")
     lines = [line.strip() for line in tail.splitlines() if line.strip()]
     if not lines:
         return None
@@ -397,28 +405,30 @@ def _emit_chained_receipt(
 
     private_key = load_private_key(keys_dir=keys_dir)
     state = resolve_chain_state(trace_id=trace_id)
-    # Strip the "sha-256:" prefix: previous_receipt_hash returns a prefixed
-    # string for readability, but build_receipt / verify_chain expect a bare
-    # 64-char hex digest in parent_receipt_hash.
-    parent_hash = _strip_hash_prefix(previous_receipt_hash(state))
-    receipt_obj = build_receipt(
-        decision_enum,
-        event,
-        parent_hash,
-        # Pass None so build_receipt calls _signed_policy_decisions internally,
-        # which normalises to the schema-valid {"backend","decision","reason"}
-        # shape. The raw PolicyDecision.to_dict() output carries extra fields
-        # ("label", "reasons") that fail the receipt schema validator.
-        policy_decisions=None,
-        reason=reason,
-    )
-    # Backfill the four content-class telemetry fields from arguments onto
-    # the receipt's first-class optional fields. Without this, those fields
-    # pass the proxy gate (which reads them from arguments) but never land
-    # in the signed receipt payload that auditors verify.
-    _backfill_telemetry_fields(receipt_obj, event.arguments)
-    signed = sign_receipt(receipt_obj, private_key)
-    append_receipt(state, signed)
+    with _locked(state):
+        # Parent lookup and append must be in one critical section. Claude Code
+        # can dispatch parallel subagents, producing multiple hook processes at
+        # the same time; a split read/sign/append lets several receipts become
+        # independent roots and breaks chain verification.
+        parent_hash = _strip_hash_prefix(_previous_receipt_hash_unlocked(state))
+        receipt_obj = build_receipt(
+            decision_enum,
+            event,
+            parent_hash,
+            # Pass None so build_receipt calls _signed_policy_decisions internally,
+            # which normalises to the schema-valid {"backend","decision","reason"}
+            # shape. The raw PolicyDecision.to_dict() output carries extra fields
+            # ("label", "reasons") that fail the receipt schema validator.
+            policy_decisions=None,
+            reason=reason,
+        )
+        # Backfill the four content-class telemetry fields from arguments onto
+        # the receipt's first-class optional fields. Without this, those fields
+        # pass the proxy gate (which reads them from arguments) but never land
+        # in the signed receipt payload that auditors verify.
+        _backfill_telemetry_fields(receipt_obj, event.arguments)
+        signed = sign_receipt(receipt_obj, private_key)
+        _append_receipt_unlocked(state, signed)
     return receipt_obj
 
 
@@ -590,21 +600,23 @@ def handle_post_tool_use(
     # appends in one shot, but we need result_hash in the signed payload.
     private_key = load_private_key(keys_dir=keys_dir)
     state = resolve_chain_state(trace_id=trace_id)
-    # Strip the "sha-256:" prefix for the same reason as _emit_chained_receipt.
-    parent_hash = _strip_hash_prefix(previous_receipt_hash(state))
-    receipt_obj = build_receipt(
-        Decision.PERMIT,
-        event,
-        parent_hash,
-        policy_decisions=None,
-        reason="post-call observation",
-    )
-    # Backfill the four content-class telemetry fields and the result digest
-    # before signing, so all five fields land in the canonical signed payload.
-    _backfill_telemetry_fields(receipt_obj, event.arguments)
-    receipt_obj.result_hash = _result_hash(tool_response)
-    signed = sign_receipt(receipt_obj, private_key)
-    append_receipt(state, signed)
+    with _locked(state):
+        # Keep parent lookup/sign/append atomic for the same parallel-hook
+        # reason documented in _emit_chained_receipt.
+        parent_hash = _strip_hash_prefix(_previous_receipt_hash_unlocked(state))
+        receipt_obj = build_receipt(
+            Decision.PERMIT,
+            event,
+            parent_hash,
+            policy_decisions=None,
+            reason="post-call observation",
+        )
+        # Backfill the four content-class telemetry fields and the result digest
+        # before signing, so all five fields land in the canonical signed payload.
+        _backfill_telemetry_fields(receipt_obj, event.arguments)
+        receipt_obj.result_hash = _result_hash(tool_response)
+        signed = sign_receipt(receipt_obj, private_key)
+        _append_receipt_unlocked(state, signed)
     return {"continue": True}
 
 

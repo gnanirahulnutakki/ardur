@@ -134,6 +134,28 @@ def test_protect_claude_code_preserves_flag_based_safe_coding(tmp_path):
     assert result["forbidden_tools"] == ["Bash"]
 
 
+def test_profile_explicit_allowlist_can_leave_forbidden_tools_empty(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    profile = tmp_path / "ARDUR.md"
+    profile.write_text(
+        """# Ardur Guardrails
+Mode: safe coding
+Mission: Permissive observability test.
+Protect folder: ./project
+Allowed Tools: *
+""",
+        encoding="utf-8",
+    )
+
+    result = protect_claude_code(
+        _protect_args(profile=profile, home=tmp_path / "home", keys_dir=tmp_path / "keys")
+    )
+
+    assert result["allowed_tools"] == ["*"]
+    assert result["forbidden_tools"] == []
+
+
 def test_protect_claude_code_quotes_plugin_dir_with_spaces(tmp_path):
     project = tmp_path / "project"
     project.mkdir()

@@ -204,6 +204,166 @@ def test_allow_path_returns_continue_true_and_chains_receipt(tmp_path, monkeypat
     assert claims.get("step_id", "").endswith(":pre")
 
 
+def test_wildcard_allowed_tools_permits_agent_dispatch_and_reports_it(tmp_path, monkeypatch):
+    private_key, _public_key = generate_keypair(keys_dir=tmp_path)
+    mission = MissionPassport(
+        agent_id="alice",
+        mission="observe subagent launch",
+        allowed_tools=["*"],
+        forbidden_tools=[],
+        resource_scope=[],
+        max_tool_calls=10,
+        max_duration_s=600,
+    )
+    token = issue_passport(mission, private_key, ttl_s=3600)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    from vibap.claude_code_hook import handle_pre_tool_use
+    from vibap.claude_code_report import build_claude_code_report
+
+    output = handle_pre_tool_use(
+        {
+            "session_id": "sess-1",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "tool_input": {
+                "agent_type": "general-purpose",
+                "description": "Read README title",
+                "prompt": "Use Read to inspect README.md",
+            },
+        },
+        keys_dir=tmp_path,
+    )
+
+    assert output["continue"] is True
+    report = build_claude_code_report(
+        home=tmp_path,
+        chain_dir=tmp_path / "chain",
+        keys_dir=tmp_path,
+        verify_expiry=False,
+    )
+    assert report["totals"]["dispatch_count"] == 1
+    assert report["totals"]["dispatch_launch_count"] == 1
+    assert report["totals"]["dispatch_observation_count"] == 0
+    assert report["totals"]["dispatch_receipt_count"] == 1
+    assert report["totals"]["tools"] == {"Agent": 1}
+    assert report["totals"]["side_effect_classes"] == {"subagent_launch": 1}
+
+
+def test_long_scoped_bash_command_is_not_denied_by_truncated_target(tmp_path, monkeypatch):
+    private_key, _public_key = generate_keypair(keys_dir=tmp_path)
+    scope = tmp_path / "scope"
+    nested = scope / "a" / "b" / "c" / "d"
+    nested.mkdir(parents=True)
+    mission = MissionPassport(
+        agent_id="alice",
+        mission="allow long scoped bash",
+        allowed_tools=["Bash"],
+        forbidden_tools=[],
+        resource_scope=[str(scope), f"{scope}/*"],
+        max_tool_calls=10,
+        max_duration_s=600,
+    )
+    token = issue_passport(mission, private_key, ttl_s=3600)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    from vibap.claude_code_hook import handle_pre_tool_use
+
+    command = f"ls -la {nested} {nested} {nested} {nested}"
+    assert len(command) > 128
+    output = handle_pre_tool_use(
+        {
+            "session_id": "sess-1",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+        },
+        keys_dir=tmp_path,
+    )
+
+    assert output["continue"] is True
+
+
+def test_parallel_pre_tool_use_processes_serialize_receipt_chain(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    private_key, public_key = generate_keypair(keys_dir=tmp_path)
+    mission = MissionPassport(
+        agent_id="alice",
+        mission="parallel subagent launch",
+        allowed_tools=["Agent"],
+        forbidden_tools=[],
+        resource_scope=[],
+        max_tool_calls=20,
+        max_duration_s=600,
+    )
+    token = issue_passport(mission, private_key, ttl_s=3600)
+    repo_root = Path(__file__).resolve().parents[2]
+    env = {
+        **os.environ,
+        "ARDUR_MISSION_PASSPORT": token,
+        "VIBAP_HOME": str(tmp_path),
+        "ARDUR_CC_HOOK_DIR": str(tmp_path / "chain"),
+        "PYTHONPATH": str(repo_root / "python"),
+    }
+
+    processes = []
+    for index in range(5):
+        hook_input = json.dumps(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": {
+                    "agent_type": "general-purpose",
+                    "description": f"parallel agent {index}",
+                    "prompt": "Use a tool and write a short report.",
+                },
+            }
+        )
+        processes.append(
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "vibap.claude_code_hook",
+                    "pre",
+                    "--keys-dir",
+                    str(tmp_path),
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+            )
+        )
+        processes[-1].stdin.write(hook_input)
+        processes[-1].stdin.close()
+
+    for process in processes:
+        stdout = process.stdout.read()
+        stderr = process.stderr.read()
+        assert process.wait(timeout=10) == 0, stderr
+        assert json.loads(stdout)["continue"] is True
+
+    receipts = list((tmp_path / "chain").rglob("receipts.jsonl"))
+    assert len(receipts) == 1
+    lines = [line.strip() for line in receipts[0].read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 5
+
+    from vibap.receipt import verify_chain
+
+    verify_chain(lines, public_key, verify_expiry=False)
+
+
 def test_deny_path_returns_continue_false_with_stop_reason(tmp_path, monkeypatch):
     # Reuse the canonical test helper; it already sets forbidden_tools=["Bash"].
     token, _ = _issue_test_passport(tmp_path)

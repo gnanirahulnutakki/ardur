@@ -32,6 +32,7 @@ from .personal_hub import (
     setup_personal,
     uninstall_personal,
 )
+from .claude_code_report import build_claude_code_report
 from .claude_code_hook import main as claude_code_hook_main
 from .proxy import GovernanceProxy, serve_proxy
 
@@ -121,6 +122,32 @@ def cmd_claude_code_hook(args: argparse.Namespace) -> int:
     if args.keys_dir:
         argv.extend(["--keys-dir", str(args.keys_dir)])
     return claude_code_hook_main(argv)
+
+
+def cmd_claude_code_report(args: argparse.Namespace) -> int:
+    report = build_claude_code_report(
+        home=args.home,
+        chain_dir=args.chain_dir,
+        keys_dir=args.keys_dir,
+        verify_expiry=args.verify_expiry,
+    )
+    if args.json:
+        _print_json(report)
+        return 0
+
+    print(f"Ardur Claude Code receipt report: {report['receipt_count']} receipts across {report['chain_count']} chains")
+    print(f"Home: {report['home']}")
+    print(f"Chains: {report['chain_dir']}")
+    print(f"Tools: {report['totals']['tools']}")
+    print(f"Verdicts: {report['totals']['verdicts']}")
+    print(f"Side effects: {report['totals']['side_effect_classes']}")
+    print(
+        "Subagent dispatches: "
+        f"{report['totals']['dispatch_launch_count']} launches, "
+        f"{report['totals']['dispatch_observation_count']} post observations"
+    )
+    print(f"Attribution: {report['coverage']['attribution']}")
+    return 0
 
 
 def cmd_hub(args: argparse.Namespace) -> int:
@@ -319,8 +346,16 @@ def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
     plugin_dir = Path(args.plugin_dir).expanduser().resolve()
     _validate_claude_code_plugin_dir(plugin_dir)
     private_key, public_key = generate_keypair(keys_dir=args.keys_dir or (home / "keys"))
-    allowed_tools = list(profile.allowed_tools if profile and profile.allowed_tools else mode["allowed_tools"])
-    forbidden_tools = list(profile.forbidden_tools if profile and profile.forbidden_tools else mode["forbidden_tools"])
+    if profile and profile.allowed_tools:
+        # A profile with an explicit allowlist is authoritative: if the author
+        # leaves the blocklist empty, that means "no explicit tool denylist" and
+        # should not silently inherit the mode's default denies. The built-in
+        # templates still include their blocklists explicitly.
+        allowed_tools = list(profile.allowed_tools)
+        forbidden_tools = list(profile.forbidden_tools)
+    else:
+        allowed_tools = list(mode["allowed_tools"])
+        forbidden_tools = list(profile.forbidden_tools if profile and profile.forbidden_tools else mode["forbidden_tools"])
     max_tool_calls = profile.max_tool_calls if profile and profile.max_tool_calls is not None else args.max_tool_calls
     max_duration_s = profile.max_duration_s if profile and profile.max_duration_s is not None else args.max_duration_s
     mission = MissionPassport(
@@ -464,6 +499,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="signing keys directory",
     )
     cc_hook.set_defaults(func=cmd_claude_code_hook)
+
+    cc_report = subparsers.add_parser(
+        "claude-code-report",
+        help="verify Claude Code hook receipt chains and summarize observability",
+    )
+    cc_report.add_argument("--home", type=Path, help="Ardur home containing claude-code-hook receipts")
+    cc_report.add_argument("--chain-dir", type=Path, help="explicit Claude Code receipt chain directory")
+    cc_report.add_argument("--keys-dir", type=Path, help="signing public-key directory")
+    cc_report.add_argument(
+        "--verify-expiry",
+        action="store_true",
+        help="also enforce short receipt expiry windows while verifying",
+    )
+    cc_report.add_argument("--json", action="store_true", help="print machine-readable report")
+    cc_report.set_defaults(func=cmd_claude_code_report)
 
     hub = subparsers.add_parser("hub", help="start the local Ardur Personal Hub")
     hub.add_argument("--host", default=DEFAULT_HUB_HOST, help="bind address")
