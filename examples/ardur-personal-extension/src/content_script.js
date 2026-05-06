@@ -176,7 +176,6 @@
     if (digest === lastDigest) {
       return;
     }
-    lastDigest = digest;
     const review = await buildReviewSnapshot(text, reason, digest);
     await chrome.runtime.sendMessage({
       type: EVENT_TYPE,
@@ -194,6 +193,7 @@
       },
       review
     });
+    lastDigest = digest;
   }
 
   function scheduleObservation(reason) {

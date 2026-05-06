@@ -159,14 +159,13 @@ def test_bash_tool_maps_to_shell_execute_high_sensitivity_instruction_bearing() 
     assert arguments["command"] == "ls -la /tmp"  # original input preserved
 
 
-def test_bash_tool_truncates_command_to_128_chars() -> None:
+def test_bash_tool_keeps_full_command_as_policy_target() -> None:
     long_command = "echo " + "x" * 200
     arguments = map_tool_call(
         tool_name="Bash",
         tool_input={"command": long_command},
     )
-    assert len(arguments["target"]) == 128
-    assert arguments["target"] == long_command[:128]
+    assert arguments["target"] == long_command
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +186,24 @@ def test_task_tool_maps_to_agent_dispatch_medium_sensitivity_instruction_bearing
     assert arguments["instruction_bearing"] is True
     assert arguments["budget_delta"] == 10
     assert arguments["description"] == "Summarise the repo"  # original input preserved
+
+
+def test_agent_tool_maps_to_agent_dispatch_alias() -> None:
+    arguments = map_tool_call(
+        tool_name="Agent",
+        tool_input={
+            "agent_type": "general-purpose",
+            "description": "Read README title",
+            "prompt": "Read README.md and report the title",
+        },
+    )
+    assert arguments["action_class"] == "dispatch"
+    assert arguments["target"] == "general-purpose:Read README title"
+    assert arguments["resource_family"] == "agent"
+    assert arguments["side_effect_class"] == "subagent_launch"
+    assert arguments["instruction_bearing"] is True
+    assert arguments["budget_delta"] == 10
+    assert arguments["prompt"] == "Read README.md and report the title"
 
 
 def test_task_tool_truncates_description_to_64_chars() -> None:

@@ -39,6 +39,13 @@ def _issue_test_passport(tmp_path: Path) -> tuple[str, ec.EllipticCurvePrivateKe
     return token, private_key
 
 
+def _deny_reason(output: dict) -> str:
+    hook_output = output["hookSpecificOutput"]
+    assert hook_output["hookEventName"] == "PreToolUse"
+    assert hook_output["permissionDecision"] == "deny"
+    return hook_output["permissionDecisionReason"]
+
+
 def test_loads_passport_from_env_var_path(tmp_path, monkeypatch):
     token, _ = _issue_test_passport(tmp_path)
     passport_file = tmp_path / "active.jwt"
@@ -197,6 +204,362 @@ def test_allow_path_returns_continue_true_and_chains_receipt(tmp_path, monkeypat
     assert claims.get("step_id", "").endswith(":pre")
 
 
+def test_wildcard_allowed_tools_permits_agent_dispatch_and_reports_it(tmp_path, monkeypatch):
+    private_key, _public_key = generate_keypair(keys_dir=tmp_path)
+    mission = MissionPassport(
+        agent_id="alice",
+        mission="observe subagent launch",
+        allowed_tools=["*"],
+        forbidden_tools=[],
+        resource_scope=[],
+        max_tool_calls=10,
+        max_duration_s=600,
+    )
+    token = issue_passport(mission, private_key, ttl_s=3600)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    from vibap.claude_code_hook import handle_pre_tool_use
+    from vibap.claude_code_report import build_claude_code_report
+
+    output = handle_pre_tool_use(
+        {
+            "session_id": "sess-1",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "tool_input": {
+                "agent_type": "general-purpose",
+                "description": "Read README title",
+                "prompt": "Use Read to inspect README.md",
+            },
+        },
+        keys_dir=tmp_path,
+    )
+
+    assert output["continue"] is True
+    report = build_claude_code_report(
+        home=tmp_path,
+        chain_dir=tmp_path / "chain",
+        keys_dir=tmp_path,
+        verify_expiry=False,
+    )
+    assert report["totals"]["dispatch_count"] == 1
+    assert report["totals"]["dispatch_launch_count"] == 1
+    assert report["totals"]["dispatch_observation_count"] == 0
+    assert report["totals"]["dispatch_receipt_count"] == 1
+    assert report["totals"]["tools"] == {"Agent": 1}
+    assert report["totals"]["side_effect_classes"] == {"subagent_launch": 1}
+
+
+def test_subagent_lifecycle_receipts_and_report_derived_tool_attribution(tmp_path, monkeypatch):
+    private_key, _public_key = generate_keypair(keys_dir=tmp_path)
+    mission = MissionPassport(
+        agent_id="alice",
+        mission="observe child lifecycle",
+        allowed_tools=["*"],
+        forbidden_tools=[],
+        resource_scope=[],
+        max_tool_calls=20,
+        max_duration_s=600,
+    )
+    token = issue_passport(mission, private_key, ttl_s=3600)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    child_transcript = tmp_path / "subagents" / "agent-child-1.jsonl"
+    child_transcript.parent.mkdir()
+    child_transcript.write_text('{"tool_use_id":"toolu_read_1"}\n', encoding="utf-8")
+    parent_transcript = tmp_path / "parent.jsonl"
+    parent_transcript.write_text("{}\n", encoding="utf-8")
+
+    from vibap.claude_code_hook import (
+        handle_pre_tool_use,
+        handle_post_tool_use,
+        handle_subagent_start,
+        handle_subagent_stop,
+    )
+    from vibap.claude_code_report import build_claude_code_report
+
+    start_output = handle_subagent_start(
+        {
+            "session_id": "sess-1",
+            "transcript_path": str(parent_transcript),
+            "cwd": str(tmp_path),
+            "hook_event_name": "SubagentStart",
+            "agent_id": "agent-child-1",
+            "agent_type": "Explore",
+        },
+        keys_dir=tmp_path,
+    )
+    assert start_output["hookSpecificOutput"]["hookEventName"] == "SubagentStart"
+    assert "child:" in start_output["hookSpecificOutput"]["additionalContext"]
+
+    handle_pre_tool_use(
+        {
+            "session_id": "sess-1",
+            "transcript_path": str(child_transcript),
+            "cwd": str(tmp_path),
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Read",
+            "tool_use_id": "toolu_read_1",
+            "tool_input": {"file_path": str(tmp_path / "README.md")},
+        },
+        keys_dir=tmp_path,
+    )
+    handle_post_tool_use(
+        {
+            "session_id": "sess-1",
+            "transcript_path": str(child_transcript),
+            "cwd": str(tmp_path),
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Read",
+            "tool_use_id": "toolu_read_1",
+            "tool_input": {"file_path": str(tmp_path / "README.md")},
+            "tool_response": {"content": "hello"},
+        },
+        keys_dir=tmp_path,
+    )
+    stop_output = handle_subagent_stop(
+        {
+            "session_id": "sess-1",
+            "transcript_path": str(parent_transcript),
+            "cwd": str(tmp_path),
+            "hook_event_name": "SubagentStop",
+            "agent_id": "agent-child-1",
+            "agent_type": "Explore",
+            "agent_transcript_path": str(child_transcript),
+            "last_assistant_message": "done",
+        },
+        keys_dir=tmp_path,
+    )
+    assert stop_output == {"continue": True}
+
+    receipts = list((tmp_path / "chain").rglob("receipts.jsonl"))
+    assert len(receipts) == 1
+    lines = [line.strip() for line in receipts[0].read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 4
+    import jwt as pyjwt
+    claims = [pyjwt.decode(line, options={"verify_signature": False}) for line in lines]
+    assert [claim["tool"] for claim in claims] == ["SubagentStart", "Read", "Read", "SubagentStop"]
+    start_meta = claims[0]["measurements"]["claude_code"]
+    assert start_meta["claude_agent_id"] == "agent-child-1"
+    assert start_meta["actor_kind"] == "subagent"
+    assert start_meta["attribution"]["mode"] == "exact"
+    read_meta = claims[1]["measurements"]["claude_code"]
+    assert read_meta["tool_use_id"] == "toolu_read_1"
+    assert read_meta["actor_kind"] == "unattributed"
+    stop_meta = claims[-1]["measurements"]["claude_code"]
+    assert stop_meta["final_response_hash"]["alg"] == "sha-256"
+    assert stop_meta["child_receipt_summary"]["receipt_count"] == 2
+
+    registry = list((tmp_path / "chain").rglob("subagents.jsonl"))
+    assert len(registry) == 1
+    assert len(registry[0].read_text(encoding="utf-8").splitlines()) == 2
+
+    report = build_claude_code_report(
+        home=tmp_path,
+        chain_dir=tmp_path / "chain",
+        keys_dir=tmp_path,
+        verify_expiry=False,
+    )
+    assert report["chain_verification"]["ok"] is True
+    assert report["totals"]["subagents_started"] == 1
+    assert report["totals"]["subagents_stopped"] == 1
+    assert report["coverage"]["per_child_attribution"] == "derived"
+    assert report["totals"]["unattributed_tool_receipt_count"] == 0
+    subagent = report["chains"][0]["subagents"][0]
+    assert subagent["claude_agent_id"] == "agent-child-1"
+    assert subagent["tool_receipt_count"] == 2
+    assert subagent["tools"] == {"Read": 2}
+    assert subagent["attribution_modes"] == {"derived": 2}
+
+
+def test_report_keeps_unmatched_child_tools_trace_only(tmp_path, monkeypatch):
+    private_key, _public_key = generate_keypair(keys_dir=tmp_path)
+    mission = MissionPassport(
+        agent_id="alice",
+        mission="do not guess child attribution",
+        allowed_tools=["*"],
+        forbidden_tools=[],
+        resource_scope=[],
+        max_tool_calls=20,
+        max_duration_s=600,
+    )
+    token = issue_passport(mission, private_key, ttl_s=3600)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    child_transcript = tmp_path / "subagents" / "agent-child-2.jsonl"
+    child_transcript.parent.mkdir()
+    child_transcript.write_text('{"tool_use_id":"different_tool"}\n', encoding="utf-8")
+    parent_transcript = tmp_path / "parent.jsonl"
+    parent_transcript.write_text("{}\n", encoding="utf-8")
+
+    from vibap.claude_code_hook import handle_pre_tool_use, handle_subagent_start, handle_subagent_stop
+    from vibap.claude_code_report import build_claude_code_report
+
+    handle_subagent_start(
+        {
+            "session_id": "sess-1",
+            "transcript_path": str(parent_transcript),
+            "cwd": str(tmp_path),
+            "hook_event_name": "SubagentStart",
+            "agent_id": "agent-child-2",
+            "agent_type": "Explore",
+        },
+        keys_dir=tmp_path,
+    )
+    handle_pre_tool_use(
+        {
+            "session_id": "sess-1",
+            "transcript_path": str(parent_transcript),
+            "cwd": str(tmp_path),
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Read",
+            "tool_use_id": "toolu_unmatched",
+            "tool_input": {"file_path": str(tmp_path / "README.md")},
+        },
+        keys_dir=tmp_path,
+    )
+    handle_subagent_stop(
+        {
+            "session_id": "sess-1",
+            "transcript_path": str(parent_transcript),
+            "cwd": str(tmp_path),
+            "hook_event_name": "SubagentStop",
+            "agent_id": "agent-child-2",
+            "agent_type": "Explore",
+            "agent_transcript_path": str(child_transcript),
+        },
+        keys_dir=tmp_path,
+    )
+
+    report = build_claude_code_report(
+        home=tmp_path,
+        chain_dir=tmp_path / "chain",
+        keys_dir=tmp_path,
+        verify_expiry=False,
+    )
+    assert report["coverage"]["per_child_attribution"] == "trace_only"
+    assert report["totals"]["unattributed_tool_receipt_count"] == 1
+    assert report["chains"][0]["unattributed_tool_receipts"][0]["tool_use_id"] == "toolu_unmatched"
+
+
+def test_long_scoped_bash_command_is_not_denied_by_truncated_target(tmp_path, monkeypatch):
+    private_key, _public_key = generate_keypair(keys_dir=tmp_path)
+    scope = tmp_path / "scope"
+    nested = scope / "a" / "b" / "c" / "d"
+    nested.mkdir(parents=True)
+    mission = MissionPassport(
+        agent_id="alice",
+        mission="allow long scoped bash",
+        allowed_tools=["Bash"],
+        forbidden_tools=[],
+        resource_scope=[str(scope), f"{scope}/*"],
+        max_tool_calls=10,
+        max_duration_s=600,
+    )
+    token = issue_passport(mission, private_key, ttl_s=3600)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    from vibap.claude_code_hook import handle_pre_tool_use
+
+    command = f"ls -la {nested} {nested} {nested} {nested}"
+    assert len(command) > 128
+    output = handle_pre_tool_use(
+        {
+            "session_id": "sess-1",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+        },
+        keys_dir=tmp_path,
+    )
+
+    assert output["continue"] is True
+
+
+def test_parallel_pre_tool_use_processes_serialize_receipt_chain(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    private_key, public_key = generate_keypair(keys_dir=tmp_path)
+    mission = MissionPassport(
+        agent_id="alice",
+        mission="parallel subagent launch",
+        allowed_tools=["Agent"],
+        forbidden_tools=[],
+        resource_scope=[],
+        max_tool_calls=20,
+        max_duration_s=600,
+    )
+    token = issue_passport(mission, private_key, ttl_s=3600)
+    repo_root = Path(__file__).resolve().parents[2]
+    env = {
+        **os.environ,
+        "ARDUR_MISSION_PASSPORT": token,
+        "VIBAP_HOME": str(tmp_path),
+        "ARDUR_CC_HOOK_DIR": str(tmp_path / "chain"),
+        "PYTHONPATH": str(repo_root / "python"),
+    }
+
+    processes = []
+    for index in range(5):
+        hook_input = json.dumps(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": {
+                    "agent_type": "general-purpose",
+                    "description": f"parallel agent {index}",
+                    "prompt": "Use a tool and write a short report.",
+                },
+            }
+        )
+        processes.append(
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "vibap.claude_code_hook",
+                    "pre",
+                    "--keys-dir",
+                    str(tmp_path),
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+            )
+        )
+        processes[-1].stdin.write(hook_input)
+        processes[-1].stdin.close()
+
+    for process in processes:
+        stdout = process.stdout.read()
+        stderr = process.stderr.read()
+        assert process.wait(timeout=10) == 0, stderr
+        assert json.loads(stdout)["continue"] is True
+
+    receipts = list((tmp_path / "chain").rglob("receipts.jsonl"))
+    assert len(receipts) == 1
+    lines = [line.strip() for line in receipts[0].read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 5
+
+    from vibap.receipt import verify_chain
+
+    verify_chain(lines, public_key, verify_expiry=False)
+
+
 def test_deny_path_returns_continue_false_with_stop_reason(tmp_path, monkeypatch):
     # Reuse the canonical test helper; it already sets forbidden_tools=["Bash"].
     token, _ = _issue_test_passport(tmp_path)
@@ -215,8 +578,7 @@ def test_deny_path_returns_continue_false_with_stop_reason(tmp_path, monkeypatch
         keys_dir=tmp_path,
     )
 
-    assert output["continue"] is False
-    assert "ardur:" in output["stopReason"].lower()
+    assert "ardur:" in _deny_reason(output).lower()
     receipts = list((tmp_path / "chain").rglob("receipts.jsonl"))
     assert len(receipts) == 1
     lines = receipts[0].read_text(encoding="utf-8").splitlines()
@@ -348,7 +710,7 @@ def test_three_call_session_chain_verifies(tmp_path, monkeypatch):
 
     # Call 2: Bash (denied) — pre only (post never fires when blocked).
     out = handle_pre_tool_use({"tool_name": "Bash", "tool_input": {"command": "echo hi"}}, keys_dir=tmp_path)
-    assert out["continue"] is False
+    assert "ardur:" in _deny_reason(out).lower()
 
     # Call 3: Read (allowed) — pre + post.
     handle_pre_tool_use({"tool_name": "Read", "tool_input": {"file_path": "/tmp/b.txt"}}, keys_dir=tmp_path)

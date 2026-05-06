@@ -11,7 +11,8 @@ Execution Receipts and Session Reviews.
 Start the Hub:
 
 ```bash
-PYTHONPATH=python python3 -m vibap.cli hub
+ardur setup
+ardur hub
 ```
 
 Load the extension:
@@ -20,8 +21,9 @@ Load the extension:
 2. Enable developer mode.
 3. Load this directory as an unpacked extension.
 4. Open Claude, ChatGPT, Grok, Codex web, Kimi, or another AI website.
-5. Enable the current site in the popup.
-6. Optional: enable **Capture visible text** for readable Session Review excerpts.
+5. Paste the local Hub token printed by `ardur setup`.
+6. Enable the current site in the popup.
+7. Optional: enable **Capture visible text** for readable Session Review excerpts.
 
 After a site is enabled, the extension injects on page load and on manual
 **Observe**. The Hub receives digests by default. Text excerpts are sent only

@@ -26,19 +26,32 @@ That walks through key generation, mission compilation, ES256-signed passport is
 
 ## Ardur Personal Hub
 
-The regular-user local Hub is available through the same CLI:
+The regular-user path uses the same package dependencies and CLI:
+
+```bash
+pip install -e .
+ardur profile init --template read-only --path ARDUR.md
+ardur protect claude-code --profile ARDUR.md
+ardur doctor-claude-code
+```
+
+The Hub is available when you want browser/desktop evidence and local receipt
+exports:
 
 ```bash
 ardur setup
 ardur hub
 ardur status
-ardur run -- python --version
-ardur desktop-observe
 ```
 
 Browser, desktop, and CLI adapters send observations to the Hub. The Hub uses
 the existing `GovernanceProxy` and Execution Receipt path, so adapters do not
 create their own policy authority.
+
+`ardur run -- <command>` remains available for simple non-interactive commands,
+but Claude Code is the first-class RC path. Interactive Codex and Claude
+Desktop packaging are intentionally not presented as complete in this release
+candidate.
 
 A heads-up on the CLI name: `ardur` is the canonical entrypoint going forward. `ardur-proxy` still works as a deprecated alias so existing scripts don't break, but new code should use `ardur`.
 
@@ -75,7 +88,7 @@ Full reasoning is in [`docs/specs/README.md`](../docs/specs/README.md) under "Pr
 
 A few things are honest gaps right now rather than oversights:
 
-- **Live LLM tests** — the semantic-judge and behavioral-fingerprint test lanes need real API keys, so the default test run uses stubbed LLMs. To opt in, set `ARDUR_SEMANTIC_JUDGE=anthropic` and `ANTHROPIC_API_KEY`.
+- **Live LLM tests** — the semantic-judge and behavioral-fingerprint test lanes need real API keys, so the default test run uses local test doubles. To opt in, set `ARDUR_SEMANTIC_JUDGE=anthropic` and `ANTHROPIC_API_KEY`.
 - **Corpus-heavy benchmark tests** — AgentDojo, InjectAgent, R-Judge, STAC, and the telemetry-ablation harness stay in the private research tree. The cleaner subset that backs the public claims is what's curated here.
 - **Docker images** (`rahulnutakki/ardur-demo:lang`, `:autogen`) and re-recorded asciinema casts — these need a maintainer with Docker Hub credentials and an `asciinema record` session, neither of which an automated process can do.
 

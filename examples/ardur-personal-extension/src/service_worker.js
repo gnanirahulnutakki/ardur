@@ -36,6 +36,8 @@ async function handleMessage(message, sender) {
       return capturePolicy(message.origin);
     case "ardur.personal.set_capture_snapshots":
       return setCaptureSnapshots(message.origin, message.enabled);
+    case "ardur.personal.set_hub_token":
+      return setHubToken(message.token);
     case "ardur.personal.export_receipts":
       return hubGet("/v1/export");
     case "ardur.personal.hub_status":
@@ -125,6 +127,13 @@ async function setCaptureSnapshots(origin, enabledValue) {
       (item) => item !== normalized
     );
   }
+  await saveSettings(settings);
+  return { ok: true, settings };
+}
+
+async function setHubToken(tokenValue) {
+  const settings = await loadSettings();
+  settings.hubToken = String(tokenValue || "").trim();
   await saveSettings(settings);
   return { ok: true, settings };
 }
@@ -246,7 +255,9 @@ async function maybeInjectEnabledTab(tabId, url) {
 async function hubGet(path) {
   const settings = await loadSettings();
   try {
-    const response = await fetch(`${settings.hubUrl}${path}`);
+    const response = await fetch(`${settings.hubUrl}${path}`, {
+      headers: hubHeaders(settings)
+    });
     return await response.json();
   } catch (error) {
     return { ok: false, error: `Hub unavailable: ${error.message || error}` };
@@ -258,7 +269,7 @@ async function hubPost(path, payload) {
   try {
     const response = await fetch(`${settings.hubUrl}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: hubHeaders(settings, { "content-type": "application/json" }),
       body: JSON.stringify(payload)
     });
     return await response.json();
@@ -273,6 +284,7 @@ async function loadSettings() {
     enabledOrigins: [],
     captureSnapshotsOrigins: [],
     hubUrl: DEFAULT_HUB_URL,
+    hubToken: "",
     ...stored[SETTINGS_KEY]
   };
 }
@@ -292,6 +304,16 @@ function normalizeOrigin(value) {
   } catch {
     return "";
   }
+}
+
+function hubHeaders(settings, extra = {}) {
+  const headers = { ...extra };
+  const token = String(settings.hubToken || "").trim();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    headers["X-Ardur-Hub-Token"] = token;
+  }
+  return headers;
 }
 
 function providerFromOrigin(origin) {

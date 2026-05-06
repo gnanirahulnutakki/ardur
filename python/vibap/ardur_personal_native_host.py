@@ -48,6 +48,8 @@ def handle_native_host_message(
     message: dict[str, Any],
     *,
     hub_url: str = DEFAULT_HUB_URL,
+    hub_token: str | None = None,
+    home: str | Path | None = None,
     storage_dir: str | Path | None = None,
     keys_dir: str | Path | None = None,
     caller_origin: str | None = None,
@@ -78,7 +80,7 @@ def handle_native_host_message(
                 "raw_content_included": False,
             },
         }
-    return hub_request("POST", "/v1/events/observe", payload, hub_url=hub_url)
+    return hub_request("POST", "/v1/events/observe", payload, hub_url=hub_url, hub_token=hub_token, home=home)
 
 
 def run_native_host(
@@ -86,6 +88,8 @@ def run_native_host(
     stdout: BinaryIO,
     *,
     hub_url: str = DEFAULT_HUB_URL,
+    hub_token: str | None = None,
+    home: str | Path | None = None,
     storage_dir: str | Path | None = None,
     keys_dir: str | Path | None = None,
     caller_origin: str | None = None,
@@ -103,6 +107,8 @@ def run_native_host(
             response = handle_native_host_message(
                 message,
                 hub_url=hub_url,
+                hub_token=hub_token,
+                home=home,
                 storage_dir=storage_dir,
                 keys_dir=keys_dir,
                 caller_origin=caller_origin,

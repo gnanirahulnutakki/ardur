@@ -16,9 +16,11 @@ import json
 import os
 import plistlib
 import re
+import secrets
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -26,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
+from urllib import parse as urlparse
 from urllib import request as urlrequest
 
 from cryptography.hazmat.primitives import serialization
@@ -50,6 +53,9 @@ MAX_BODY_BYTES = 1024 * 1024
 MAX_EXCERPT_CHARS = 1800
 MAX_ACTIONS_PER_REVIEW = 160
 MAX_OBSERVATIONS_PER_REVIEW = 240
+HUB_TOKEN_ENV_VAR = "ARDUR_PERSONAL_HUB_TOKEN"
+HUB_TOKEN_HEADER = "X-Ardur-Hub-Token"
+_QUERY_TOKEN_LOG_RE = re.compile(r"([?&]token=)[^\s&\"']+")
 _SHA256_DIGEST_RE = re.compile(r"^sha-256:[0-9a-f]{64}$")
 _SENSITIVE_TARGET_RE = re.compile(r"\b(password|secret|token|api[-_ ]?key|ssn)\b", re.I)
 _DANGEROUS_CLI_RE = re.compile(
@@ -100,6 +106,72 @@ def _sha256_text(value: str) -> str:
     return "sha-256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+@dataclass(frozen=True)
+class StreamedProcessResult:
+    returncode: int
+    stdout_digest: str
+    stderr_digest: str
+    stdout_bytes: int
+    stderr_bytes: int
+
+
+def _stream_subprocess(command: list[str]) -> StreamedProcessResult:
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout_hash = hashlib.sha256()
+    stderr_hash = hashlib.sha256()
+    counts = {"stdout": 0, "stderr": 0}
+    errors: list[BaseException] = []
+
+    def pump(stream, target, hasher, key: str) -> None:
+        try:
+            while True:
+                chunk = stream.read(64 * 1024)
+                if not chunk:
+                    return
+                hasher.update(chunk)
+                counts[key] += len(chunk)
+                target.write(chunk)
+                target.flush()
+        except BaseException as exc:  # pragma: no cover - stdout/stderr pipe failures are host-specific
+            errors.append(exc)
+        finally:
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+    assert process.stdout is not None
+    assert process.stderr is not None
+    stdout_thread = threading.Thread(
+        target=pump,
+        args=(process.stdout, sys.stdout.buffer, stdout_hash, "stdout"),
+        daemon=True,
+    )
+    stderr_thread = threading.Thread(
+        target=pump,
+        args=(process.stderr, sys.stderr.buffer, stderr_hash, "stderr"),
+        daemon=True,
+    )
+    stdout_thread.start()
+    stderr_thread.start()
+    returncode = process.wait()
+    stdout_thread.join()
+    stderr_thread.join()
+    if errors:
+        raise errors[0]
+    return StreamedProcessResult(
+        returncode=returncode,
+        stdout_digest="sha-256:" + stdout_hash.hexdigest(),
+        stderr_digest="sha-256:" + stderr_hash.hexdigest(),
+        stdout_bytes=counts["stdout"],
+        stderr_bytes=counts["stderr"],
+    )
+
+
 def _read_json(path: Path, default: Any) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -114,6 +186,64 @@ def _write_json(path: Path, payload: Any) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp.replace(path)
+
+
+def _new_hub_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _redact_url_tokens(message: str) -> str:
+    return _QUERY_TOKEN_LOG_RE.sub(r"\1<redacted>", message)
+
+
+def _load_hub_config(paths: HubPaths) -> dict[str, Any]:
+    return _dict(_read_json(paths.config, {}))
+
+
+def _ensure_hub_config(
+    paths: HubPaths,
+    *,
+    hub_url: str | None = None,
+    browser_extension_path: str | None = None,
+    rotate_token: bool = False,
+) -> dict[str, Any]:
+    config = _load_hub_config(paths)
+    if config.get("schema_version") != "ardur.personal.config.v0.1":
+        config["schema_version"] = "ardur.personal.config.v0.1"
+    if hub_url:
+        config["hub_url"] = hub_url
+    else:
+        config.setdefault("hub_url", DEFAULT_HUB_URL)
+    config["home"] = str(paths.home)
+    if browser_extension_path is not None:
+        config["browser_extension_path"] = browser_extension_path
+    if rotate_token or not isinstance(config.get("hub_token"), str) or not config["hub_token"]:
+        config["hub_token"] = _new_hub_token()
+    config.setdefault("created_at", _utc_now())
+    config["updated_at"] = _utc_now()
+    _write_json(paths.config, config)
+    try:
+        paths.config.chmod(0o600)
+    except OSError:
+        pass
+    return config
+
+
+def resolve_hub_token(
+    *,
+    home: str | Path | None = None,
+    explicit: str | None = None,
+) -> str | None:
+    if explicit:
+        return explicit
+    env_token = os.environ.get(HUB_TOKEN_ENV_VAR, "").strip()
+    if env_token:
+        return env_token
+    try:
+        token = _load_hub_config(HubPaths.from_home(home)).get("hub_token")
+    except HubError:
+        return None
+    return str(token) if token else None
 
 
 def _clip(value: Any, limit: int = MAX_EXCERPT_CHARS) -> str:
@@ -141,9 +271,12 @@ def _public_key_pem(public_key: Any) -> str:
 class PersonalHub:
     """Local in-process Hub used by the HTTP server and CLI helpers."""
 
-    def __init__(self, home: str | Path | None = None) -> None:
+    def __init__(self, home: str | Path | None = None, *, hub_url: str | None = None) -> None:
         self.paths = HubPaths.from_home(home)
         self.paths.home.mkdir(parents=True, exist_ok=True)
+        self.config = _ensure_hub_config(self.paths, hub_url=hub_url)
+        self.hub_url = str(self.config.get("hub_url") or hub_url or DEFAULT_HUB_URL)
+        self.hub_token = str(self.config["hub_token"])
         private_key, public_key = generate_keypair(keys_dir=self.paths.keys_dir)
         self.private_key = private_key
         self.public_key = public_key
@@ -167,7 +300,7 @@ class PersonalHub:
             "version": __version__,
             "home": str(self.paths.home),
             "verifier_id": self.verifier_id,
-            "hub_url": DEFAULT_HUB_URL,
+            "hub_url": self.hub_url,
             "sessions": len(sessions),
             "session_reviews": len(reviews),
             "latest_receipt": latest_receipt,
@@ -177,6 +310,13 @@ class PersonalHub:
                 "desktop": "available_with_macos_permissions",
                 "cli": "available",
             },
+        }
+
+    def health(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "schema_version": HUB_SCHEMA_VERSION,
+            "version": __version__,
         }
 
     def start_session(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -562,30 +702,41 @@ class _HubRequestHandler(BaseHTTPRequestHandler):
         self._send_json({"ok": True})
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path in {"/", "/dashboard"}:
+        path = self._request_path()
+        if path in {"/health", "/healthz"}:
+            self._send_json(self.hub.health())
+            return
+        if not self._is_authorized(allow_query_token=path in {"/", "/dashboard"}):
+            self._send_auth_required()
+            return
+        if path in {"/", "/dashboard"}:
             self._send_html(self._dashboard_html())
             return
-        if self.path in {"/health", "/healthz", "/v1/status"}:
+        if path == "/v1/status":
             self._send_json(self.hub.status())
             return
-        if self.path == "/v1/export":
+        if path == "/v1/export":
             self._send_json(self.hub.export())
             return
         self._send_json({"ok": False, "error": "not found"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._is_authorized():
+            self._send_auth_required()
+            return
+        path = self._request_path()
         try:
             payload = self._read_payload()
-            if self.path == "/v1/sessions/start":
+            if path == "/v1/sessions/start":
                 self._send_json(self.hub.start_session(payload))
                 return
-            if self.path == "/v1/events/observe":
+            if path == "/v1/events/observe":
                 self._send_json(self.hub.observe(payload))
                 return
-            if self.path == "/v1/policy/check":
+            if path == "/v1/policy/check":
                 self._send_json({"ok": True, "policy": self.hub.check_policy(payload)})
                 return
-            match = re.fullmatch(r"/v1/sessions/([^/]+)/attest", self.path)
+            match = re.fullmatch(r"/v1/sessions/([^/]+)/attest", path)
             if match:
                 self._send_json(self.hub.attest(match.group(1)))
                 return
@@ -596,7 +747,35 @@ class _HubRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": False, "error": str(exc), "error_code": "internal_error"}, status=500)
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        print(f"ardur-hub: {self.address_string()} - {fmt % args}", file=sys.stderr)
+        message = _redact_url_tokens(fmt % args)
+        print(f"ardur-hub: {self.address_string()} - {message}", file=sys.stderr)
+
+    def _request_path(self) -> str:
+        return urlparse.urlparse(self.path).path
+
+    def _is_authorized(self, *, allow_query_token: bool = False) -> bool:
+        expected = self.hub.hub_token
+        if not expected:
+            return False
+        supplied = self.headers.get(HUB_TOKEN_HEADER, "").strip()
+        if not supplied:
+            auth = self.headers.get("authorization", "").strip()
+            if auth.lower().startswith("bearer "):
+                supplied = auth[7:].strip()
+        if not supplied and allow_query_token:
+            query = urlparse.parse_qs(urlparse.urlparse(self.path).query)
+            supplied = str((query.get("token") or [""])[0]).strip()
+        return bool(supplied) and secrets.compare_digest(supplied, expected)
+
+    def _send_auth_required(self) -> None:
+        self._send_json(
+            {
+                "ok": False,
+                "error": "Ardur Personal Hub token required",
+                "error_code": "hub_auth_required",
+            },
+            status=401,
+        )
 
     def _read_payload(self) -> dict[str, Any]:
         length = int(self.headers.get("content-length") or "0")
@@ -615,17 +794,38 @@ class _HubRequestHandler(BaseHTTPRequestHandler):
         data = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
         self.send_response(status)
         self.send_header("content-type", "application/json; charset=utf-8")
-        self.send_header("access-control-allow-origin", "*")
+        self.send_header("x-content-type-options", "nosniff")
+        origin = self._allowed_cors_origin()
+        if origin:
+            self.send_header("access-control-allow-origin", origin)
+            self.send_header("vary", "Origin")
         self.send_header("access-control-allow-methods", "GET, POST, OPTIONS")
-        self.send_header("access-control-allow-headers", "content-type")
+        self.send_header(
+            "access-control-allow-headers",
+            f"authorization, content-type, {HUB_TOKEN_HEADER}",
+        )
         self.send_header("content-length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _allowed_cors_origin(self) -> str | None:
+        origin = self.headers.get("origin", "").strip()
+        if not origin:
+            return None
+        parsed = urlparse.urlparse(origin)
+        if parsed.scheme in {"chrome-extension", "moz-extension"}:
+            return origin
+        if parsed.scheme in {"http", "https"} and parsed.hostname in {"127.0.0.1", "localhost"}:
+            return origin
+        return None
 
     def _send_html(self, content: str, *, status: int = 200) -> None:
         data = content.encode("utf-8")
         self.send_response(status)
         self.send_header("content-type", "text/html; charset=utf-8")
+        self.send_header("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+        self.send_header("referrer-policy", "no-referrer")
+        self.send_header("x-content-type-options", "nosniff")
         self.send_header("content-length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -668,17 +868,29 @@ class _HubRequestHandler(BaseHTTPRequestHandler):
 
 def serve_hub(*, host: str = DEFAULT_HUB_HOST, port: int = DEFAULT_HUB_PORT, home: str | Path | None = None) -> None:
     server = ThreadingHTTPServer((host, port), _HubRequestHandler)
-    server.hub = PersonalHub(home)  # type: ignore[attr-defined]
+    server.hub = PersonalHub(home, hub_url=f"http://{host}:{port}")  # type: ignore[attr-defined]
     print(f"Ardur Personal Hub listening on http://{host}:{port}", file=sys.stderr)
     server.serve_forever()
 
 
-def hub_request(method: str, path: str, payload: dict[str, Any] | None = None, *, hub_url: str = DEFAULT_HUB_URL) -> dict[str, Any]:
+def hub_request(
+    method: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    hub_url: str = DEFAULT_HUB_URL,
+    hub_token: str | None = None,
+    home: str | Path | None = None,
+) -> dict[str, Any]:
     data = None
     headers = {"accept": "application/json"}
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["content-type"] = "application/json"
+    token = resolve_hub_token(home=home, explicit=hub_token)
+    if token:
+        headers["authorization"] = f"Bearer {token}"
+        headers[HUB_TOKEN_HEADER] = token
     req = urlrequest.Request(hub_url.rstrip("/") + path, data=data, method=method, headers=headers)
     try:
         with urlrequest.urlopen(req, timeout=5) as response:
@@ -695,24 +907,24 @@ def hub_request(method: str, path: str, payload: dict[str, Any] | None = None, *
 def setup_personal(args: argparse.Namespace) -> dict[str, Any]:
     paths = HubPaths.from_home(args.home)
     paths.home.mkdir(parents=True, exist_ok=True)
-    config = {
-        "schema_version": "ardur.personal.config.v0.1",
-        "hub_url": f"http://{args.host}:{args.port}",
-        "home": str(paths.home),
-        "browser_extension_path": str(Path(args.extension_path).expanduser()) if args.extension_path else None,
-        "created_at": _utc_now(),
-    }
-    _write_json(paths.config, config)
+    config = _ensure_hub_config(
+        paths,
+        hub_url=f"http://{args.host}:{args.port}",
+        browser_extension_path=str(Path(args.extension_path).expanduser()) if args.extension_path else None,
+        rotate_token=bool(getattr(args, "rotate_token", False)),
+    )
     launch_agent = _write_launch_agent(paths, args.host, args.port)
     return {
         "ok": True,
         "home": str(paths.home),
         "config": str(paths.config),
+        "hub_url": config["hub_url"],
+        "hub_token": config["hub_token"],
         "launch_agent": str(launch_agent),
         "next_steps": [
             "brew services start ardur-personal, or run ardur hub",
-            "Load examples/ardur-personal-extension as an unpacked browser extension",
-            "Use ardur run -- <command> for CLI sessions",
+            "Paste hub_token into the Ardur Personal browser extension settings",
+            "Use ardur protect claude-code --scope . --mode read-only before starting Claude Code",
         ],
     }
 
@@ -747,10 +959,12 @@ def _write_launch_agent(paths: HubPaths, host: str, port: int) -> Path:
 
 def doctor_personal(args: argparse.Namespace) -> dict[str, Any]:
     paths = HubPaths.from_home(args.home)
-    hub = hub_request("GET", "/v1/status", hub_url=args.hub_url)
+    token = resolve_hub_token(home=args.home, explicit=getattr(args, "hub_token", None))
+    hub = hub_request("GET", "/v1/status", hub_url=args.hub_url, hub_token=token, home=args.home)
     checks = [
         {"name": "home", "ok": paths.home.exists(), "detail": str(paths.home)},
         {"name": "config", "ok": paths.config.exists(), "detail": str(paths.config)},
+        {"name": "hub_token", "ok": bool(token), "detail": "configured" if token else "missing"},
         {"name": "hub", "ok": bool(hub.get("ok")), "detail": hub.get("error") or args.hub_url},
         {
             "name": "desktop_permissions",
@@ -758,7 +972,7 @@ def doctor_personal(args: argparse.Namespace) -> dict[str, Any]:
             "detail": "macOS Accessibility/Screen Recording must be granted for desktop capture",
         },
     ]
-    return {"ok": all(item["ok"] for item in checks[:3]), "checks": checks}
+    return {"ok": all(item["ok"] for item in checks[:4]), "checks": checks}
 
 
 def uninstall_personal(args: argparse.Namespace) -> dict[str, Any]:
@@ -784,7 +998,8 @@ def run_under_hub(args: argparse.Namespace) -> int:
         "source": {"type": "cli", "app": command[0], "process": " ".join(command)},
         "session": {"id": session_id, "title": " ".join(command)},
     }
-    start = hub_request("POST", "/v1/sessions/start", start_payload, hub_url=args.hub_url)
+    token = resolve_hub_token(home=getattr(args, "home", None), explicit=getattr(args, "hub_token", None))
+    start = hub_request("POST", "/v1/sessions/start", start_payload, hub_url=args.hub_url, hub_token=token, home=getattr(args, "home", None))
     if not start.get("ok"):
         print(f"Ardur Hub unavailable: {start.get('error')}", file=sys.stderr)
         return 127
@@ -798,22 +1013,20 @@ def run_under_hub(args: argparse.Namespace) -> int:
             "raw_content_included": False,
         },
     }
-    check = hub_request("POST", "/v1/policy/check", check_payload, hub_url=args.hub_url)
+    check = hub_request("POST", "/v1/policy/check", check_payload, hub_url=args.hub_url, hub_token=token, home=getattr(args, "home", None))
     if not check.get("ok"):
         print(f"Ardur policy check failed: {check.get('error')}", file=sys.stderr)
         return 127
     policy = _dict(check.get("policy"))
     if policy.get("verdict") == "blocked":
-        observe = hub_request("POST", "/v1/events/observe", check_payload, hub_url=args.hub_url)
+        observe = hub_request("POST", "/v1/events/observe", check_payload, hub_url=args.hub_url, hub_token=token, home=getattr(args, "home", None))
         print(f"Ardur blocked command: {policy.get('reason')}", file=sys.stderr)
         if observe.get("receipt", {}).get("receipt_id"):
             print(f"receipt: {observe['receipt']['receipt_id']}", file=sys.stderr)
         return 126
 
     started = time.time()
-    completed = subprocess.run(command, capture_output=True, text=True)
-    sys.stdout.write(completed.stdout)
-    sys.stderr.write(completed.stderr)
+    completed = _stream_subprocess(command)
     duration_ms = int((time.time() - started) * 1000)
     observe_payload = {
         **check_payload,
@@ -821,12 +1034,14 @@ def run_under_hub(args: argparse.Namespace) -> int:
             **check_payload["event"],
             "exit_code": completed.returncode,
             "duration_ms": duration_ms,
-            "stdout_digest": _sha256_text(completed.stdout),
-            "stderr_digest": _sha256_text(completed.stderr),
+            "stdout_digest": completed.stdout_digest,
+            "stderr_digest": completed.stderr_digest,
+            "stdout_bytes": completed.stdout_bytes,
+            "stderr_bytes": completed.stderr_bytes,
             "content_digest": _sha256_text(" ".join(command) + str(completed.returncode)),
         },
     }
-    hub_request("POST", "/v1/events/observe", observe_payload, hub_url=args.hub_url)
+    hub_request("POST", "/v1/events/observe", observe_payload, hub_url=args.hub_url, hub_token=token, home=getattr(args, "home", None))
     return completed.returncode
 
 
@@ -869,7 +1084,8 @@ def desktop_observe(args: argparse.Namespace) -> dict[str, Any]:
             "hidden_provider_activity": True,
         },
     }
-    response = hub_request("POST", "/v1/events/observe", payload, hub_url=args.hub_url)
+    token = resolve_hub_token(home=getattr(args, "home", None), explicit=getattr(args, "hub_token", None))
+    response = hub_request("POST", "/v1/events/observe", payload, hub_url=args.hub_url, hub_token=token, home=getattr(args, "home", None))
     if permission_note:
         response["permission_note"] = permission_note
     return response

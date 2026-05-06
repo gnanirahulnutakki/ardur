@@ -1,83 +1,115 @@
-# Ardur Claude Code Hook Plugin
+# Ardur Claude Code Plugin
 
 ## What it does
 
-This plugin governs every Claude Code tool call against the active Mission
-Passport. `PreToolUse` runs before the tool executes: the adapter loads the
-passport, maps the tool input to declared telemetry, and runs the native policy
-backend. On Permit it emits a chained, tamper-evident receipt and returns
-`continue: true`. On Deny it emits a non-compliant receipt and returns
-`continue: false` with a `stopReason`. `PostToolUse` runs after the tool
-returns: the adapter loads the response, computes its SHA-256 digest, and emits
-a chained receipt with `result_hash` populated. All receipts are ES256-signed
-and linked by SHA-256 parent-hashes so the chain can be verified offline.
+This plugin protects Claude Code at the local tool boundary. `PreToolUse` runs
+before a Claude Code tool executes: the adapter loads the active Ardur profile,
+maps the tool input to declared telemetry, evaluates the Mission Passport, and
+emits a signed receipt. If Ardur denies the call, the hook returns Claude Code's
+current `hookSpecificOutput.permissionDecision = "deny"` response.
 
-## Prerequisites
+On permit, Ardur emits evidence only. It does not return
+`permissionDecision=allow`, so Claude Code's normal permission prompts and user
+approval flow remain in charge.
 
-- Python 3.11+
-- `pip install -e python/` from the repo root (makes `vibap` importable)
-- `python3` on PATH in Claude Code's spawn environment
-- A Mission Passport issued via `ardur issue --mission "..."`, with the
-  resulting JWT exported as `ARDUR_MISSION_PASSPORT`
+## Easiest Setup
 
-## Install
+Install Ardur with its Python dependencies, then create a plain Markdown
+guardrail file:
 
 ```bash
-# Issue a mission passport
 cd <ardur-repo>
 pip install -e python/
-ardur issue --agent-id me --mission "review my code without running it" \
-  --allowed-tools Read,Glob,Grep --forbidden-tools Bash,Write,Edit \
-  --resource-scope '/Users/me/work/*' > active_mission.jwt
-export ARDUR_MISSION_PASSPORT="$(cat active_mission.jwt)"
-
-# Install the plugin into Claude Code
-claude plugin add path/to/plugins/claude-code
+ardur profile init --template read-only --path ARDUR.md
 ```
 
-Note: `claude plugin add` is the conventional Claude Code plugin install
-command. Verify against current Claude Code documentation if the exact
-subcommand differs for your installed version.
+Open `ARDUR.md` in any text editor:
+
+```markdown
+# Ardur Guardrails
+Mode: read only
+Mission: Review this project without changing files or running commands.
+Protect folder: .
+Max tool calls: 100
+Duration: 1d
+
+## Allow
+- Read files
+- Search files
+
+## Block
+- Run shell commands
+- Edit files
+- Write files
+```
+
+Turn protection on:
+
+```bash
+ardur protect claude-code --profile ARDUR.md
+```
+
+Start Claude Code with the exact command printed by Ardur. It includes
+`VIBAP_HOME=...` so the hook can find the active passport and the Python
+environment where Ardur is installed. It will look like:
+
+```bash
+VIBAP_HOME=/path/to/.vibap claude --plugin-dir /path/to/plugins/claude-code
+```
+
+## Built-In Options
+
+- `ardur profile init --template read-only`: safest first run. Allows reading
+  and searching only.
+- `ardur profile init --template safe-coding`: allows local file edits inside
+  the selected folder, but blocks shell commands.
+- `ardur protect claude-code --scope . --mode read-only`: same behavior without
+  a Markdown profile.
+- `ardur protect claude-code --scope . --mode safe-coding`: flag-based setup
+  for technical users.
+
+Advanced users can still use `ardur issue`, `ARDUR_MISSION_PASSPORT`,
+`ARDUR_CC_HOOK_DIR`, and custom Mission Passport fields directly. The Markdown
+profile is a friendly layer over the same capabilities, not a replacement.
 
 ## What happens when a tool is called
 
-1. **PreToolUse fires.** The hook script invokes
-   `vibap.claude_code_hook.pre_tool_use_handler` with the tool name and input
-   JSON from Claude Code.
-2. The adapter calls `vibap.claude_code_telemetry.map_tool_call` to translate
-   the Claude Code tool input into Ardur declared telemetry (tool name,
-   arguments, resource targets).
-3. The native policy backend evaluates the telemetry against the active
-   passport's `allowed_tools`, `forbidden_tools`, and `resource_scope`.
-4. **On Permit**: a chained receipt is emitted (parent-hash set to the previous
-   receipt's digest, or the passport `jti` for the first call). The hook exits
-   with `continue: true`.
-5. **On Deny**: a non-compliant receipt is emitted. The hook exits with
-   `continue: false` and a `stopReason` describing which policy clause was
-   violated.
-6. **PostToolUse fires** after the tool runs. The adapter receives the tool
-   response, computes `sha256(response_bytes)`, and emits a chained receipt with
-   `result_hash` set. No policy decision is made at this stage — PostToolUse is
-   evidence collection only.
+1. `PreToolUse` fires.
+2. Ardur maps the Claude Code tool input into declared telemetry.
+3. Ardur checks the active Mission Passport: allowed tools, forbidden tools,
+   resource scope, cwd, and relevant policy backends.
+4. If permitted, Ardur appends a compliant receipt and lets Claude Code continue
+   its normal permission flow.
+5. If denied, Ardur appends a violation receipt and returns
+   `hookSpecificOutput.permissionDecision = "deny"`.
+6. `PostToolUse` records the SHA-256 digest of permitted tool responses as a
+   chained evidence receipt.
+7. `SubagentStart` / `SubagentStop` record signed lifecycle receipts and append
+   per-trace subagent registry events. Tool receipts are attributed only when
+   Claude Code exposes an exact agent id or when transcript evidence binds one
+   child; otherwise they remain trace-level and are reported as unattributed.
 
 ## Where receipts live
 
 Receipts are written to:
 
-```
+```text
 $ARDUR_CC_HOOK_DIR/<trace_id>/receipts.jsonl
 ```
 
 Default when `ARDUR_CC_HOOK_DIR` is not set:
 
-```
+```text
 ~/.vibap/claude-code-hook/<trace_id>/receipts.jsonl
 ```
 
-Each line is one signed receipt JWT. The `trace_id` is derived from the
-passport's `jti` claim. Override it with `ARDUR_TRACE_ID`.
+Subagent lifecycle observations for the same trace are also written to:
 
-## Verifying the chain
+```text
+$ARDUR_CC_HOOK_DIR/<trace_id>/subagents.jsonl
+```
+
+## Verify a receipt chain
 
 ```bash
 PYTHONPATH=python python3 -c "
@@ -92,46 +124,38 @@ print('chain ok:', len(jwts), 'receipts')
 "
 ```
 
-Replace `<trace>` with the `jti` from the passport (or the value of
-`ARDUR_TRACE_ID` if you set that override).
+## Boundaries
 
-## What this plugin does NOT do
-
-- Does not validate tool-response content — only digests it (SHA-256 hash of
-  the raw response bytes).
-- Does not catch tools that bypass the hook system, for example tools invoked by
-  sub-shells started inside a `Bash` tool call.
-- Does not gate non-tool agent actions: model output, system prompts, sampling
-  decisions, and memory writes are outside the hook surface.
-- Does not enforce budgets across sessions — `max_tool_calls` is mission-scoped,
-  but the hook adapter does not re-check budget on every call. Cross-session
-  budget accounting is handled by the proxy session state (Tasks 6-8), not this
-  plugin.
+- Ardur protects Claude Code local tool calls that pass through Claude Code's
+  hook system.
+- Ardur does not control hidden provider-side behavior, model sampling, or
+  tools that bypass Claude Code hooks.
+- Ardur is not a sandbox. Use it with Claude Code's normal permissions and OS
+  filesystem controls.
+- Codex and Claude Desktop are not first-class in this RC. They remain separate
+  next-cycle integrations.
 
 ## Troubleshooting
 
 **"ardur: no active mission passport found"**
-The `ARDUR_MISSION_PASSPORT` environment variable is not set in the shell where
-Claude Code is running. Export it before launching Claude Code, or add it to a
-`.env` file that Claude Code loads on startup.
 
-**"all candidate passports failed verification"**
-The passport was signed by a keypair that does not match the public key resolved
-from `keys_dir`. Either re-issue the passport with the correct key (run
-`ardur issue` again) or point `ARDUR_KEYS_DIR` at the directory containing the
-matching public key.
+Run:
 
-**Hook crashes silently / receipts not appearing**
-Check that `ARDUR_CC_HOOK_DIR` (or `~/.vibap/claude-code-hook/`) is writable by
-the process running Claude Code. Also confirm `python3` is on PATH in Claude
-Code's environment — the hook scripts invoke `python3` directly.
+```bash
+ardur protect claude-code --profile ARDUR.md
+```
 
-**Hook fires but every call is denied unexpectedly**
-Inspect the non-compliant receipt: `jq -r '. | @base64d' receipts.jsonl` (after
-splitting on `.`) shows the payload. The `policy_result.reason` field identifies
-which clause triggered the deny.
+**Plugin validation fails**
 
-## Filing integration requests
+Run:
 
-Open an issue at:
-https://github.com/gnanirahulnutakki/ardur/issues/new?template=integration_request.yml
+```bash
+claude plugin validate plugins/claude-code
+```
+
+The plugin should contain `.claude-plugin/plugin.json` and `hooks/hooks.json`.
+
+**Receipts are not appearing**
+
+Confirm `python3` is on PATH for Claude Code and that
+`~/.vibap/claude-code-hook/` is writable.

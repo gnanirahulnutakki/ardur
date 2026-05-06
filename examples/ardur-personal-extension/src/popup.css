@@ -56,6 +56,7 @@ main {
 
 .origin,
 .hub,
+.hub-token,
 .consent,
 .toolbar,
 .section-title {
@@ -67,10 +68,27 @@ main {
 
 .origin,
 .hub,
+.hub-token,
 .consent {
   padding: 12px;
   border: 1px solid #d7dee8;
   border-radius: 8px;
+  background: #ffffff;
+}
+
+.hub-token label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.hub-token input {
+  min-width: 0;
+  border: 1px solid #b8c2cf;
+  border-radius: 6px;
+  padding: 8px;
+  color: #17202a;
   background: #ffffff;
 }
 
@@ -221,6 +239,7 @@ li {
 
   .origin,
   .hub,
+  .hub-token,
   .consent,
   #review-summary,
   li {
@@ -235,6 +254,12 @@ li {
   }
 
   #toggle-origin[data-enabled="true"] {
+    color: #eef4fb;
+    background: #111827;
+  }
+
+  .hub-token input {
+    border-color: #334155;
     color: #eef4fb;
     background: #111827;
   }
