@@ -1,0 +1,29 @@
+{{ $data := hugo.Data.capabilities }}
+{{ $sourceRef := .Site.Params.sourceRef | default "dev" }}
+<div class="capability-ledger">
+  <div class="capability-note">
+    <strong>{{ $data.asset_class }}</strong>
+    <p>{{ $data.asset_class_note }}</p>
+    <a href="{{ printf "repo/%s" $data.source_path | absURL }}">Source: {{ $data.source_path }}</a>
+  </div>
+  <div class="capability-grid">
+    {{ range $data.included_now }}
+      <article class="capability-card">
+        <span class="status-token evidence">{{ .proof_scope }}</span>
+        <h2>{{ .id }}</h2>
+        <p>{{ .title }}</p>
+        <dl class="claim-meta">
+          <div>
+            <dt>Kind</dt>
+            <dd>{{ .kind }}</dd>
+          </div>
+          <div>
+            <dt>Canonical</dt>
+            <dd>{{ .canonical }}</dd>
+          </div>
+        </dl>
+        <a href="{{ printf "repo/%s" .path | absURL }}">{{ .path }}</a>
+      </article>
+    {{ end }}
+  </div>
+</div>

@@ -1,0 +1,13 @@
+<footer class="site-footer">
+  {{ $sourceRef := .Site.Params.sourceRef | default "dev" }}
+  <div>
+    <strong>Ardur evidence site</strong>
+    <p>Generated from repo-backed metadata and public-source links. The root repo remains the source of truth.</p>
+  </div>
+  <div class="footer-links">
+    <a href="{{ .Site.Params.repoURL }}">GitHub</a>
+    <a href="{{ "source/status/" | absURL }}">Status</a>
+    <a href="{{ "source/docs/known-limitations/" | absURL }}">Known limitations</a>
+    <a href="{{ "source/" | absURL }}">Documentation</a>
+  </div>
+</footer>

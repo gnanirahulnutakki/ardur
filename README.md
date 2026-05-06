@@ -12,7 +12,7 @@ imports, mission examples, and deferred framework adapter directories. Broader p
 packaging, and production deployment material are still being tightened before
 they are presented as release-ready.
 
-[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md)
+[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Evidence Site Source](site/README.md)
 
 ## Why Ardur
 

@@ -1,0 +1,101 @@
+{
+  "claims": [
+    {
+      "id": "mission-boundary",
+      "title": "Mission boundaries are the product center",
+      "body": "Ardur binds agent sessions to declared missions and makes runtime decisions over tools, resources, budgets, and delegation. The public claim is the conservative runtime-governance boundary, not a universal sandbox.",
+      "evidence_level": "code-and-doc",
+      "maturity": "public-now",
+      "claim_type": "runtime-boundary",
+      "surface": ["docs", "python", "go"],
+      "framework": ["framework-agnostic"],
+      "source_paths": [
+        "README.md",
+        "docs/security-model.md",
+        "python/vibap/proxy.py",
+        "go/pkg/governance/engine.go"
+      ]
+    },
+    {
+      "id": "delegation-narrowing",
+      "title": "Delegation narrows instead of widening authority",
+      "body": "Child sessions are intended to receive strictly narrower authority than their parents. The public evidence includes the ADR, Python tests, and Go chain-audit tests rather than broad marketing language.",
+      "evidence_level": "code-and-doc",
+      "maturity": "public-now",
+      "claim_type": "delegation",
+      "surface": ["docs", "python", "go"],
+      "framework": ["framework-agnostic"],
+      "source_paths": [
+        "docs/decisions/ADR-017-biscuit-attenuation-narrowing-semantics.md",
+        "python/tests/test_delegation.py",
+        "go/pkg/governance/chain_audit_test.go"
+      ]
+    },
+    {
+      "id": "unknown-state",
+      "title": "Lack of evidence is not treated as safe success",
+      "body": "When the runtime cannot observe enough evidence, Ardur must return a denial or unknown state instead of claiming a compliant result. This is part of the security model and known-limits story.",
+      "evidence_level": "limitation-backed",
+      "maturity": "public-now",
+      "claim_type": "evidence-semantics",
+      "surface": ["docs", "python"],
+      "framework": ["framework-agnostic"],
+      "source_paths": [
+        "docs/security-model.md",
+        "docs/known-limitations.md",
+        "python/tests/test_denial_vocabulary.py"
+      ]
+    },
+    {
+      "id": "archival-media",
+      "title": "Starter media is archival, not yet a rerunnable public proof path",
+      "body": "The included casts show the product direction, but the repo explicitly marks them archival until verifier commands and artifact paths are public and re-recorded from this tree.",
+      "evidence_level": "archival-media",
+      "maturity": "in-progress",
+      "claim_type": "proof-media",
+      "surface": ["media", "docs"],
+      "framework": ["framework-live", "foundation"],
+      "source_paths": [
+        "MEDIA.md",
+        "media/selected-assets.json",
+        "media/casts/ARDUR-CAP-001-mission-declaration.cast",
+        "media/casts/ARDUR-CAP-002-tool-policy.cast",
+        "media/casts/ARDUR-CAP-003-resource-scope.cast",
+        "media/casts/ARDUR-CAP-014-active-revocation.cast"
+      ]
+    },
+    {
+      "id": "mcep-specs",
+      "title": "MCEP v0.1 is the public protocol spine",
+      "body": "The public spec set defines the Mission-Controlled Execution Protocol shape, with explicit caveats where migrated specs still point at future public-import work.",
+      "evidence_level": "spec",
+      "maturity": "public-now",
+      "claim_type": "protocol-spec",
+      "surface": ["docs", "specs"],
+      "framework": ["framework-agnostic"],
+      "source_paths": [
+        "docs/specs/README.md",
+        "docs/specs/mission-declaration-v0.1.md",
+        "docs/specs/execution-receipt-v0.1.md",
+        "docs/specs/verifier-contract-v0.1.md"
+      ]
+    },
+    {
+      "id": "deployment-boundary",
+      "title": "Deployment material is useful but not production-complete",
+      "body": "The repo includes Helm and Kubernetes/SPIRE material, but the status and limitations pages still keep deployment maturity bounded until full walkthroughs and security gates land.",
+      "evidence_level": "doc-and-manifest",
+      "maturity": "in-progress",
+      "claim_type": "deployment",
+      "surface": ["deploy", "docs"],
+      "framework": ["kubernetes", "spire"],
+      "source_paths": [
+        "deploy/README.md",
+        "deploy/helm/ardur/README.md",
+        "deploy/k8s/spire/README.md",
+        "docs/known-limitations.md",
+        "ROADMAP.md"
+      ]
+    }
+  ]
+}

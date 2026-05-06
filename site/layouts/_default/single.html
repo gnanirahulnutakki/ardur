@@ -1,0 +1,12 @@
+{{ define "main" }}
+  <article class="page-shell">
+    <header class="page-heading">
+      <p class="eyebrow">{{ .Section | default "Ardur" }}</p>
+      <h1>{{ .Title }}</h1>
+      {{ with .Description }}<p>{{ . }}</p>{{ end }}
+    </header>
+    <div class="prose">
+      {{ .Content }}
+    </div>
+  </article>
+{{ end }}

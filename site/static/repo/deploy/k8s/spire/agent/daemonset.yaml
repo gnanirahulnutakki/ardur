@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: spire-agent
+  namespace: spire-system
+  labels:
+    app.kubernetes.io/name: spire-agent
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: ardur
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: spire-agent
+        app.kubernetes.io/component: identity
+        app.kubernetes.io/part-of: ardur
+    spec:
+      serviceAccountName: spire-agent
+      hostPID: true
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      priorityClassName: system-node-critical
+      # Pod-level securityContext (FIX-9, 2026-04-28): drop-by-default
+      # posture so the SPIRE agent daemon runs without root or extra
+      # capabilities even when hostPID/hostNetwork expose more of the
+      # node than a plain workload pod. Container-level overrides below.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: spire-agent
+        # FIX-9 (2026-04-28): production deployments MUST replace this
+        # tag-pinned reference with a digest-pinned one. Tag mutability
+        # at the registry is a supply-chain attack surface for security
+        # software. Resolve the current digest with:
+        #   skopeo inspect docker://ghcr.io/spiffe/spire-agent:1.14.2 \
+        #     --format '{{.Digest}}'
+        # Then replace ":1.14.2" below with "@sha256:<digest>".
+        image: ghcr.io/spiffe/spire-agent:1.14.2
+        imagePullPolicy: IfNotPresent
+        # Container-level securityContext (FIX-9, 2026-04-28). The
+        # SPIRE agent communicates via Unix domain sockets and does not
+        # require root, write access to /, or any Linux capability
+        # beyond the default set the runtime provides.
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        args:
+        - -expandEnv
+        - -config
+        - /run/spire/config/agent.conf
+        env:
+        - name: SPIRE_TRUST_DOMAIN
+          value: "ardur.demo"
+        - name: SPIRE_CLUSTER_NAME
+          value: "ardur-demo"
+        - name: KUBE_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        ports:
+        - name: health
+          containerPort: 8080
+        volumeMounts:
+        - name: spire-config
+          mountPath: /run/spire/config
+          readOnly: true
+        - name: spire-bundle
+          mountPath: /run/spire/bundle
+          readOnly: true
+        - name: spire-agent-sockets
+          mountPath: /run/spire/agent-sockets
+        - name: spire-agent-data
+          mountPath: /run/spire/data
+        - name: spire-token
+          mountPath: /var/run/secrets/tokens
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: health
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: spire-config
+        configMap:
+          name: spire-agent
+      - name: spire-bundle
+        configMap:
+          name: spire-bundle
+      - name: spire-agent-sockets
+        hostPath:
+          path: /run/spire/agent-sockets
+          type: DirectoryOrCreate
+      - name: spire-agent-data
+        emptyDir: {}
+      - name: spire-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: spire-agent
+              expirationSeconds: 7200
+              audience: spire-server
