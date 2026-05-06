@@ -1,0 +1,87 @@
+# Shared Agent Contract
+
+These rules apply to every agent runtime: Conductor, Codex, Claude, and any
+future automation.
+
+## Startup
+
+1. Run `./scripts/conductor-bootstrap.sh`.
+2. Read `.context/ARDUR_CONTEXT.md`.
+3. Read `.context/ardur-graph.md`.
+4. Use `.context/ardur-graph.json` as the structural map, then verify exact
+   behavior with source files and tests.
+
+If bootstrap fails, stop and fix or report the bootstrap problem before making
+task-specific edits.
+
+## Branch Flow
+
+- `dev` is the integration branch.
+- `origin/dev` is the default diff and PR base for normal development.
+- `main` is release-only.
+- Promote to `main` only after work has landed on `dev`, passed verification,
+  and is ready as public-facing open source.
+- If a workspace starts from `origin/main`, do not rename the branch. Still
+  target the eventual PR/merge at `dev` unless the task is explicitly a release
+  promotion.
+
+## Repo Truth
+
+Use current repo state over stale notes:
+
+1. `git status`, branch refs, and live files.
+2. `.github/workflows/`.
+3. `AGENTS.md`, `docs/engineering-standards.md`, `docs/TESTING.md`,
+   `docs/public-import-plan.md`, and `docs/decisions/`.
+4. Generated `.context/` files, after checking their timestamp.
+
+When sources conflict, state the conflict and verify from the current tree.
+
+## Work Rules
+
+- Preserve user work in progress.
+- Do not reset, clean, revert, or switch branches destructively unless the user
+  explicitly asks.
+- Keep changes small, reviewable, and tied to the request.
+- Keep public claims evidence-backed: test, command, artifact, verifier path, or
+  explicit limitation.
+- Do not add secrets, machine-local private paths, generated credentials, or
+  local session state.
+- Update docs when behavior or workflow changes.
+
+## Validation
+
+For small docs/script changes:
+
+```bash
+./scripts/check-local.sh --quick
+```
+
+For runtime changes after local setup:
+
+```bash
+./scripts/setup-dev.sh
+./scripts/check-local.sh --full
+```
+
+If local Go is below `go/go.mod`, report the mismatch and do not claim full Go
+validation.
+
+## Local-Only Information
+
+Local skills, session notes, scratch plans, and private agent state must stay in
+ignored paths:
+
+- `.context/skills/`
+- `.agents/`
+- `.local-skills/`
+- `.ai-context/`
+- `.agent-context/`
+- `.codex/`
+- `.claude/`
+- `HANDOFF.md`
+- `workdone-so-far.md`
+
+Run `./scripts/check-local.sh --quick` before publishing to verify none of
+those paths are tracked.
+
