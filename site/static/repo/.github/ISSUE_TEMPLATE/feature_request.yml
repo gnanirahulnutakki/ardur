@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest a new capability or improvement for Ardur.
+title: "[feature] "
+labels: ["feature", "needs-design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a feature. A few things that help a request land:
+
+        - describe the *use case*, not the implementation — we may have a better path
+        - explain what you've already tried, even if it didn't work
+        - if it's a major change, expect to discuss it in [Discussions → Ideas](https://github.com/gnanirahulnutakki/ardur/discussions/categories/ideas) first
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: What are you trying to accomplish? Concrete scenarios beat abstract goals.
+      placeholder: |
+        I'm running an agent that..., and I need Ardur to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What would you like Ardur to do differently? Sketch the API, the config, the behaviour — whatever fits.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else have you tried, considered, or seen elsewhere? "I tried X but it didn't work because Y" is gold.
+    validations:
+      required: true
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Anything else
+      description: Links to similar features in other tools, related issues, or constraints we should know about.
+    validations:
+      required: false

@@ -1,0 +1,61 @@
+{
+  "asset_class": "archival_walkthrough",
+  "asset_class_note": "These recordings are archival walkthroughs from before the public code lift. The rerunnable proof path lands with Phase 1 \u2014 see MEDIA.md.",
+  "included_now": [
+    {
+      "canonical": true,
+      "id": "ARDUR-CAP-001",
+      "kind": "cast",
+      "lineage_note": "Sanitized public recording using the Ardur capability namespace",
+      "path": "media/casts/ARDUR-CAP-001-mission-declaration.cast",
+      "proof_scope": "framework-live",
+      "title": "Mission declaration and binding"
+    },
+    {
+      "canonical": true,
+      "id": "ARDUR-CAP-002",
+      "kind": "cast",
+      "lineage_note": "Sanitized public recording using the Ardur capability namespace",
+      "path": "media/casts/ARDUR-CAP-002-tool-policy.cast",
+      "proof_scope": "framework-live",
+      "title": "Tool allow and deny enforcement"
+    },
+    {
+      "canonical": true,
+      "id": "ARDUR-CAP-003",
+      "kind": "cast",
+      "lineage_note": "Sanitized public recording using the Ardur capability namespace",
+      "path": "media/casts/ARDUR-CAP-003-resource-scope.cast",
+      "proof_scope": "framework-live",
+      "title": "Resource scope enforcement"
+    },
+    {
+      "canonical": true,
+      "id": "ARDUR-CAP-014",
+      "kind": "cast",
+      "lineage_note": "Sanitized public recording using the Ardur capability namespace",
+      "path": "media/casts/ARDUR-CAP-014-active-revocation.cast",
+      "proof_scope": "foundation",
+      "title": "Active revocation"
+    }
+  ],
+  "next_candidates": [
+    {
+      "kind": "rendered_video",
+      "status": "coming_soon",
+      "title": "Claude Code hook walkthrough"
+    },
+    {
+      "kind": "rendered_video",
+      "status": "coming_soon",
+      "title": "OpenAI Agents SDK example"
+    },
+    {
+      "kind": "rendered_video",
+      "status": "coming_soon",
+      "title": "Google ADK example"
+    }
+  ],
+  "source_path": "media/selected-assets.json",
+  "source_sha256": "99542d13a4457f1d37ddb9461b4206458af513db869377262a47130f8cf7d9c2"
+}

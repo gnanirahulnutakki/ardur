@@ -1,0 +1,11 @@
+{
+  "agent_id": "sales-analyst-001",
+  "mission": "Analyze Q1 sales data and produce a revenue summary report",
+  "allowed_tools": ["read_file", "calculator", "write_file"],
+  "forbidden_tools": ["execute_code", "send_email", "shell"],
+  "resource_scope": ["sales/*", "reports/*"],
+  "max_tool_calls": 25,
+  "max_duration_s": 300,
+  "delegation_allowed": false,
+  "max_delegation_depth": 0
+}

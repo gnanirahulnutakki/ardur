@@ -1,0 +1,97 @@
+name: hugo-site
+
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - "**/*.md"
+      - "media/**"
+      - ".github/workflows/hugo-site.yml"
+  push:
+    branches: [main, dev]
+    paths:
+      - "site/**"
+      - "**/*.md"
+      - "media/**"
+      - ".github/workflows/hugo-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hugo-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validate and build Hugo site
+    runs-on: ubuntu-latest
+    env:
+      HUGO_VERSION: 0.161.1
+      HUGO_PARAMS_SOURCEREF: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Verify source-backed Hugo mirrors
+        run: |
+          set -euo pipefail
+          python3 site/scripts/sync_source_docs.py --check
+
+      - name: Validate public claim metadata
+        run: |
+          set -euo pipefail
+          python3 site/scripts/validate_claims.py
+
+      - name: Install Hugo
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.local/bin"
+          curl -sSLO "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_${HUGO_VERSION}_linux-amd64.tar.gz"
+          curl -sSLO "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_${HUGO_VERSION}_checksums.txt"
+          grep " hugo_${HUGO_VERSION}_linux-amd64.tar.gz$" "hugo_${HUGO_VERSION}_checksums.txt" | sha256sum -c -
+          tar -C "${HOME}/.local/bin" -xzf "hugo_${HUGO_VERSION}_linux-amd64.tar.gz" hugo
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+      - name: Build site
+        run: |
+          set -euo pipefail
+          hugo --source site --gc --minify
+
+      - name: Verify hosted documentation links
+        run: |
+          set -euo pipefail
+          python3 site/scripts/validate_rendered_docs_links.py site/public
+
+      - name: Verify rendered source provenance
+        run: |
+          set -euo pipefail
+          if grep -RInE --exclude-dir=repo 'blob/dev|tree/dev|__ARDUR_SOURCE_REF__|__ardur_internal__' site/public; then
+            echo "::error::Rendered site contains non-build-specific source links."
+            exit 1
+          fi
+
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
+        with:
+          path: site/public
+
+  deploy:
+    name: Deploy GitHub Pages
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d  # v6.0.0
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128  # v5.0.0
