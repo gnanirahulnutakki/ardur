@@ -1,0 +1,9 @@
+{{ $state := .Get "state" | default "unknown" }}
+{{ $label := .Get "label" | default $state }}
+{{ $source := .Get "source" }}
+{{ $sourceRef := .Site.Params.sourceRef | default "dev" }}
+<aside class="proof-status proof-{{ $state }}">
+  <strong>{{ $label }}</strong>
+  {{ with .Inner }}<p>{{ . | markdownify }}</p>{{ end }}
+  {{ with $source }}<a href="{{ $.Site.Params.repoURL }}/blob/{{ $sourceRef }}/{{ . }}">Source: {{ . }}</a>{{ end }}
+</aside>

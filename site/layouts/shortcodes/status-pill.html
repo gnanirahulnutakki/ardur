@@ -1,0 +1,3 @@
+{{ $state := .Get "state" | default "neutral" }}
+{{ $label := .Get "label" | default $state }}
+<span class="status-pill status-{{ $state }}">{{ $label }}</span>

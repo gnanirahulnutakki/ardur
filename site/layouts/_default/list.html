@@ -1,0 +1,21 @@
+{{ define "main" }}
+  <section class="page-shell">
+    <header class="page-heading">
+      <p class="eyebrow">{{ .Section | default "Ardur" }}</p>
+      <h1>{{ .Title }}</h1>
+      {{ with .Description }}<p>{{ . }}</p>{{ end }}
+    </header>
+    <div class="prose section-intro">
+      {{ .Content }}
+    </div>
+    <div class="list-grid">
+      {{ range .RegularPagesRecursive.ByTitle }}
+        <article class="list-item">
+          <p class="list-kicker">{{ delimit .Params.maturity ", " }}</p>
+          <h2><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></h2>
+          {{ with .Description }}<p>{{ . }}</p>{{ else }}<p>{{ .Summary }}</p>{{ end }}
+        </article>
+      {{ end }}
+    </div>
+  </section>
+{{ end }}

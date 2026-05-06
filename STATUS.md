@@ -10,6 +10,7 @@
 - curated Go runtime, governance, and operator files are present under `go/`
 - JSON mission examples and framework example stubs are present under `examples/`
 - selected archival walkthrough recordings are ready as starter public media (the rerunnable proof path lands with the next public drop — see `MEDIA.md`)
+- a Hugo public evidence-site source tree is present under `site/`
 - the launch direction is documented without shipping the full internal docs tree
 
 ## In Progress
