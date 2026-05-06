@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in Ardur isn't behaving the way the docs or this repo claim it should.
+title: "[bug] "
+labels: ["bug", "needs-repro"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Before filing, please check:
+
+        - the [open issues](https://github.com/gnanirahulnutakki/ardur/issues?q=is%3Aissue) — your bug may already be tracked
+        - [Discussions](https://github.com/gnanirahulnutakki/ardur/discussions) — if it's a "how do I" or "is this expected", that belongs in Q&A there, not here
+
+  - type: input
+    id: version
+    attributes:
+      label: Ardur version
+      description: Output of the version command, or the commit hash you're on.
+      placeholder: "v0.0.1, or 7bd8f20"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python or Go version, agent framework if relevant.
+      placeholder: "macOS 14.4, Python 3.12, LangChain 0.3.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: |
+        The smallest set of commands or code that reproduces the bug. If we can't reproduce it, we can't fix it — this section is required.
+      placeholder: |
+        ```
+        # commands or code here
+        ```
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect Ardur to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What did Ardur actually do? Include error output, stack traces, or receipt logs verbatim.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Anything else
+      description: Logs, screenshots, related issues, hypotheses about cause — anything that helps.
+    validations:
+      required: false

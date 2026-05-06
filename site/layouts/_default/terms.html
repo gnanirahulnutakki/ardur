@@ -1,0 +1,17 @@
+{{ define "main" }}
+  <section class="page-shell">
+    <header class="page-heading">
+      <p class="eyebrow">Taxonomy</p>
+      <h1>{{ .Title }}</h1>
+      <p>Browse pages by the evidence metadata used across the public site.</p>
+    </header>
+    <div class="taxonomy-grid">
+      {{ range .Data.Terms.Alphabetical }}
+        <a class="term-chip" href="{{ .Page.RelPermalink }}">
+          <span>{{ .Page.Title }}</span>
+          <strong>{{ .Count }}</strong>
+        </a>
+      {{ end }}
+    </div>
+  </section>
+{{ end }}

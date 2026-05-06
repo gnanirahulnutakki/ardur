@@ -1,0 +1,11 @@
+{
+  "agent_id": "coordinator-001",
+  "mission": "Coordinate Q1 business review using research and analysis sub-agents",
+  "allowed_tools": ["read_file", "write_file", "calculator", "web_search", "delegate"],
+  "forbidden_tools": ["execute_code", "shell", "send_email"],
+  "resource_scope": ["sales/*", "reports/*", "customers/summary/*"],
+  "max_tool_calls": 100,
+  "max_duration_s": 600,
+  "delegation_allowed": true,
+  "max_delegation_depth": 2
+}

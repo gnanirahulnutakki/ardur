@@ -26,3 +26,8 @@ go/benchmark_sparse
 go/cedar-benchmark-wrapper
 go/specvalidate
 go/benchcheck
+
+# Hugo site build output.
+site/public/
+site/resources/_gen/
+site/.hugo_build.lock

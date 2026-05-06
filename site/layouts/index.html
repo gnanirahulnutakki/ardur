@@ -1,0 +1,44 @@
+{{ define "main" }}
+  <section class="home-rail">
+    <div class="home-copy">
+      <p class="eyebrow">Runtime governance, rendered as evidence</p>
+      <h1>Ardur turns public claims into a navigable evidence ledger.</h1>
+      <p>
+        This site organizes the repo's public-safe status, specs, ADRs, media,
+        examples, and limitations without replacing the source docs.
+      </p>
+      <div class="action-row">
+        <a class="primary-link" href="{{ "claims/" | absURL }}">Open claim ledger</a>
+        <a class="secondary-link" href="{{ .Site.Params.repoURL }}">View source repo</a>
+      </div>
+    </div>
+    <div class="evidence-board" aria-label="Evidence flow">
+      <div class="node source">Repo Markdown<br><span>README, specs, ADRs</span></div>
+      <div class="node build">Hugo build<br><span>metadata checks</span></div>
+      <div class="node site">Public site<br><span>filters and caveats</span></div>
+      <div class="flow-line flow-one"></div>
+      <div class="flow-line flow-two"></div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-heading">
+      <p class="eyebrow">Current posture</p>
+      <h2>Public now, in progress, and deliberately bounded.</h2>
+    </div>
+    <div class="metric-strip">
+      <div><strong>{{ len hugo.Data.claims.claims }}</strong><span>claim cards</span></div>
+      <div><strong>5</strong><span>taxonomy families</span></div>
+      <div><strong>{{ len hugo.Data.capabilities.included_now }}</strong><span>archival casts</span></div>
+      <div><strong>0</strong><span>server runtime cost</span></div>
+    </div>
+  </section>
+
+  <section class="page-shell compact">
+    <div class="claim-grid">
+      {{ range first 3 hugo.Data.claims.claims }}
+        {{ partial "claim-card.html" (dict "claim" . "site" $.Site) }}
+      {{ end }}
+    </div>
+  </section>
+{{ end }}

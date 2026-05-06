@@ -1,0 +1,5 @@
+{{ $id := .Get 0 }}
+{{ if not $id }}{{ errorf "claim shortcode requires an id" }}{{ end }}
+{{ $matches := where hugo.Data.claims.claims "id" $id }}
+{{ if ne (len $matches) 1 }}{{ errorf "claim shortcode could not find exactly one claim for id %q" $id }}{{ end }}
+{{ partial "claim-card.html" (dict "claim" (index $matches 0) "site" .Site) }}

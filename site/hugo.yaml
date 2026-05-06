@@ -1,0 +1,30 @@
+baseURL: "https://gnanirahulnutakki.github.io/ardur/"
+title: "Ardur Evidence"
+locale: "en-us"
+enableRobotsTXT: true
+disableKinds:
+  - RSS
+summaryLength: 28
+
+params:
+  repoURL: "https://github.com/gnanirahulnutakki/ardur"
+  sourceRef: "dev"
+  description: "Runtime governance and verifier-backed evidence for AI agents."
+
+taxonomies:
+  maturity: maturity
+  claim_type: claim_types
+  surface: surfaces
+  framework: frameworks
+  evidence_level: evidence_levels
+
+markup:
+  highlight:
+    noClasses: false
+  goldmark:
+    renderer:
+      unsafe: false
+
+caches:
+  images:
+    dir: ":cacheDir/images"

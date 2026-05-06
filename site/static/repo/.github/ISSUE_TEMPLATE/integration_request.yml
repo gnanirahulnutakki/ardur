@@ -1,0 +1,69 @@
+name: Integration request
+description: Request support for a specific agent framework, model provider, policy engine, or runtime.
+title: "[integration] "
+labels: ["integration", "needs-design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to ask for first-class support for a tool we don't yet integrate with.
+
+        For agent frameworks (LangChain, AutoGen, CrewAI, etc.), model providers (OpenAI, Anthropic, local Ollama, etc.), policy engines (Cedar, OPA, Biscuit), identity systems (SPIFFE, OIDC), or anything else where an integration shape would help.
+
+  - type: input
+    id: target
+    attributes:
+      label: Integration target
+      description: What are we integrating with?
+      placeholder: "LangChain 0.3, OpenAI Agents SDK, Cedar 4.x, etc."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Agent framework
+        - Model provider / SDK
+        - Policy engine
+        - Identity / workload identity
+        - Runtime / deployment platform
+        - Observability / receipts sink
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: What does the integration shape look like?
+      description: |
+        How would you expect Ardur to plug into this target? Sidecar? Middleware? SDK call? Hook?
+        Sketch it as concretely as you can.
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Why this matters to you
+      description: What are you trying to govern, observe, or prove that this integration would unblock?
+    validations:
+      required: true
+
+  - type: textarea
+    id: existing
+    attributes:
+      label: Existing approach
+      description: Are you already working around this somehow? What's the pain?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution interest
+      options:
+        - label: I'd be willing to help with the integration (design, code, or testing).
+          required: false

@@ -1,0 +1,87 @@
+name: codeql
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    # Mondays at 06:00 UTC. Catches drift in third-party advisories
+    # against checked-in code without waiting for a PR.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  # Required for codeql-action/analyze to upload SARIF results that
+  # the `code_quality` ruleset rule reads.
+  security-events: write
+
+jobs:
+  # Pre-flight: detect whether the tree currently has any languages
+  # CodeQL can analyse. The repo opened before code landed, and this
+  # guard still keeps the workflow valid if language directories are
+  # temporarily absent in a future branch. Without it,
+  # `codeql-action/init` fails on "no supported languages found",
+  # which blocks merges via the `code_quality` ruleset rule.
+  detect-languages:
+    runs-on: ubuntu-latest
+    outputs:
+      languages: ${{ steps.detect.outputs.languages }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - id: detect
+        name: Detect supported languages present in the tree
+        run: |
+          set -euo pipefail
+          langs=()
+          if [ -d python ] && [ -n "$(find python -name '*.py' -print -quit 2>/dev/null)" ]; then
+            langs+=("python")
+          fi
+          if [ -d go ] && [ -n "$(find go -name '*.go' -print -quit 2>/dev/null)" ]; then
+            langs+=("go")
+          fi
+          if [ ${#langs[@]} -eq 0 ]; then
+            echo "No supported languages detected — analyze job will skip."
+            echo 'languages=[]' >> "$GITHUB_OUTPUT"
+          else
+            printf 'Detected:'; printf ' %s' "${langs[@]}"; printf '\n'
+            json=$(printf '%s\n' "${langs[@]}" | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+            echo "languages=$json" >> "$GITHUB_OUTPUT"
+          fi
+
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: detect-languages
+    if: needs.detect-languages.outputs.languages != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(needs.detect-languages.outputs.languages) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      # v3 is an annotated tag (tag-object 865f5f5c... → commit ce64ddcb...).
+      # Pin to the commit SHA per the same discipline as the other
+      # workflows; comment shows the human-readable version.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a  # v3 (commit)
+        with:
+          languages: ${{ matrix.language }}
+          # `security-and-quality` is the broadest pack — covers
+          # CWE-tagged security alerts plus general quality issues.
+          # The ruleset's `severity: all` matches this scope. Switch
+          # to `security-extended` if quality-only noise becomes a
+          # signal-to-noise problem after Phase 1.
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a  # v3 (commit)
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a  # v3 (commit)
+        with:
+          category: "/language:${{ matrix.language }}"
