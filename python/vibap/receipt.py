@@ -96,8 +96,23 @@ _OPTIONAL_CLAIMS = {
     "measurements",
 }
 _ALLOWED_CLAIMS = set(_REQUIRED_CLAIMS) | _OPTIONAL_CLAIMS
-_ACTION_CLASSES = {"search", "read", "write", "query", "delegate", "send", "summarize", "observe"}
-_SIDE_EFFECT_CLASSES = {"none", "internal_write", "external_send", "state_change"}
+_ACTION_CLASSES = {
+    "search", "read", "write", "query", "delegate", "send", "summarize", "observe",
+    # Claude Code hook adapter extensions — tool-execution semantics not covered
+    # by the original proxy-centric schema:
+    "execute",   # Bash / shell execution
+    "dispatch",  # Task / subagent dispatch
+    "fetch",     # WebFetch / HTTP read
+    "invoke",    # LS, TodoRead, TodoWrite, other passive invocations
+}
+_SIDE_EFFECT_CLASSES = {
+    "none", "internal_write", "external_send", "state_change",
+    # Claude Code hook adapter extensions:
+    "filesystem_write",  # Write/Edit to local filesystem
+    "process_launch",    # Bash spawns a subprocess
+    "network_read",      # WebFetch/WebSearch makes an outbound read request
+    "subagent_launch",   # Task spawns a sub-agent
+}
 _VERDICTS = {"compliant", "violation", "insufficient_evidence"}
 _EVIDENCE_LEVELS = {"self_signed", "counter_signed", "transparency_logged"}
 _DIGEST_ALGS = {"sha-256", "sha-384", "sha-512"}

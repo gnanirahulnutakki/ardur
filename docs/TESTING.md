@@ -118,6 +118,21 @@ make reproduce
 - **`test_mission_binding.py`**: one xfail (`test_tampered_md_returns_chain_invalid`) due to module-level `urllib.request.urlopen` state leak — runs green in isolation. CI invokes it as a separate `pytest` call.
 - **`test_biscuit_passport.py`**: requires `biscuit-python==0.4.0`. ABI breaks on 0.5+ and on Python 3.14.
 - **Live LLM tests**: tests under the semantic-judge / behavioral-fingerprint lanes need API access. Default test runs use null-judge stubs; live runs require explicit env vars (`ARDUR_SEMANTIC_JUDGE=anthropic` + `ANTHROPIC_API_KEY`).
+
+### Ardur Personal Hub
+
+When touching the Hub or its adapters, run:
+
+```bash
+PYTHONPATH=python python3 -m pytest -q python/tests/test_ardur_personal_hub.py
+node --check examples/ardur-personal-extension/src/service_worker.js
+node --check examples/ardur-personal-extension/src/content_script.js
+node --check examples/ardur-personal-extension/src/popup.js
+```
+
+The Hub test confirms browser observations produce standard Ardur Execution
+Receipts through `GovernanceProxy`, CLI policy can block a controllable command,
+and the export path includes Session Reviews.
 - **Mark `pytest.mark.<name>`**: every custom mark must be registered in `conftest.py` so `pytest -W error` doesn't blow up. The private repo had unregistered `spiffe_mock` warnings; we don't carry that forward.
 
 ### Coverage targets
@@ -175,6 +190,13 @@ For runtime changes:
 - Known-failing / known-collecting-error count has not grown
 - No `xfail` flipped to pass-or-fail without an explicit reason
 - The pytest summary line (`N passed, M skipped, K xfailed`) pasted into the commit body so a reviewer can see the delta vs the known baseline without re-running
+- When touching the Claude Code hook plugin, run
+  `PYTHONPATH=python python3 -m pytest python/tests/test_claude_code_hook.py python/tests/test_claude_code_telemetry.py -q`.
+  Also run the end-to-end stub:
+  `PYTHONPATH=python python3 plugins/claude-code/scripts/smoke.py`
+  (expects `PASS:` output and exit 0).
+  Live-binary smoke against an actual Claude Code session is optional and
+  not gated in CI because it requires a Claude Code install.
 
 ## Why this page exists
 

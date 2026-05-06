@@ -24,6 +24,22 @@ ardur verify <token-from-issue-output>
 
 That walks through key generation, mission compilation, ES256-signed passport issuance, and verification — all local, no LLM calls.
 
+## Ardur Personal Hub
+
+The regular-user local Hub is available through the same CLI:
+
+```bash
+ardur setup
+ardur hub
+ardur status
+ardur run -- python --version
+ardur desktop-observe
+```
+
+Browser, desktop, and CLI adapters send observations to the Hub. The Hub uses
+the existing `GovernanceProxy` and Execution Receipt path, so adapters do not
+create their own policy authority.
+
 A heads-up on the CLI name: `ardur` is the canonical entrypoint going forward. `ardur-proxy` still works as a deprecated alias so existing scripts don't break, but new code should use `ardur`.
 
 ## What's here
@@ -31,15 +47,18 @@ A heads-up on the CLI name: `ardur` is the canonical entrypoint going forward. `
 ```
 python/
 ├── vibap/                  # Core runtime package
-│   ├── attestation.py      # Per-session attestation issuance + verify
-│   ├── backends/           # Policy-engine adapters (Cedar, native, forbid-rules)
-│   ├── biscuit_passport.py # Biscuit AAT/DG implementation
-│   ├── cli.py              # ardur CLI entrypoint
-│   ├── mission.py          # Mission Declaration parsing + cache
-│   ├── passport.py         # Passport issuance + verify
-│   ├── policy_backend.py   # PolicyBackend protocol
-│   ├── proxy.py            # Governance proxy + session lifecycle
-│   ├── receipt.py          # Execution Receipt issuance + verify
+│   ├── attestation.py           # Per-session attestation issuance + verify
+│   ├── backends/                # Policy-engine adapters (Cedar, native, forbid-rules)
+│   ├── biscuit_passport.py      # Biscuit AAT/DG implementation
+│   ├── claude_code_hook.py      # Claude Code PreToolUse/PostToolUse adapter
+│   ├── claude_code_telemetry.py # Claude Code tool → declared-telemetry mapper
+│   ├── cli.py                   # ardur CLI entrypoint
+│   ├── mission.py               # Mission Declaration parsing + cache
+│   ├── passport.py              # Passport issuance + verify
+│   ├── personal_hub.py          # Local Ardur Personal Hub service + adapter API
+│   ├── policy_backend.py        # PolicyBackend protocol
+│   ├── proxy.py                 # Governance proxy + session lifecycle
+│   ├── receipt.py               # Execution Receipt issuance + verify
 │   └── ...
 └── tests/                  # Curated test set (~23 files)
 ```
