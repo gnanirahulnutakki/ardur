@@ -39,6 +39,13 @@ def _issue_test_passport(tmp_path: Path) -> tuple[str, ec.EllipticCurvePrivateKe
     return token, private_key
 
 
+def _deny_reason(output: dict) -> str:
+    hook_output = output["hookSpecificOutput"]
+    assert hook_output["hookEventName"] == "PreToolUse"
+    assert hook_output["permissionDecision"] == "deny"
+    return hook_output["permissionDecisionReason"]
+
+
 def test_loads_passport_from_env_var_path(tmp_path, monkeypatch):
     token, _ = _issue_test_passport(tmp_path)
     passport_file = tmp_path / "active.jwt"
@@ -215,8 +222,7 @@ def test_deny_path_returns_continue_false_with_stop_reason(tmp_path, monkeypatch
         keys_dir=tmp_path,
     )
 
-    assert output["continue"] is False
-    assert "ardur:" in output["stopReason"].lower()
+    assert "ardur:" in _deny_reason(output).lower()
     receipts = list((tmp_path / "chain").rglob("receipts.jsonl"))
     assert len(receipts) == 1
     lines = receipts[0].read_text(encoding="utf-8").splitlines()
@@ -348,7 +354,7 @@ def test_three_call_session_chain_verifies(tmp_path, monkeypatch):
 
     # Call 2: Bash (denied) — pre only (post never fires when blocked).
     out = handle_pre_tool_use({"tool_name": "Bash", "tool_input": {"command": "echo hi"}}, keys_dir=tmp_path)
-    assert out["continue"] is False
+    assert "ardur:" in _deny_reason(out).lower()
 
     # Call 3: Read (allowed) — pre + post.
     handle_pre_tool_use({"tool_name": "Read", "tool_input": {"file_path": "/tmp/b.txt"}}, keys_dir=tmp_path)

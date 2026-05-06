@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bind("export", exportReceipts);
   bind("hub", hubStatus);
   bind("dashboard", openDashboard);
+  bind("save-hub-token", saveHubToken);
   document
     .getElementById("capture-snapshots")
     .addEventListener("change", toggleCaptureSnapshots);
@@ -42,6 +43,7 @@ function renderState(state) {
   toggle.textContent = state.enabled ? "Disable" : "Enable";
   toggle.dataset.enabled = String(state.enabled);
   document.getElementById("collect").disabled = !state.enabled || !state.hub?.ok;
+  document.getElementById("hub-token").value = state.settings?.hubToken || "";
   const capture = document.getElementById("capture-snapshots");
   capture.checked = Boolean(state.captureSnapshots);
   capture.disabled = !state.enabled;
@@ -157,6 +159,19 @@ async function toggleCaptureSnapshots(event) {
   setStatus(event.target.checked ? "Review text on" : "Digest only");
 }
 
+async function saveHubToken() {
+  const token = document.getElementById("hub-token").value;
+  const response = await chrome.runtime.sendMessage({
+    type: "ardur.personal.set_hub_token",
+    token
+  });
+  if (!response.ok) {
+    throw new Error(response.error || "Hub token save failed");
+  }
+  await refresh();
+  setStatus("Hub token saved");
+}
+
 async function collectNow() {
   await injectContentScript();
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -199,7 +214,17 @@ async function hubStatus() {
 }
 
 async function openDashboard() {
-  await chrome.tabs.create({ url: "http://127.0.0.1:8765/dashboard" });
+  const state = await chrome.runtime.sendMessage({
+    type: "ardur.personal.get_state",
+    origin: currentOrigin
+  });
+  const settings = state.settings || {};
+  const hubUrl = settings.hubUrl || "http://127.0.0.1:8765";
+  const token = String(settings.hubToken || "").trim();
+  const url = token
+    ? `${hubUrl}/dashboard?token=${encodeURIComponent(token)}`
+    : `${hubUrl}/dashboard`;
+  await chrome.tabs.create({ url });
 }
 
 function normalizeOrigin(value) {

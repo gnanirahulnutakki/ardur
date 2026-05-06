@@ -8,7 +8,7 @@ Ardur is the runtime governance and evidence layer for AI agents.
 
 This public repo is opening in phases. It now contains the product intent,
 research-informed positioning, public specs, curated Python and Go runtime
-imports, mission examples, and framework example stubs. Broader proof surfaces,
+imports, mission examples, and deferred framework adapter directories. Broader proof surfaces,
 packaging, and production deployment material are still being tightened before
 they are presented as release-ready.
 
@@ -44,7 +44,7 @@ This repo currently includes:
 - current status and what is still being resolved
 - public v0.1 specs for mission declarations, execution receipts, verifier contracts, conformance profiles, and related protocol surfaces
 - curated Python and Go runtime imports under `python/` and `go/`
-- JSON-only mission examples plus framework example stubs under `examples/`
+- JSON-only mission examples plus runnable and deferred adapter examples under `examples/`
 - selected archival terminal recordings (the rerunnable proof path lands with the next public drop — see [MEDIA.md](MEDIA.md))
 - a journey-log [article series](docs/articles/README.md) — Article 06 (Public Import Discipline) and Article 05 (Proof Media That Actually Means Something) are the first-wave shippers
 - a public audit trail at [`docs/audit/`](docs/audit/) mirroring the GitHub Code Scanning dismissal record so triage decisions are auditable from the repo tree without GitHub credentials
@@ -53,6 +53,8 @@ This repo currently includes:
 
 The next repo drops will add:
 
+- a Claude Code-first Ardur Personal release candidate with plain `ARDUR.md`
+  guardrail profiles for non-technical users
 - dedicated Python and Go CI workflows once the imported runtime surfaces finish their public verification pass
 - first runnable framework examples beyond JSON mission files
 - public verifier and proof commands with stable artifact paths
@@ -64,7 +66,7 @@ Ardur sits between an AI agent and the tools it calls — so the integration sto
 
 | Layer                | In repo now | Still pending public validation |
 |----------------------|-------------|---------------------------------|
-| **Agent framework**  | JSON mission examples; framework stubs (README-only) for Claude Code, OpenAI Agents SDK, Google ADK, LangChain, LangGraph, AutoGen | runnable framework adapters |
+| **Agent framework**  | JSON mission examples; Claude Code plugin; runnable LangChain, LangGraph, AutoGen, browser, desktop-observe, and native-host examples; deferred README-only OpenAI Agents SDK and Google ADK directories | more runnable framework adapters |
 | **Model provider**   | provider-agnostic tool boundary in the runtime design | local Ollama quickstarts and live-provider examples |
 | **Policy engine**    | native checks, forbid-rules, Cedar-facing surfaces | OPA and broader Biscuit datalog examples |
 | **Identity**         | SPIFFE / SPIRE-oriented code and docs | full cluster deployment walkthrough |

@@ -1,4 +1,4 @@
-"""Stub end-to-end smoke for the Ardur Claude Code hook.
+"""Local end-to-end smoke for the Ardur Claude Code hook.
 
 Issues a test passport, simulates 3 hook invocations (Read -> Bash -> Read),
 and verifies the resulting receipt chain. Does not require a live Claude
@@ -33,7 +33,7 @@ def main() -> int:
         private_key, public_key = generate_keypair(keys_dir=tmp_path)
         mission = MissionPassport(
             agent_id="smoke",
-            mission="end-to-end stub session",
+            mission="Claude Code hook smoke session",
             allowed_tools=["Read"],
             forbidden_tools=["Bash"],
             resource_scope=["/tmp/*"],
@@ -66,7 +66,8 @@ def main() -> int:
                 {"tool_name": "Bash", "tool_input": {"command": "echo hi"}},
                 keys_dir=tmp_path,
             )
-            if out.get("continue") is not False:
+            hook_output = out.get("hookSpecificOutput") or {}
+            if hook_output.get("permissionDecision") != "deny":
                 print(f"FAIL: Bash call was not denied; output={out}", file=sys.stderr)
                 return 1
 

@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Sequence
 
 from . import __version__
+from .ardur_profile import PROFILE_TEMPLATES, load_ardur_profile, write_profile_template
 from .ardur_personal_native_host import (
     build_native_host_manifest,
     handle_native_host_message,
     run_native_host,
 )
-from .passport import MissionPassport, generate_keypair, issue_passport, load_mission_file, verify_passport
+from .passport import DEFAULT_HOME, MissionPassport, generate_keypair, issue_passport, load_mission_file, verify_passport
 from .personal_hub import (
     DEFAULT_HUB_HOST,
     DEFAULT_HUB_PORT,
@@ -129,7 +132,13 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    response = hub_request("GET", "/v1/status", hub_url=args.hub_url)
+    response = hub_request(
+        "GET",
+        "/v1/status",
+        hub_url=args.hub_url,
+        hub_token=args.hub_token,
+        home=args.home,
+    )
     _print_json(response)
     return 0 if response.get("ok") else 1
 
@@ -158,10 +167,10 @@ def cmd_desktop_observe(args: argparse.Namespace) -> int:
 def cmd_personal_native_host(args: argparse.Namespace) -> int:
     if args.once_json:
         message = json.loads(args.once_json.read_text(encoding="utf-8"))
-        response = handle_native_host_message(message, hub_url=args.hub_url)
+        response = handle_native_host_message(message, hub_url=args.hub_url, hub_token=args.hub_token, home=args.home)
         _print_json(response)
         return 0 if response.get("ok") else 1
-    run_native_host(sys.stdin.buffer, sys.stdout.buffer, hub_url=args.hub_url)
+    run_native_host(sys.stdin.buffer, sys.stdout.buffer, hub_url=args.hub_url, hub_token=args.hub_token, home=args.home)
     return 0
 
 
@@ -174,6 +183,195 @@ def cmd_personal_native_manifest(args: argparse.Namespace) -> int:
         )
     )
     return 0
+
+
+CLAUDE_CODE_PROTECT_MODES = {
+    "safe-coding": {
+        "mission": "Safe Claude Code work inside the selected folder.",
+        "allowed_tools": ["Read", "Glob", "Grep", "Edit", "MultiEdit", "Write"],
+        "forbidden_tools": ["Bash"],
+    },
+    "read-only": {
+        "mission": "Read-only Claude Code review inside the selected folder.",
+        "allowed_tools": ["Read", "Glob", "Grep"],
+        "forbidden_tools": ["Bash", "Edit", "MultiEdit", "Write"],
+    },
+}
+
+
+def _default_claude_plugin_dir() -> Path:
+    cwd_candidate = Path.cwd() / "plugins" / "claude-code"
+    if cwd_candidate.exists():
+        return cwd_candidate
+    source_candidate = Path(__file__).resolve().parents[2] / "plugins" / "claude-code"
+    return source_candidate
+
+
+def _normalize_protect_mode(value: str) -> str:
+    return value.strip().lower().replace("_", "-").replace(" ", "-")
+
+
+def _claude_code_plugin_checks(plugin_dir: Path) -> list[dict[str, object]]:
+    return [
+        {
+            "name": "plugin_dir",
+            "ok": plugin_dir.exists() and plugin_dir.is_dir(),
+            "detail": str(plugin_dir),
+        },
+        {
+            "name": "plugin_manifest",
+            "ok": (plugin_dir / ".claude-plugin" / "plugin.json").is_file(),
+            "detail": str(plugin_dir / ".claude-plugin" / "plugin.json"),
+        },
+        {
+            "name": "plugin_hooks",
+            "ok": (plugin_dir / "hooks" / "hooks.json").is_file(),
+            "detail": str(plugin_dir / "hooks" / "hooks.json"),
+        },
+        {
+            "name": "pre_tool_use",
+            "ok": (plugin_dir / "hooks" / "pre_tool_use").is_file(),
+            "detail": str(plugin_dir / "hooks" / "pre_tool_use"),
+        },
+        {
+            "name": "post_tool_use",
+            "ok": (plugin_dir / "hooks" / "post_tool_use").is_file(),
+            "detail": str(plugin_dir / "hooks" / "post_tool_use"),
+        },
+    ]
+
+
+def _validate_claude_code_plugin_dir(plugin_dir: Path) -> None:
+    failed = [check for check in _claude_code_plugin_checks(plugin_dir) if not check["ok"]]
+    if failed:
+        details = ", ".join(str(item["detail"]) for item in failed)
+        raise FileNotFoundError(f"Claude Code plugin is incomplete: {details}")
+
+
+def claude_code_doctor(plugin_dir: Path | None = None, home: Path | None = None) -> dict[str, object]:
+    plugin = (plugin_dir or _default_claude_plugin_dir()).expanduser().resolve()
+    checks = _claude_code_plugin_checks(plugin)
+    claude_binary = shutil.which("claude")
+    checks.append({
+        "name": "claude_binary",
+        "ok": bool(claude_binary),
+        "detail": claude_binary or "claude not found on PATH",
+    })
+    active_passport = (home.expanduser() if home else DEFAULT_HOME) / "active_mission.jwt"
+    checks.append({
+        "name": "active_passport",
+        "ok": active_passport.is_file(),
+        "detail": str(active_passport),
+    })
+    if claude_binary and all(check["ok"] for check in checks[:5]):
+        result = subprocess.run(
+            [claude_binary, "plugin", "validate", str(plugin)],
+            capture_output=True,
+            text=True,
+        )
+        checks.append({
+            "name": "plugin_validate",
+            "ok": result.returncode == 0,
+            "detail": result.stdout.strip() or result.stderr.strip(),
+        })
+    else:
+        checks.append({
+            "name": "plugin_validate",
+            "ok": False,
+            "detail": "skipped; missing claude binary or plugin files",
+        })
+    return {"ok": all(bool(check["ok"]) for check in checks), "checks": checks}
+
+
+def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
+    profile = load_ardur_profile(args.profile) if args.profile else None
+    mode_name = _normalize_protect_mode(args.mode or (profile.mode if profile and profile.mode else "safe-coding"))
+    if mode_name not in CLAUDE_CODE_PROTECT_MODES:
+        raise ValueError(f"unsupported Claude Code protection mode: {mode_name}")
+    mode = CLAUDE_CODE_PROTECT_MODES[mode_name]
+    raw_scope = args.scope
+    if raw_scope is None and profile and profile.scope:
+        profile_scope = Path(profile.scope).expanduser()
+        if profile_scope.is_absolute():
+            raw_scope = profile_scope
+        else:
+            raw_scope = Path(args.profile).expanduser().parent / profile_scope
+    if raw_scope is None:
+        raise ValueError("ardur protect claude-code requires --scope or a profile with `Protect folder:`")
+    scope = Path(raw_scope).expanduser().resolve()
+    home = Path(args.home).expanduser() if args.home else DEFAULT_HOME
+    home.mkdir(parents=True, exist_ok=True)
+    plugin_dir = Path(args.plugin_dir).expanduser().resolve()
+    _validate_claude_code_plugin_dir(plugin_dir)
+    private_key, public_key = generate_keypair(keys_dir=args.keys_dir or (home / "keys"))
+    allowed_tools = list(profile.allowed_tools if profile and profile.allowed_tools else mode["allowed_tools"])
+    forbidden_tools = list(profile.forbidden_tools if profile and profile.forbidden_tools else mode["forbidden_tools"])
+    max_tool_calls = profile.max_tool_calls if profile and profile.max_tool_calls is not None else args.max_tool_calls
+    max_duration_s = profile.max_duration_s if profile and profile.max_duration_s is not None else args.max_duration_s
+    mission = MissionPassport(
+        agent_id=args.agent_id,
+        mission=args.mission or (profile.mission if profile and profile.mission else mode["mission"]),
+        allowed_tools=allowed_tools,
+        forbidden_tools=forbidden_tools,
+        resource_scope=[str(scope), f"{scope}/*"],
+        cwd=str(scope),
+        max_tool_calls=max_tool_calls,
+        max_duration_s=max_duration_s,
+    )
+    token = issue_passport(mission, private_key, ttl_s=args.ttl_s or max_duration_s)
+    claims = verify_passport(token, public_key)
+    active_passport = home / "active_mission.jwt"
+    active_passport.write_text(token + "\n", encoding="utf-8")
+    run_command = f"claude --plugin-dir {plugin_dir}"
+    return {
+        "ok": True,
+        "agent": "claude-code",
+        "mode": mode_name,
+        "profile": str(Path(args.profile).expanduser()) if args.profile else None,
+        "scope": str(scope),
+        "home": str(home),
+        "active_passport": str(active_passport),
+        "plugin_dir": str(plugin_dir),
+        "run_command": run_command,
+        "allowed_tools": allowed_tools,
+        "forbidden_tools": forbidden_tools,
+        "claims": claims,
+    }
+
+
+def cmd_protect_claude_code(args: argparse.Namespace) -> int:
+    result = protect_claude_code(args)
+    if args.json:
+        _print_json(result)
+        return 0
+    print("Ardur Claude Code protection configured.")
+    print(f"mode: {result['mode']}")
+    print(f"scope: {result['scope']}")
+    print(f"active passport: {result['active_passport']}")
+    print(f"run: {result['run_command']}")
+    return 0
+
+
+def cmd_profile_init(args: argparse.Namespace) -> int:
+    path = write_profile_template(args.path, template=args.template, force=args.force)
+    result = {
+        "ok": True,
+        "template": args.template,
+        "path": str(path),
+        "next_step": f"ardur protect claude-code --profile {path}",
+    }
+    if args.json:
+        _print_json(result)
+    else:
+        print(f"Created {path}")
+        print(result["next_step"])
+    return 0
+
+
+def cmd_doctor_claude_code(args: argparse.Namespace) -> int:
+    response = claude_code_doctor(plugin_dir=args.plugin_dir, home=args.home)
+    _print_json(response)
+    return 0 if response.get("ok") else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -260,6 +458,11 @@ def build_parser() -> argparse.ArgumentParser:
     setup.add_argument("--port", type=int, default=DEFAULT_HUB_PORT, help="Hub port")
     setup.add_argument("--home", type=Path, help="Ardur Personal home directory")
     setup.add_argument(
+        "--rotate-token",
+        action="store_true",
+        help="generate a new local Hub token instead of reusing the existing install token",
+    )
+    setup.add_argument(
         "--extension-path",
         type=Path,
         default=Path("examples/ardur-personal-extension"),
@@ -269,12 +472,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = subparsers.add_parser("status", help="show Ardur Personal Hub status")
     status.add_argument("--hub-url", default=DEFAULT_HUB_URL, help="Hub base URL")
+    status.add_argument("--hub-token", default=None, help="Hub bearer token (defaults to config/env)")
+    status.add_argument("--home", type=Path, help="Ardur Personal home directory")
     status.set_defaults(func=cmd_status)
 
     doctor = subparsers.add_parser("doctor", help="check local Ardur Personal setup")
     doctor.add_argument("--home", type=Path, help="Ardur Personal home directory")
     doctor.add_argument("--hub-url", default=DEFAULT_HUB_URL, help="Hub base URL")
+    doctor.add_argument("--hub-token", default=None, help="Hub bearer token (defaults to config/env)")
     doctor.set_defaults(func=cmd_doctor)
+
+    doctor_cc = subparsers.add_parser("doctor-claude-code", help="check Claude Code plugin and active passport setup")
+    doctor_cc.add_argument("--home", type=Path, help="Ardur home containing active_mission.jwt")
+    doctor_cc.add_argument("--plugin-dir", type=Path, default=_default_claude_plugin_dir(), help="Claude Code plugin directory")
+    doctor_cc.set_defaults(func=cmd_doctor_claude_code)
 
     uninstall = subparsers.add_parser("uninstall", help="remove Ardur Personal launch files")
     uninstall.add_argument("--home", type=Path, help="Ardur Personal home directory")
@@ -287,6 +498,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = subparsers.add_parser("run", help="run a CLI command through Ardur Personal Hub")
     run.add_argument("--hub-url", default=DEFAULT_HUB_URL, help="Hub base URL")
+    run.add_argument("--hub-token", default=None, help="Hub bearer token (defaults to config/env)")
+    run.add_argument("--home", type=Path, help="Ardur Personal home directory")
     run.add_argument("command", nargs=argparse.REMAINDER, help="command to run after --")
     run.set_defaults(func=cmd_run)
 
@@ -295,6 +508,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="record a Mac desktop app observation through Ardur Personal Hub",
     )
     desktop.add_argument("--hub-url", default=DEFAULT_HUB_URL, help="Hub base URL")
+    desktop.add_argument("--hub-token", default=None, help="Hub bearer token (defaults to config/env)")
+    desktop.add_argument("--home", type=Path, help="Ardur Personal home directory")
     desktop.add_argument("--session-id", help="stable desktop session id")
     desktop.add_argument("--app", help="application name; autodetected on macOS when omitted")
     desktop.add_argument("--title", help="window title; autodetected on macOS when omitted")
@@ -309,6 +524,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="run the Ardur Personal native messaging bridge",
     )
     personal_native_host.add_argument("--hub-url", default=DEFAULT_HUB_URL, help="Hub base URL")
+    personal_native_host.add_argument("--hub-token", default=None, help="Hub bearer token (defaults to config/env)")
+    personal_native_host.add_argument("--home", type=Path, help="Ardur Personal home directory")
     personal_native_host.add_argument(
         "--once-json",
         type=Path,
@@ -328,6 +545,54 @@ def build_parser() -> argparse.ArgumentParser:
         default="chrome",
     )
     personal_native_manifest.set_defaults(func=cmd_personal_native_manifest)
+
+    profile = subparsers.add_parser(
+        "profile",
+        help="create and inspect plain Markdown Ardur guardrail profiles",
+    )
+    profile_subparsers = profile.add_subparsers(dest="profile_command", required=True)
+    profile_init = profile_subparsers.add_parser(
+        "init",
+        help="create an ARDUR.md guardrail profile from a built-in template",
+    )
+    profile_init.add_argument(
+        "--template",
+        choices=sorted(PROFILE_TEMPLATES),
+        default="read-only",
+        help="starter profile to write",
+    )
+    profile_init.add_argument("--path", type=Path, default=Path("ARDUR.md"), help="profile file to create")
+    profile_init.add_argument("--force", action="store_true", help="replace an existing profile")
+    profile_init.add_argument("--json", action="store_true", help="print machine-readable setup details")
+    profile_init.set_defaults(func=cmd_profile_init)
+
+    protect = subparsers.add_parser(
+        "protect",
+        help="configure local Ardur protection for an AI assistant",
+    )
+    protect_subparsers = protect.add_subparsers(dest="protect_target", required=True)
+    protect_cc = protect_subparsers.add_parser(
+        "claude-code",
+        help="issue an active Mission Passport and print the Claude Code plugin command",
+    )
+    protect_cc.add_argument("--scope", type=Path, help="folder Claude Code is allowed to work in")
+    protect_cc.add_argument("--profile", type=Path, help="Markdown Ardur profile, such as ARDUR.md")
+    protect_cc.add_argument(
+        "--mode",
+        choices=sorted(CLAUDE_CODE_PROTECT_MODES),
+        default=None,
+        help="plain-English policy template",
+    )
+    protect_cc.add_argument("--json", action="store_true", help="print machine-readable setup details")
+    protect_cc.add_argument("--home", type=Path, help="Ardur home that receives active_mission.jwt")
+    protect_cc.add_argument("--plugin-dir", type=Path, default=_default_claude_plugin_dir(), help="Claude Code plugin directory")
+    protect_cc.add_argument("--keys-dir", type=Path, help="signing keys directory")
+    protect_cc.add_argument("--agent-id", default="local-user:claude-code", help="Mission Passport subject")
+    protect_cc.add_argument("--mission", help="override the default mission text for the selected mode")
+    protect_cc.add_argument("--max-tool-calls", type=int, default=250, help="maximum governed tool calls")
+    protect_cc.add_argument("--max-duration-s", type=int, default=86400, help="mission duration budget in seconds")
+    protect_cc.add_argument("--ttl-s", type=int, help="override token TTL in seconds")
+    protect_cc.set_defaults(func=cmd_protect_claude_code)
 
     return parser
 

@@ -1,63 +1,137 @@
 # Ardur Personal Hub
 
-Ardur Personal Hub is the regular-user local product shape for Ardur on Mac.
-The Hub runs the real Python Ardur runtime locally and receives events from thin
-browser, desktop, and CLI adapters.
+Ardur Personal is the local product shape for regular users. It protects local
+AI-agent actions where Ardur owns the tool boundary, and it labels everything
+else honestly as observed or unknown.
 
-## Install Shape
+The first release-candidate path is Claude Code.
 
-Developer install:
+## First Run
+
+Install Ardur with its Python dependencies:
 
 ```bash
-cd python
-pip install -e .
+cd <ardur-repo>
+pip install -e python/
+ardur --version
+```
+
+Create a simple guardrail file:
+
+```bash
+ardur profile init --template read-only --path ARDUR.md
+```
+
+Edit `ARDUR.md` if needed:
+
+```markdown
+# Ardur Guardrails
+Mode: read only
+Mission: Review this project without changing files or running commands.
+Protect folder: .
+Max tool calls: 100
+Duration: 1d
+
+## Allow
+- Read files
+- Search files
+
+## Block
+- Run shell commands
+- Edit files
+- Write files
+```
+
+Turn on Claude Code protection:
+
+```bash
+ardur protect claude-code --profile ARDUR.md
+```
+
+Start Claude Code with the command Ardur prints:
+
+```bash
+claude --plugin-dir plugins/claude-code
+```
+
+Check for missing tools, plugin files, or active passport before using it:
+
+```bash
+ardur doctor-claude-code
+```
+
+If `claude` is missing, install Claude Code first. If plugin files are missing,
+use the checked-in `plugins/claude-code` directory or reinstall Ardur from a
+complete release artifact.
+
+## Options Users Can Choose
+
+- `read-only`: review code without editing files or running commands.
+- `safe-coding`: edit files inside the protected folder, but block shell
+  commands.
+- `ARDUR.md`: plain Markdown profile for the same settings, suitable for
+  non-technical users.
+- Advanced CLI flags: `ardur protect claude-code --scope . --mode read-only`
+  and `ardur protect claude-code --scope . --mode safe-coding`.
+
+The Markdown profile compiles into the same Mission Passport and receipt path
+as advanced CLI setup. No policy capability is removed.
+
+For source installs, `pip install -e python/` installs Ardur's required Python
+dependencies from `python/pyproject.toml`. The development Homebrew formula is
+not the stable public install path yet; it must be regenerated from a tagged
+release with Python resource stanzas before it is advertised to non-technical
+users.
+
+## Hub Setup
+
+The Hub receives browser, desktop, and CLI observations and signs standard
+Ardur evidence.
+
+```bash
 ardur setup
 ardur hub
 ```
 
-Target Homebrew install:
+`ardur setup` writes a local Hub token to the Ardur Personal config and prints
+it once for setup. Keep that token local. The browser extension uses it to talk
+to the Hub; arbitrary websites should not be able to read Hub exports or submit
+fake observations.
 
-```bash
-brew install gnanirahulnutakki/ardur/ardur-personal
-ardur setup
-brew services start ardur-personal
-```
+## Browser Evidence
 
-## Use
-
-Browser:
+The browser extension is beta evidence collection, not enforcement over hidden
+provider behavior.
 
 1. Start the Hub.
 2. Load `examples/ardur-personal-extension` as an unpacked extension.
-3. Enable the current AI site.
-4. Optional: enable visible-text capture for readable excerpts.
-5. Review evidence in the popup or at `http://127.0.0.1:8765/dashboard`.
+3. Paste the Hub token from `ardur setup`.
+4. Enable the current AI site.
+5. Optional: enable visible-text capture for readable excerpts.
+6. Review evidence in the popup or dashboard.
 
-CLI:
+## CLI And Desktop Boundaries
 
-```bash
-ardur run -- codex
-ardur run -- claude
-ardur run -- python script.py
-```
+`ardur run -- <command>` can enforce simple non-interactive local commands, but
+it is not the first-class path for interactive CLIs such as Codex or Claude in
+this release candidate. Codex hooks and Claude Desktop MCP packaging are
+explicit next-cycle work.
 
-Desktop:
-
-```bash
-ardur desktop-observe
-```
+`ardur desktop-observe` records local desktop observations on macOS. It does
+not control hidden provider-side behavior.
 
 ## Evidence Levels
 
-- `enforced`: Ardur controlled the local action boundary, such as `ardur run`.
+- `enforced`: Ardur controlled the local action boundary.
 - `attested`: Ardur signed an observation or receipt.
-- `observed`: The local adapter saw browser, desktop, or CLI state.
-- `blocked`: Hub policy denied a controllable action.
-- `insufficient_evidence`: The provider-side activity was not locally visible.
+- `observed`: a local adapter saw browser, desktop, or CLI state.
+- `blocked`: Hub or hook policy denied a controllable action.
+- `insufficient_evidence`: the relevant provider-side activity was not locally
+  visible.
 
 ## Boundary
 
-The Hub can enforce CLI commands and adapter-mediated checks. It cannot control
-hidden server-side behavior inside Claude, ChatGPT, Grok, Codex web, Kimi, or
-other third-party services unless those providers expose a tool/action boundary
-that Ardur owns.
+Ardur can protect Claude Code local tool calls and other adapter-mediated local
+actions. It cannot control hidden server-side behavior inside Claude, ChatGPT,
+Grok, Codex web, Kimi, or other third-party services unless those providers
+expose a tool/action boundary that Ardur owns.

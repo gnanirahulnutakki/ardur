@@ -213,6 +213,16 @@ def load_active_passport(*, keys_dir: Path | None = None) -> dict[str, Any]:
 HOOK_VERIFIER_ID = "ardur-claude-code-hook"
 
 
+def _pre_tool_use_deny_output(reason: str) -> dict[str, Any]:
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }
+    }
+
+
 def _trace_id_from_claims(claims: dict[str, Any]) -> str:
     override = os.environ.get("ARDUR_TRACE_ID", "").strip()
     if override:
@@ -421,12 +431,14 @@ def handle_pre_tool_use(
 
     Returns a Claude-Code hook-protocol JSON dict:
       - on Permit: ``{"continue": True, "systemMessage": "..."}`` plus a
-        signed Execution Receipt appended to the per-trace chain;
-      - on Deny / fail-closed: ``{"continue": False, "stopReason": "..."}``
-        plus a non-compliant receipt appended to the chain;
-      - on Mission-load failure (no passport, signature mismatch, …):
-        ``{"continue": False, "stopReason": "ardur: <reason>"}`` and NO
-        receipt (no trace context to chain into).
+        signed Execution Receipt appended to the per-trace chain. This does
+        not return ``permissionDecision=allow``; Claude Code's normal
+        permission flow remains in charge.
+      - on Deny / fail-closed: a ``hookSpecificOutput`` deny decision plus
+        a non-compliant receipt appended to the chain;
+      - on Mission-load failure (no passport, signature mismatch, …): a
+        fail-closed ``hookSpecificOutput`` deny decision and NO receipt (no
+        trace context to chain into).
     """
     from .claude_code_telemetry import map_tool_call
     from .proxy import Decision, PolicyEvent
@@ -434,10 +446,7 @@ def handle_pre_tool_use(
     try:
         claims = load_active_passport(keys_dir=keys_dir)
     except MissionLoadError as exc:
-        return {
-            "continue": False,
-            "stopReason": f"ardur: {exc}",
-        }
+        return _pre_tool_use_deny_output(f"ardur: {exc}")
 
     tool_name = str(hook_input.get("tool_name", ""))
     tool_input_dict = dict(hook_input.get("tool_input", {}) or {})
@@ -491,10 +500,7 @@ def handle_pre_tool_use(
             trace_id=trace_id,
             keys_dir=keys_dir,
         )
-        return {
-            "continue": False,
-            "stopReason": f"ardur: blocked — {reason_text}",
-        }
+        return _pre_tool_use_deny_output(f"ardur: blocked - {reason_text}")
 
     # Allow: build + sign + chain receipt via the shared helper.
     receipt_obj = _emit_chained_receipt(
