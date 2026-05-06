@@ -42,5 +42,6 @@ jobs:
             --no-progress
             --accept 200,206,429
             --exclude 'github\.com/.*/security/advisories/new(/.*)?$'
+            --exclude-path '^site/content/'
             './**/*.md'
           fail: true

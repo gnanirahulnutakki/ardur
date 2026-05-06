@@ -13,10 +13,6 @@ evidence_levels: ["code-and-doc"]
 
 This section lists hosted documentation and mirrored artifacts generated from `.github/`.
 
-## Hosted Docs
-
-- [`PULL_REQUEST_TEMPLATE.md`](/__ardur_internal__/source/github/pull_request_template/)
-
 ## Child Sections
 
 - [`ISSUE_TEMPLATE/`](/__ardur_internal__/source/github/issue_template/)

@@ -61,4 +61,3 @@ without using GitHub as the documentation browser.
 - {{< repo-link "docs/articles/06-public-import-discipline.md" "Public Import Discipline" >}}
 - {{< repo-link "CONTRIBUTING.md" "Contributing" >}}
 - {{< repo-link "CODE_OF_CONDUCT.md" "Code of conduct" >}}
-- {{< repo-link ".github/PULL_REQUEST_TEMPLATE.md" "Pull request template" >}}

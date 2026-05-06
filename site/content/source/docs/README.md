@@ -2,7 +2,7 @@
 title: "Docs"
 description: "This repo is opening in phases."
 source_path: "docs/README.md"
-source_sha256: "579567ab22153c21749e4f8a851bb1cd808847b81597cd3448ca79ed841bd539"
+source_sha256: "9b878fa0c081d4b6f54bedbf6a580b16bbd2c4616c8f6ac0a267352a2beae154"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -30,6 +30,9 @@ tighter quickstart are landing in follow-on phases.
 - [Protocol Roots](/__ardur_internal__/source/docs/protocol-roots/)
 - [Public Import Plan](/__ardur_internal__/source/docs/public-import-plan/)
 - [Testing](/__ardur_internal__/source/docs/testing/)
+- [Conductor Bootstrap](/__ardur_internal__/source/docs/conductor-bootstrap/)
+- [Agent Instructions](/__ardur_internal__/source/docs/agent-instructions/readme/)
+- [Engineering Standards](/__ardur_internal__/source/docs/engineering-standards/)
 - [Architecture Decision Records](/__ardur_internal__/source/docs/decisions/readme/)
 - [MCEP Specifications (v0.1)](/__ardur_internal__/source/docs/specs/readme/)
 - [Comparisons and engineering responses](/__ardur_internal__/source/docs/comparisons/readme/)

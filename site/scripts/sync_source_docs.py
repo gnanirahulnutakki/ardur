@@ -34,7 +34,7 @@ PUBLIC_MARKDOWN_EXCLUDED_DIR_NAMES = {
     "vendor"
 }
 
-PUBLIC_MARKDOWN_INCLUDED_HIDDEN_DIRS = {".github"}
+PUBLIC_MARKDOWN_INCLUDED_HIDDEN_DIRS: set[str] = set()
 
 PUBLIC_ARTIFACT_GLOBS = [
     ".github/ISSUE_TEMPLATE/*.yml",
@@ -165,9 +165,6 @@ def classify(source: Path, text: str) -> dict[str, list[str]]:
     elif lowered.startswith("docs/audit/"):
         surfaces = ["docs"]
         claim_types = ["audit"]
-    elif lowered.startswith(".github/"):
-        surfaces = ["github"]
-        claim_types = ["contributor-process"]
     elif "known-limitations" in lowered:
         surfaces = ["docs"]
         claim_types = ["limitation"]
