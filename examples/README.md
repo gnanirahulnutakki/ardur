@@ -10,10 +10,14 @@ Working examples of Ardur governing AI agents across the major frameworks. Some 
 | [langchain-quickstart/](langchain-quickstart/) | runnable | `python/` editable install + LangChain + an LLM provider |
 | [langgraph-quickstart/](langgraph-quickstart/) | runnable | `python/` editable install + LangGraph + an LLM provider |
 | [autogen-quickstart/](autogen-quickstart/) | runnable | `python/` editable install + AutoGen v0.4+ + an LLM provider |
+| [ardur-personal-extension/](ardur-personal-extension/) | runnable adapter | local `ardur hub` + Chrome-compatible browser |
+| [ardur-personal-desktop/](ardur-personal-desktop/) | runnable adapter | local `ardur hub` + macOS Accessibility permission for autodetect |
+| [ardur-personal-native-host/](ardur-personal-native-host/) | optional bridge | local `ardur hub` + browser Native Messaging |
 | [_shared/](_shared/) | helpers | Imported by the three framework demos above |
 | [claude-code-hook/](claude-code-hook/) | placeholder | `python/` editable install + a frontier-LLM coding-agent CLI |
 | [openai-agents-sdk/](openai-agents-sdk/) | placeholder | `python/` editable install + OpenAI Agents SDK + OpenAI API key |
 | [google-adk/](google-adk/) | placeholder | `python/` editable install + Google ADK + Google AI API key |
+| [../plugins/claude-code/](../plugins/claude-code/) | placeholder | `python/` editable install + Claude Code |
 
 The runnable framework directories (`langchain-quickstart/`, `langgraph-quickstart/`, `autogen-quickstart/`) ship a `demo.py` entrypoint and, where applicable, a `Dockerfile` that produces the published `rahulnutakki/ardur-demo:*` images. They share helpers under [`_shared/`](_shared/) — provider selection, SVID fetch, Biscuit issuance, governed-session setup, receipt-chain verification, end-of-session attestation. No model identifiers are hard-coded in any of these files; provider config is sourced from environment variables at runtime (see [CONTRIBUTING.md](../CONTRIBUTING.md) "No specific LLM model names" rule).
 
