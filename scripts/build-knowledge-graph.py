@@ -320,7 +320,12 @@ def walk_go(root: Path, graph: Graph, files: list[str]) -> None:
                     if module_path and import_name.startswith(module_path):
                         suffix = import_name.removeprefix(module_path).lstrip("/")
                         target_dir = "go" if not suffix else f"go/{suffix}"
-                graph.add_edge(pkg_id, f"go-pkg:{target_dir}", "imports", detected_by="go-list")
+                        graph.add_edge(
+                            pkg_id,
+                            f"go-pkg:{target_dir}",
+                            "imports",
+                            detected_by="go-list",
+                        )
 
     for path in go_files:
         text = (root / path).read_text(encoding="utf-8", errors="replace")

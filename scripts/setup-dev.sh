@@ -59,6 +59,7 @@ PY
 }
 
 failures=0
+waived_failures=0
 
 if [ "$SKIP_PYTHON" -eq 0 ]; then
   if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
@@ -81,8 +82,13 @@ if [ "$SKIP_GO" -eq 0 ]; then
     actual_go="$(go version | awk '{print $3}' | sed 's/^go//')"
     echo "==> Go local version: $actual_go; go/go.mod requires: $required_go"
     if version_lt "$actual_go" "$required_go"; then
-      echo "ERROR: local Go $actual_go is below go/go.mod requirement $required_go." >&2
-      failures=$((failures + 1))
+      if [ "$ALLOW_GO_MISMATCH" -eq 1 ]; then
+        echo "WARN: local Go $actual_go is below go/go.mod requirement $required_go; continuing because --allow-go-mismatch was set." >&2
+        waived_failures=$((waived_failures + 1))
+      else
+        echo "ERROR: local Go $actual_go is below go/go.mod requirement $required_go." >&2
+        failures=$((failures + 1))
+      fi
     elif [ "$WARM_GO" -eq 1 ]; then
       echo "==> Warming Go module cache"
       (cd go && go mod download)
@@ -90,12 +96,15 @@ if [ "$SKIP_GO" -eq 0 ]; then
   fi
 fi
 
-if [ "$failures" -gt 0 ] && [ "$ALLOW_GO_MISMATCH" -eq 0 ]; then
+if [ "$failures" -gt 0 ]; then
   echo "setup completed with $failures toolchain problem(s)" >&2
   exit 1
 fi
 
-echo "setup complete"
+if [ "$waived_failures" -gt 0 ]; then
+  echo "setup complete with $waived_failures waived toolchain warning(s)"
+else
+  echo "setup complete"
+fi
 echo "next: ./scripts/conductor-bootstrap.sh"
 echo "next: ./scripts/check-local.sh --quick"
-
