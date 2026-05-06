@@ -146,6 +146,12 @@ def cmd_claude_code_report(args: argparse.Namespace) -> int:
         f"{report['totals']['dispatch_launch_count']} launches, "
         f"{report['totals']['dispatch_observation_count']} post observations"
     )
+    print(
+        "Subagent lifecycle: "
+        f"{report['totals']['subagents_started']} started, "
+        f"{report['totals']['subagents_stopped']} stopped"
+    )
+    print(f"Per-child attribution: {report['coverage']['per_child_attribution']}")
     print(f"Attribution: {report['coverage']['attribution']}")
     return 0
 
@@ -266,6 +272,16 @@ def _claude_code_plugin_checks(plugin_dir: Path) -> list[dict[str, object]]:
             "name": "post_tool_use",
             "ok": (plugin_dir / "hooks" / "post_tool_use").is_file(),
             "detail": str(plugin_dir / "hooks" / "post_tool_use"),
+        },
+        {
+            "name": "subagent_start",
+            "ok": (plugin_dir / "hooks" / "subagent_start").is_file(),
+            "detail": str(plugin_dir / "hooks" / "subagent_start"),
+        },
+        {
+            "name": "subagent_stop",
+            "ok": (plugin_dir / "hooks" / "subagent_stop").is_file(),
+            "detail": str(plugin_dir / "hooks" / "subagent_stop"),
         },
     ]
 
@@ -486,11 +502,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     cc_hook = subparsers.add_parser(
         "claude-code-hook",
-        help="run the Claude Code PreToolUse / PostToolUse adapter",
+        help="run the Claude Code hook adapter",
     )
     cc_hook.add_argument(
         "phase",
-        choices=["pre", "post"],
+        choices=["pre", "post", "subagent-start", "subagent-stop"],
         help="hook lifecycle phase to invoke",
     )
     cc_hook.add_argument(

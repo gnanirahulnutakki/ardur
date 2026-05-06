@@ -20,6 +20,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -103,6 +104,72 @@ def _utc_now() -> str:
 
 def _sha256_text(value: str) -> str:
     return "sha-256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class StreamedProcessResult:
+    returncode: int
+    stdout_digest: str
+    stderr_digest: str
+    stdout_bytes: int
+    stderr_bytes: int
+
+
+def _stream_subprocess(command: list[str]) -> StreamedProcessResult:
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout_hash = hashlib.sha256()
+    stderr_hash = hashlib.sha256()
+    counts = {"stdout": 0, "stderr": 0}
+    errors: list[BaseException] = []
+
+    def pump(stream, target, hasher, key: str) -> None:
+        try:
+            while True:
+                chunk = stream.read(64 * 1024)
+                if not chunk:
+                    return
+                hasher.update(chunk)
+                counts[key] += len(chunk)
+                target.write(chunk)
+                target.flush()
+        except BaseException as exc:  # pragma: no cover - stdout/stderr pipe failures are host-specific
+            errors.append(exc)
+        finally:
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+    assert process.stdout is not None
+    assert process.stderr is not None
+    stdout_thread = threading.Thread(
+        target=pump,
+        args=(process.stdout, sys.stdout.buffer, stdout_hash, "stdout"),
+        daemon=True,
+    )
+    stderr_thread = threading.Thread(
+        target=pump,
+        args=(process.stderr, sys.stderr.buffer, stderr_hash, "stderr"),
+        daemon=True,
+    )
+    stdout_thread.start()
+    stderr_thread.start()
+    returncode = process.wait()
+    stdout_thread.join()
+    stderr_thread.join()
+    if errors:
+        raise errors[0]
+    return StreamedProcessResult(
+        returncode=returncode,
+        stdout_digest="sha-256:" + stdout_hash.hexdigest(),
+        stderr_digest="sha-256:" + stderr_hash.hexdigest(),
+        stdout_bytes=counts["stdout"],
+        stderr_bytes=counts["stderr"],
+    )
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -959,9 +1026,7 @@ def run_under_hub(args: argparse.Namespace) -> int:
         return 126
 
     started = time.time()
-    completed = subprocess.run(command, capture_output=True, text=True)
-    sys.stdout.write(completed.stdout)
-    sys.stderr.write(completed.stderr)
+    completed = _stream_subprocess(command)
     duration_ms = int((time.time() - started) * 1000)
     observe_payload = {
         **check_payload,
@@ -969,8 +1034,10 @@ def run_under_hub(args: argparse.Namespace) -> int:
             **check_payload["event"],
             "exit_code": completed.returncode,
             "duration_ms": duration_ms,
-            "stdout_digest": _sha256_text(completed.stdout),
-            "stderr_digest": _sha256_text(completed.stderr),
+            "stdout_digest": completed.stdout_digest,
+            "stderr_digest": completed.stderr_digest,
+            "stdout_bytes": completed.stdout_bytes,
+            "stderr_bytes": completed.stderr_bytes,
             "content_digest": _sha256_text(" ".join(command) + str(completed.returncode)),
         },
     }

@@ -84,6 +84,10 @@ profile is a friendly layer over the same capabilities, not a replacement.
    `hookSpecificOutput.permissionDecision = "deny"`.
 6. `PostToolUse` records the SHA-256 digest of permitted tool responses as a
    chained evidence receipt.
+7. `SubagentStart` / `SubagentStop` record signed lifecycle receipts and append
+   per-trace subagent registry events. Tool receipts are attributed only when
+   Claude Code exposes an exact agent id or when transcript evidence binds one
+   child; otherwise they remain trace-level and are reported as unattributed.
 
 ## Where receipts live
 
@@ -97,6 +101,12 @@ Default when `ARDUR_CC_HOOK_DIR` is not set:
 
 ```text
 ~/.vibap/claude-code-hook/<trace_id>/receipts.jsonl
+```
+
+Subagent lifecycle observations for the same trace are also written to:
+
+```text
+$ARDUR_CC_HOOK_DIR/<trace_id>/subagents.jsonl
 ```
 
 ## Verify a receipt chain

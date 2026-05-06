@@ -2,7 +2,7 @@
 
 Wires Claude Code's PreToolUse / PostToolUse hooks to Ardur's policy
 backends and signed Execution Receipts. Stateless per call: each invocation
-is a fresh `python -m vibap.claude_code_hook <pre|post>` process that reads
+    is a fresh `python -m vibap.claude_code_hook <phase>` process that reads
 hook input from stdin, writes hook output to stdout, and appends one
 receipt to the per-trace JSONL chain.
 """
@@ -36,6 +36,8 @@ PASSPORT_ENV_VAR = "ARDUR_MISSION_PASSPORT"
 CHAIN_DIR_ENV_VAR = "ARDUR_CC_HOOK_DIR"
 DEFAULT_CHAIN_DIR = DEFAULT_HOME / "claude-code-hook"
 CHAIN_FILENAME = "receipts.jsonl"
+SUBAGENT_REGISTRY_FILENAME = "subagents.jsonl"
+CLAUDE_CODE_VISIBILITY_FULL = "full"
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,10 @@ class ChainState:
     @property
     def lock_file(self) -> Path:
         return self.chain_dir / self.trace_id / ".lock"
+
+    @property
+    def subagents_file(self) -> Path:
+        return self.chain_dir / self.trace_id / SUBAGENT_REGISTRY_FILENAME
 
 
 def resolve_chain_state(*, trace_id: str) -> ChainState:
@@ -85,6 +91,11 @@ def append_receipt(state: ChainState, signed_jwt: str) -> None:
 def _append_receipt_unlocked(state: ChainState, signed_jwt: str) -> None:
     with open(state.file, "a", encoding="utf-8") as f:
         f.write(signed_jwt.strip() + "\n")
+
+
+def _append_subagent_event_unlocked(state: ChainState, record: Mapping[str, Any]) -> None:
+    with open(state.subagents_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(dict(record), sort_keys=True, separators=(",", ":")) + "\n")
 
 
 def previous_receipt_hash(state: ChainState) -> str | None:
@@ -238,6 +249,134 @@ def _trace_id_from_claims(claims: dict[str, Any]) -> str:
     return str(claims.get("jti", "trace-unknown"))
 
 
+def _stable_child_id(*, trace_id: str, session_id: str, agent_id: str) -> str:
+    payload = json.dumps(
+        {
+            "trace_id": trace_id,
+            "session_id": session_id,
+            "agent_id": agent_id,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "child:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _hash_text(value: str) -> dict[str, str]:
+    return {"alg": "sha-256", "value": hashlib.sha256(value.encode("utf-8")).hexdigest()}
+
+
+def _without_empty_values(payload: Mapping[str, Any]) -> dict[str, Any]:
+    clean: dict[str, Any] = {}
+    for key, value in payload.items():
+        if value is None or value == "":
+            continue
+        if isinstance(value, Mapping):
+            nested = _without_empty_values(value)
+            if nested:
+                clean[key] = nested
+            continue
+        clean[key] = value
+    return clean
+
+
+def _common_claude_code_metadata(
+    hook_input: Mapping[str, Any],
+    *,
+    trace_id: str,
+    tool_name: str,
+) -> dict[str, Any]:
+    return _without_empty_values(
+        {
+            "schema_version": "ardur.claude_code.measurements.v0.1",
+            "trace_id": trace_id,
+            "hook_event_name": str(hook_input.get("hook_event_name", "")),
+            "claude_session_id": str(hook_input.get("session_id", "")),
+            "tool_use_id": str(hook_input.get("tool_use_id", "")),
+            "transcript_path": str(hook_input.get("transcript_path", "")),
+            "cwd": str(hook_input.get("cwd", "")),
+            "permission_mode": str(hook_input.get("permission_mode", "")),
+            "tool_name": tool_name,
+        }
+    )
+
+
+def _tool_actor_metadata(
+    hook_input: Mapping[str, Any],
+    *,
+    trace_id: str,
+    tool_name: str,
+) -> dict[str, Any]:
+    metadata = _common_claude_code_metadata(
+        hook_input,
+        trace_id=trace_id,
+        tool_name=tool_name,
+    )
+    agent_id = str(hook_input.get("agent_id", "") or "")
+    session_id = str(hook_input.get("session_id", "") or "")
+    if agent_id:
+        metadata.update(
+            {
+                "actor_kind": "subagent",
+                "claude_agent_id": agent_id,
+                "ardur_child_id": _stable_child_id(
+                    trace_id=trace_id,
+                    session_id=session_id,
+                    agent_id=agent_id,
+                ),
+                "attribution": {
+                    "mode": "exact",
+                    "source": "tool_hook.agent_id",
+                },
+            }
+        )
+    elif tool_name in {"Agent", "Task"}:
+        metadata.update(
+            {
+                "actor_kind": "parent",
+                "attribution": {
+                    "mode": "exact",
+                    "source": "parent_agent_dispatch_tool",
+                },
+            }
+        )
+    else:
+        metadata.update(
+            {
+                "actor_kind": "unattributed",
+                "attribution": {
+                    "mode": "trace_only",
+                    "source": "tool hook payload did not include agent_id",
+                },
+            }
+        )
+    return metadata
+
+
+def _attach_claude_code_measurements(
+    receipt_obj: Any,
+    hook_input: Mapping[str, Any],
+    *,
+    trace_id: str,
+    tool_name: str,
+    metadata: Mapping[str, Any] | None = None,
+) -> None:
+    measurements = dict(receipt_obj.measurements or {})
+    claude_code = (
+        dict(metadata)
+        if metadata is not None
+        else _tool_actor_metadata(hook_input, trace_id=trace_id, tool_name=tool_name)
+    )
+    claude_code["verdict"] = receipt_obj.verdict
+    claude_code["receipt_id"] = receipt_obj.receipt_id
+    measurements["claude_code"] = _without_empty_values(claude_code)
+    receipt_obj.measurements = measurements
+
+
 def _build_policy_event(
     *,
     claims: dict[str, Any],
@@ -248,7 +387,7 @@ def _build_policy_event(
 ) -> Any:
     """Build a PolicyEvent for a PreToolUse or PostToolUse hook call.
 
-    ``phase`` MUST be ``"pre"`` or ``"post"``. It is appended to the
+    ``phase`` is appended to the
     deterministic step_id as ``":<phase>"`` so a Pre receipt and a Post
     receipt for the same tool call carry distinct step_ids — without
     this, the (passport_jti, timestamp, tool_name, arguments) key could
@@ -391,6 +530,9 @@ def _emit_chained_receipt(
     reason: str,
     trace_id: str,
     keys_dir: Path | None,
+    hook_input: Mapping[str, Any] | None = None,
+    measurements: Mapping[str, Any] | None = None,
+    subagent_record: Mapping[str, Any] | None = None,
 ) -> Any:
     """Build, sign, and append one receipt to the per-trace chain.
 
@@ -427,7 +569,18 @@ def _emit_chained_receipt(
         # pass the proxy gate (which reads them from arguments) but never land
         # in the signed receipt payload that auditors verify.
         _backfill_telemetry_fields(receipt_obj, event.arguments)
+        _attach_claude_code_measurements(
+            receipt_obj,
+            hook_input or {},
+            trace_id=trace_id,
+            tool_name=str(getattr(event, "tool_name", "")),
+            metadata=measurements,
+        )
         signed = sign_receipt(receipt_obj, private_key)
+        if subagent_record is not None:
+            record = dict(subagent_record)
+            record["receipt_id"] = receipt_obj.receipt_id
+            _append_subagent_event_unlocked(state, record)
         _append_receipt_unlocked(state, signed)
     return receipt_obj
 
@@ -509,6 +662,7 @@ def handle_pre_tool_use(
             reason=reason_text,
             trace_id=trace_id,
             keys_dir=keys_dir,
+            hook_input=hook_input,
         )
         return _pre_tool_use_deny_output(f"ardur: blocked - {reason_text}")
 
@@ -520,6 +674,7 @@ def handle_pre_tool_use(
         reason="allowed by composed policy",
         trace_id=trace_id,
         keys_dir=keys_dir,
+        hook_input=hook_input,
     )
     return {
         "continue": True,
@@ -614,10 +769,278 @@ def handle_post_tool_use(
         # Backfill the four content-class telemetry fields and the result digest
         # before signing, so all five fields land in the canonical signed payload.
         _backfill_telemetry_fields(receipt_obj, event.arguments)
+        _attach_claude_code_measurements(
+            receipt_obj,
+            hook_input,
+            trace_id=trace_id,
+            tool_name=tool_name,
+        )
         receipt_obj.result_hash = _result_hash(tool_response)
         signed = sign_receipt(receipt_obj, private_key)
         _append_receipt_unlocked(state, signed)
     return {"continue": True}
+
+
+# ─── Subagent lifecycle handlers ──────────────────────────────────────────────
+
+
+def _lifecycle_arguments(
+    hook_input: Mapping[str, Any],
+    *,
+    lifecycle: str,
+) -> dict[str, Any]:
+    agent_id = str(hook_input.get("agent_id", "") or "")
+    agent_type = str(hook_input.get("agent_type", "") or "<unknown>")
+    target = f"{agent_type}:{agent_id or '<unknown>'}"
+    return {
+        "agent_id": agent_id,
+        "agent_type": agent_type,
+        "agent_transcript_path": str(hook_input.get("agent_transcript_path", "") or ""),
+        "hook_event_name": str(hook_input.get("hook_event_name", "") or ""),
+        "tool_name": str(hook_input.get("hook_event_name", "") or lifecycle),
+        "action_class": "dispatch" if lifecycle == "start" else "observe",
+        "target": target,
+        "resource_family": "agent",
+        "content_class": "user_instruction",
+        "content_provenance": "claude_code_hook_input",
+        "side_effect_class": "subagent_launch" if lifecycle == "start" else "none",
+        "visibility": CLAUDE_CODE_VISIBILITY_FULL,
+        "sensitivity": "medium",
+        "instruction_bearing": lifecycle == "start",
+        "budget_delta": 10 if lifecycle == "start" else 1,
+    }
+
+
+def _policy_inheritance_summary(claims: Mapping[str, Any]) -> dict[str, Any]:
+    return _without_empty_values(
+        {
+            "grant_id": str(claims.get("jti", "") or ""),
+            "agent_id": str(claims.get("sub", "") or ""),
+            "allowed_tools": list(claims.get("allowed_tools", []) or []),
+            "forbidden_tools": list(claims.get("forbidden_tools", []) or []),
+            "resource_scope": list(claims.get("resource_scope", []) or []),
+            "max_tool_calls": claims.get("max_tool_calls"),
+            "max_duration_s": claims.get("max_duration_s"),
+        }
+    )
+
+
+def _subagent_lifecycle_metadata(
+    hook_input: Mapping[str, Any],
+    *,
+    claims: Mapping[str, Any],
+    trace_id: str,
+    lifecycle: str,
+    observed_at: str,
+    child_receipt_summary: Mapping[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    agent_id = str(hook_input.get("agent_id", "") or "")
+    session_id = str(hook_input.get("session_id", "") or "")
+    ardur_child_id = _stable_child_id(
+        trace_id=trace_id,
+        session_id=session_id,
+        agent_id=agent_id or "<unknown>",
+    )
+    lifecycle_payload: dict[str, Any] = {"event": lifecycle}
+    if lifecycle == "start":
+        lifecycle_payload["started_at"] = observed_at
+    else:
+        lifecycle_payload["stopped_at"] = observed_at
+
+    metadata = _common_claude_code_metadata(
+        hook_input,
+        trace_id=trace_id,
+        tool_name=str(hook_input.get("hook_event_name", "") or f"Subagent{lifecycle.title()}"),
+    )
+    metadata.update(
+        _without_empty_values(
+            {
+                "actor_kind": "subagent",
+                "claude_agent_id": agent_id,
+                "ardur_child_id": ardur_child_id,
+                "agent_type": str(hook_input.get("agent_type", "") or ""),
+                "agent_transcript_path": str(hook_input.get("agent_transcript_path", "") or ""),
+                "final_response_hash": (
+                    _hash_text(str(hook_input.get("last_assistant_message", "")))
+                    if hook_input.get("last_assistant_message")
+                    else None
+                ),
+                "lifecycle": lifecycle_payload,
+                "inherited_policy": _policy_inheritance_summary(claims),
+                "child_receipt_summary": dict(child_receipt_summary or {}),
+                "attribution": {
+                    "mode": "exact" if agent_id else "trace_only",
+                    "source": "Subagent lifecycle hook agent_id" if agent_id else "missing lifecycle agent_id",
+                },
+            }
+        )
+    )
+    return ardur_child_id, metadata
+
+
+def _decode_claims_unverified(token: str) -> dict[str, Any] | None:
+    try:
+        decoded = jwt.decode(token, options={"verify_signature": False})
+    except jwt.InvalidTokenError:
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _summarize_child_receipts_unverified(
+    *,
+    state: ChainState,
+    agent_id: str,
+    agent_transcript_path: str,
+) -> dict[str, Any]:
+    if not state.file.exists():
+        return {"receipt_count": 0, "tools": {}, "violations": 0}
+    tools: dict[str, int] = {}
+    violations = 0
+    receipt_count = 0
+    for line in state.file.read_text(encoding="utf-8").splitlines():
+        token = line.strip()
+        if not token:
+            continue
+        claims = _decode_claims_unverified(token)
+        if not claims:
+            continue
+        if str(claims.get("tool", "")) in {"SubagentStart", "SubagentStop"}:
+            continue
+        meta = (
+            dict(claims.get("measurements", {}) or {})
+            .get("claude_code", {})
+        )
+        if not isinstance(meta, dict):
+            continue
+        if agent_id and meta.get("claude_agent_id") == agent_id:
+            matched = True
+        elif agent_transcript_path and meta.get("transcript_path") == agent_transcript_path:
+            matched = True
+        else:
+            matched = False
+        if not matched:
+            continue
+        receipt_count += 1
+        tool = str(claims.get("tool", ""))
+        tools[tool] = tools.get(tool, 0) + 1
+        if claims.get("verdict") == "violation":
+            violations += 1
+    return {"receipt_count": receipt_count, "tools": dict(sorted(tools.items())), "violations": violations}
+
+
+def _subagent_registry_record(
+    metadata: Mapping[str, Any],
+    *,
+    lifecycle: str,
+    observed_at: str,
+) -> dict[str, Any]:
+    lifecycle_meta = dict(metadata.get("lifecycle", {}) or {})
+    return _without_empty_values(
+        {
+            "schema_version": "ardur.claude_code.subagents.v0.1",
+            "event": lifecycle,
+            "observed_at": observed_at,
+            "trace_id": metadata.get("trace_id"),
+            "claude_session_id": metadata.get("claude_session_id"),
+            "claude_agent_id": metadata.get("claude_agent_id"),
+            "ardur_child_id": metadata.get("ardur_child_id"),
+            "agent_type": metadata.get("agent_type"),
+            "transcript_path": metadata.get("transcript_path"),
+            "agent_transcript_path": metadata.get("agent_transcript_path"),
+            "cwd": metadata.get("cwd"),
+            "started_at": lifecycle_meta.get("started_at"),
+            "stopped_at": lifecycle_meta.get("stopped_at"),
+            "attribution": metadata.get("attribution"),
+        }
+    )
+
+
+def _handle_subagent_lifecycle(
+    hook_input: dict[str, Any],
+    *,
+    keys_dir: Path | None,
+    lifecycle: str,
+) -> dict[str, Any]:
+    from .proxy import Decision
+
+    try:
+        claims = load_active_passport(keys_dir=keys_dir)
+    except MissionLoadError:
+        return {"continue": True}
+
+    trace_id = _trace_id_from_claims(claims)
+    observed_at = _utc_timestamp()
+    event_name = str(hook_input.get("hook_event_name", "") or ("SubagentStart" if lifecycle == "start" else "SubagentStop"))
+    state = resolve_chain_state(trace_id=trace_id)
+    agent_id = str(hook_input.get("agent_id", "") or "")
+    agent_transcript_path = str(hook_input.get("agent_transcript_path", "") or "")
+    child_summary = (
+        _summarize_child_receipts_unverified(
+            state=state,
+            agent_id=agent_id,
+            agent_transcript_path=agent_transcript_path,
+        )
+        if lifecycle == "stop"
+        else None
+    )
+    ardur_child_id, metadata = _subagent_lifecycle_metadata(
+        hook_input,
+        claims=claims,
+        trace_id=trace_id,
+        lifecycle=lifecycle,
+        observed_at=observed_at,
+        child_receipt_summary=child_summary,
+    )
+    arguments = _lifecycle_arguments(hook_input, lifecycle=lifecycle)
+    event = _build_policy_event(
+        claims=claims,
+        tool_name=event_name,
+        arguments=arguments,
+        trace_id=trace_id,
+        phase=f"subagent-{lifecycle}",
+    )
+    _emit_chained_receipt(
+        decision_enum=Decision.PERMIT,
+        event=event,
+        decisions=[],
+        reason=f"subagent {lifecycle} observed",
+        trace_id=trace_id,
+        keys_dir=keys_dir,
+        hook_input=hook_input,
+        measurements=metadata,
+        subagent_record=_subagent_registry_record(
+            metadata,
+            lifecycle=lifecycle,
+            observed_at=observed_at,
+        ),
+    )
+    if lifecycle == "start":
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "SubagentStart",
+                "additionalContext": (
+                    "Ardur is observing this subagent as "
+                    f"{ardur_child_id}. Inherited tool and resource policy still applies."
+                ),
+            }
+        }
+    return {"continue": True}
+
+
+def handle_subagent_start(
+    hook_input: dict[str, Any],
+    *,
+    keys_dir: Path | None = None,
+) -> dict[str, Any]:
+    return _handle_subagent_lifecycle(hook_input, keys_dir=keys_dir, lifecycle="start")
+
+
+def handle_subagent_stop(
+    hook_input: dict[str, Any],
+    *,
+    keys_dir: Path | None = None,
+) -> dict[str, Any]:
+    return _handle_subagent_lifecycle(hook_input, keys_dir=keys_dir, lifecycle="stop")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -630,7 +1053,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vibap.claude_code_hook")
     parser.add_argument(
         "phase",
-        choices=["pre", "post"],
+        choices=["pre", "post", "subagent-start", "subagent-stop"],
         help="hook lifecycle phase being invoked",
     )
     parser.add_argument(
@@ -648,7 +1071,13 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(f"ardur: invalid hook input JSON: {exc}\n")
         return 1
 
-    handler = handle_pre_tool_use if args.phase == "pre" else handle_post_tool_use
+    handlers = {
+        "pre": handle_pre_tool_use,
+        "post": handle_post_tool_use,
+        "subagent-start": handle_subagent_start,
+        "subagent-stop": handle_subagent_stop,
+    }
+    handler = handlers[args.phase]
     try:
         output = handler(hook_input, keys_dir=args.keys_dir)
     except Exception as exc:  # pylint: disable=broad-except

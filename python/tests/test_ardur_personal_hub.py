@@ -3,7 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import stat
+import subprocess
+import sys
 import threading
+from argparse import Namespace
 from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
 from urllib import error as urlerror
@@ -12,7 +15,7 @@ from urllib import request as urlrequest
 import pytest
 
 from vibap.ardur_personal_native_host import HOST_OBSERVATION_TYPE, handle_native_host_message
-from vibap.personal_hub import _HubRequestHandler, HubError, PersonalHub, setup_personal
+from vibap.personal_hub import _HubRequestHandler, HubError, PersonalHub, run_under_hub, setup_personal
 from vibap.personal_hub import _redact_url_tokens
 from vibap.receipt import verify_receipt
 
@@ -228,6 +231,31 @@ def test_native_host_uses_custom_home_for_hub_token(tmp_path):
         )
 
     assert response["ok"] is True
+
+
+def test_run_under_hub_streams_output_without_subprocess_run(tmp_path, capfd, monkeypatch):
+    def fail_subprocess_run(*_args, **_kwargs):
+        raise AssertionError("run_under_hub must not buffer output with subprocess.run")
+
+    monkeypatch.setattr(subprocess, "run", fail_subprocess_run)
+    with _running_hub(tmp_path) as (_, base_url):
+        exit_code = run_under_hub(
+            Namespace(
+                command=[
+                    sys.executable,
+                    "-c",
+                    "import sys; print('stream-out'); print('stream-err', file=sys.stderr)",
+                ],
+                hub_url=base_url,
+                hub_token=None,
+                home=tmp_path,
+            )
+        )
+
+    captured = capfd.readouterr()
+    assert exit_code == 0
+    assert "stream-out" in captured.out
+    assert "stream-err" in captured.err
 
 
 @contextmanager
