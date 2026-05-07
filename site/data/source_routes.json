@@ -131,6 +131,7 @@
     "docs/comparisons/oauth-and-managed-agent-auth.md": "source/docs/comparisons/oauth-and-managed-agent-auth/",
     "docs/comparisons/protocol-overhead.md": "source/docs/comparisons/protocol-overhead/",
     "docs/conductor-bootstrap.md": "source/docs/conductor-bootstrap/",
+    "docs/coverage-map.md": "source/docs/coverage-map/",
     "docs/decisions/ADR-015-production-spire-deployment.md": "source/docs/decisions/adr-015-production-spire-deployment/",
     "docs/decisions/ADR-016-delegation-lineage-hash-index.md": "source/docs/decisions/adr-016-delegation-lineage-hash-index/",
     "docs/decisions/ADR-017-biscuit-attenuation-narrowing-semantics.md": "source/docs/decisions/adr-017-biscuit-attenuation-narrowing-semantics/",
