@@ -45,5 +45,5 @@ tighter quickstart are landing in follow-on phases.
 
 1. Read the root [README](/__ardur_internal__/source/readme/).
 2. Check [STATUS](/__ardur_internal__/source/status/) for what is public now versus still in flight.
-3. Use [MEDIA](/__ardur_internal__/source/media/) for example recordings and context on the current
+3. Use [MEDIA](/__ardur_internal__/source/media-notes/) for example recordings and context on the current
    implementation lineage.
