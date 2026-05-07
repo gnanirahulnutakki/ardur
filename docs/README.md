@@ -20,6 +20,9 @@ tighter quickstart are landing in follow-on phases.
 - [Architecture Decision Records](decisions/README.md)
 - [MCEP Specifications (v0.1)](specs/README.md)
 - [Comparisons and engineering responses](comparisons/README.md)
+- [Technical Reference](reference/README.md) — CLI, Personal Hub HTTP API, and `ARDUR.md` profile format
+- [Articles](articles/README.md)
+- [CodeQL dismissal audit trail](audit/)
 
 ## Start here
 

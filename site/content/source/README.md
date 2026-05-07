@@ -2,7 +2,7 @@
 title: "Ardur"
 description: "Ardur is the runtime governance and evidence layer for AI agents."
 source_path: "README.md"
-source_sha256: "3d625baaff6a8d8291dea92cb42ba8639c8fa638a6409695ff65926c4f285633"
+source_sha256: "cfbf2f00fdb3a3e69bdcee9f21c71f86db011d786360e6e7dfa3582cc0db5d26"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["orientation", "runtime-boundary"]
@@ -25,11 +25,13 @@ Ardur is the runtime governance and evidence layer for AI agents.
 
 This public repo is opening in phases. It now contains the product intent,
 research-informed positioning, public specs, curated Python and Go runtime
-imports, mission examples, and deferred framework adapter directories. Broader proof surfaces,
-packaging, and production deployment material are still being tightened before
-they are presented as release-ready.
+imports, mission examples, runnable framework adapters (LangChain, LangGraph,
+AutoGen), the Ardur Personal Hub service, the Claude Code plugin and hook,
+and the public Hugo evidence site. Re-runnable proof media, full packaging,
+and production deployment material are still being tightened before they are
+presented as release-ready.
 
-[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
+[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
 
 ## Why Ardur
 
@@ -61,7 +63,14 @@ This repo currently includes:
 - current status and what is still being resolved
 - public v0.1 specs for mission declarations, execution receipts, verifier contracts, conformance profiles, and related protocol surfaces
 - curated Python and Go runtime imports under `python/` and `go/`
-- JSON-only mission examples plus runnable and deferred adapter examples under `examples/`
+- the Ardur Personal Hub service and CLI under `python/vibap/` (`ardur hub`, `ardur setup`, `ardur status`, `ardur protect claude-code`, `ardur profile init`, `ardur doctor-claude-code`)
+- the Claude Code plugin under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks emitting signed receipts
+- runnable framework adapters under `examples/`: LangChain, LangGraph, AutoGen, browser extension, desktop-observe, and native-host. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories remain deferred adapter specs
+- dedicated Python (3.10 + 3.13) and Go CI under `.github/workflows/tests.yml`, plus CodeQL, link-check, secret-scan, format validation, and the Hugo build
+- the Hugo public evidence site source under `site/`, with each public claim linkable to its backing source file
+- bootstrap and verification scripts under `scripts/` (`conductor-bootstrap.sh`, `setup-dev.sh`, `check-local.sh`)
+- agent-specific public guides under [`docs/agent-instructions/`](/__ardur_internal__/source/docs/agent-instructions/readme/) (Conductor, Codex, Claude)
+- new technical reference pages under [`docs/reference/`](/__ardur_internal__/source/docs/reference/readme/) — CLI, Personal Hub HTTP API, and the `ARDUR.md` profile format
 - selected archival terminal recordings (the rerunnable proof path lands with the next public drop — see [MEDIA.md](/__ardur_internal__/source/media/))
 - a journey-log [article series](/__ardur_internal__/source/docs/articles/readme/) — Article 06 (Public Import Discipline) and Article 05 (Proof Media That Actually Means Something) are the first-wave shippers
 - a public audit trail at [`docs/audit/`](/__ardur_internal__/source/docs/audit/) mirroring the GitHub Code Scanning dismissal record so triage decisions are auditable from the repo tree without GitHub credentials
@@ -70,12 +79,11 @@ This repo currently includes:
 
 The next repo drops will add:
 
-- a Claude Code-first Ardur Personal release candidate with plain `ARDUR.md`
-  guardrail profiles for non-technical users
-- dedicated Python and Go CI workflows once the imported runtime surfaces finish their public verification pass
-- first runnable framework examples beyond JSON mission files
-- public verifier and proof commands with stable artifact paths
-- a tighter quickstart and framework story
+- runnable OpenAI Agents SDK and Google ADK adapter lifts to replace the current deferred-spec README directories
+- Codex hooks and Claude Desktop MCP packaging as separate next-cycle integrations
+- re-runnable proof media — recordings made against the public runtime with stable verifier commands and artifact paths, replacing the current archival walkthrough casts
+- a tagged release with a regenerated Homebrew formula carrying Python resource stanzas, so non-technical users can install Ardur Personal without a source checkout
+- broader deployment material (cluster, identity, receipt storage) past the current SPIRE design surface
 
 ## Integrations
 

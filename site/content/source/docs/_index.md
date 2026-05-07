@@ -32,4 +32,5 @@ This section lists hosted documentation and mirrored artifacts generated from `d
 - [`comparisons/`](/__ardur_internal__/source/docs/comparisons/)
 - [`decisions/`](/__ardur_internal__/source/docs/decisions/)
 - [`guides/`](/__ardur_internal__/source/docs/guides/)
+- [`reference/`](/__ardur_internal__/source/docs/reference/)
 - [`specs/`](/__ardur_internal__/source/docs/specs/)

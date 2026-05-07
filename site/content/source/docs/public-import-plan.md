@@ -2,7 +2,7 @@
 title: "Public Import Plan"
 description: "This plan converts the private source tree into the public Ardur repo without"
 source_path: "docs/public-import-plan.md"
-source_sha256: "a165467a7f60da4a06ff0c44448a4cddea89079bc7e71c8834e550e6b9d4aabd"
+source_sha256: "aeb82a733703627ecd26f753c6d87910da9cb5a77c1317ccfe207b24f54cf252"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -86,38 +86,50 @@ ardur/
 
 ## Import Order
 
-1. **Phase 0 shell**
-   Keep the current intent, status, roadmap, media, and security docs accurate.
+1. **Phase 0 shell — done.**
+   Intent, status, roadmap, media, and security docs are present and live with
+   the rest of the repo.
 
-2. **Public-safe metadata**
-   Add root `.gitignore`, packaging metadata, and public-safe workflows before
-   importing large code surfaces.
+2. **Public-safe metadata — done.**
+   Root `.gitignore`, packaging metadata, and public-safe workflows landed
+   before the larger code surfaces.
 
-3. **Python runtime and verifier**
-   Import `python/vibap`, verifier tooling, selected tests, and a minimal local
-   quickstart. Success means a new user can install the Python surface and run
-   at least one proof-backed command.
+3. **Python runtime and verifier — done.**
+   `python/vibap` is imported with the runtime, verifier surface, selected
+   tests, and a working `pip install -e .` quickstart. New surfaces added since
+   the original plan: the Ardur Personal Hub service (`personal_hub.py`), the
+   Claude Code hook (`claude_code_hook.py`), telemetry and reporting modules,
+   the native-messaging host, and the `ARDUR.md` profile compiler.
 
-4. **Examples**
-   Import only curated examples that support the README story. Success means the
-   examples run without private paths, private secrets, or hidden local state.
+4. **Examples — partly done.**
+   Runnable: LangChain, LangGraph, AutoGen, Ardur Personal browser extension,
+   desktop-observe, native-host, plus the Claude Code plugin pointer. JSON
+   missions remain runnable. Deferred adapter specs: OpenAI Agents SDK,
+   Google ADK.
 
-5. **Go runtime and protocol schemas**
-   Import selected `VIBAP` Go packages, schemas, and module metadata. Success
-   means `go/` is a coherent module, not a partial subtree.
+5. **Go runtime and protocol schemas — done with caveats.**
+   `go/` is a coherent module covering credential, governance, policy, SPIFFE,
+   AAT (skeleton, fail-closed by design), provenance, issuer, trust,
+   transparency, and CLI surfaces. The `pkg/aat` skeleton is documented in
+   `go/README.md` and remains an explicit non-claim.
 
-6. **Deployment material**
-   Import SPIRE/Kubernetes material with maturity labels and security notes.
-   Success means deployment docs are honest about privileges, blast radius, and
-   what has or has not been tested on a real cluster.
+6. **Deployment material — partly done.**
+   SPIRE/Kubernetes material is present under `deploy/k8s/spire/` with an
+   honest README about privileges and unverified cluster surfaces. Helm
+   templates remain stubs by design (`deploy/helm/ardur/README.md`).
 
-7. **Docs and article spine**
-   Build public docs around quickstart, proof, framework integration, security,
-   limitations, deployment, and protocol roots.
+7. **Docs and article spine — partly done.**
+   Quickstart, framework integration, security model, known limitations,
+   protocol roots, public-import-plan, and engineering standards are public.
+   Articles 05 and 06 of the journey-log series ship. Technical reference
+   pages live under `docs/reference/`. Conformance test vectors and a few
+   companion fixtures referenced by the v0.1 specs remain to be imported.
 
-8. **CI and release gates**
-   Add public-safe checks for Python, Go, docs, proof smoke, secret scanning, and
-   forbidden internal-language scans.
+8. **CI and release gates — done.**
+   `.github/workflows/` ships dedicated Python (3.10 + 3.13) and Go test jobs,
+   CodeQL static analysis, link-check, secret-scan, format validation, and the
+   Hugo site build. A proof-smoke workflow lands once stable verifier commands
+   and artifact paths are public.
 
 ## Release Discipline
 
