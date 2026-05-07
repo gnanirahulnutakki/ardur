@@ -15,11 +15,11 @@ pip install -e .
 ardur issue \
   --agent-id alice \
   --mission "summarize sales from sales/q1.csv into reports/" \
-  --allowed-tools read_file,write_report \
-  --resource-scope 'sales/*,reports/*'
+  --allowed-tools read_file write_report \
+  --resource-scope 'sales/*' 'reports/*'
 
-# Verify a passport
-ardur verify <token-from-issue-output>
+# Verify a passport (the issue command prints a JSON object containing "token")
+ardur verify --token <token-from-issue-output>
 ```
 
 That walks through key generation, mission compilation, ES256-signed passport issuance, and verification — all local, no LLM calls.

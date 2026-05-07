@@ -10,7 +10,8 @@ The CLI splits into two groups:
 - **Personal path** — `hub`, `setup`, `status`, `doctor`, `doctor-claude-code`,
   `uninstall`, `run`, `desktop-observe`, `personal-native-host`,
   `personal-native-manifest`, `profile init`, `protect claude-code`,
-  `cc-hook`, `cc-report`. Used by the local Ardur Personal product shape.
+  `claude-code-hook`, `claude-code-report`. Used by the local Ardur Personal
+  product shape.
 
 Source: [`python/vibap/cli.py`](../../python/vibap/cli.py).
 
@@ -76,13 +77,21 @@ See [Personal Hub HTTP API](personal-hub-api.md) for the endpoints exposed.
 
 ### `ardur setup`
 
-Configure Ardur Personal on this machine. Generates a Hub token, writes the
-local config, and prints the token once for setup.
+Configure Ardur Personal on this machine. Generates a Hub token (or reuses an
+existing one), writes the local config, prints the token once for setup, and
+on macOS installs a per-user LaunchAgent plist at
+`~/Library/LaunchAgents/dev.ardur.personal-hub.plist` so the Hub can be
+managed via `launchctl` or `brew services`. Run `ardur uninstall` to remove
+the plist.
 
 ```text
 ardur setup [--host HOST] [--port PORT] [--home DIR]
-            [--regen-token] [--print-token]
+            [--rotate-token] [--extension-path DIR]
 ```
+
+`--rotate-token` forces a new token even if one already exists.
+`--extension-path` selects which browser-extension directory the setup output
+points users to (default: `examples/ardur-personal-extension`).
 
 ### `ardur status`
 
@@ -112,12 +121,15 @@ ardur doctor-claude-code [--home DIR] [--plugin-dir DIR]
 
 ### `ardur uninstall`
 
-Remove Ardur Personal launch files (LaunchAgent on macOS, etc.) without
-deleting the home directory by default.
+Remove Ardur Personal launch files (the macOS LaunchAgent plist installed by
+`ardur setup`) without deleting the home directory by default.
 
 ```text
-ardur uninstall [--home DIR] [--remove-home]
+ardur uninstall [--home DIR] [--remove-data]
 ```
+
+`--remove-data` also deletes the local Ardur Personal evidence and key
+material under the home directory.
 
 ### `ardur run -- COMMAND ...`
 
@@ -130,13 +142,17 @@ ardur run [--hub-url URL] [--hub-token TOKEN] [--home DIR] -- <command>
 ### `ardur desktop-observe`
 
 Record a desktop observation against the Hub. On macOS, autodetects the
-foreground app and window title via the Accessibility API when available.
+foreground app and window title via the Accessibility API when `--app` and
+`--title` are omitted.
 
 ```text
 ardur desktop-observe [--hub-url URL] [--hub-token TOKEN] [--home DIR]
                       [--session-id ID] [--app NAME] [--title TEXT]
-                      [--no-autodetect]
+                      [--text EXCERPT]
 ```
+
+`--text` is an explicit-consent visible text excerpt to include in the
+session review; omit it to record an app/title-only observation.
 
 ### `ardur personal-native-host`
 
@@ -146,8 +162,11 @@ directly.
 
 ```text
 ardur personal-native-host [--hub-url URL] [--hub-token TOKEN] [--home DIR]
-                           [--allowed-extension-id ID]
+                           [--once-json FILE]
 ```
+
+`--once-json` is a development-mode flag: process one JSON message file and
+exit (used by tests and the smoke harness, not by browsers).
 
 ### `ardur personal-native-manifest`
 
@@ -156,7 +175,7 @@ browser's `NativeMessagingHosts/` directory.
 
 ```text
 ardur personal-native-manifest --host-path PATH --extension-id ID
-                               [--browser chrome|firefox|edge]
+                               [--browser chrome|chrome-for-testing|chromium|edge|firefox]
 ```
 
 ### `ardur profile init`
@@ -189,21 +208,25 @@ ardur protect claude-code [--scope DIR] [--profile PATH]
 Profile mode and CLI mode set the same Mission Passport — the Markdown
 profile is a friendly layer over the same capability set.
 
-### `ardur cc-hook`
+### `ardur claude-code-hook`
 
 Implements the Claude Code hook executable invoked by
 `plugins/claude-code/hooks/`. Not intended for human invocation; called by
-Claude Code with hook-specific stdin payloads.
+Claude Code with hook-specific stdin payloads (`pre`, `post`, `subagent-start`,
+`subagent-stop`).
 
-### `ardur cc-report`
+### `ardur claude-code-report`
 
 Read a Claude Code receipt chain and emit a human or JSON summary of allow,
 deny, and chain-verification outcomes.
 
 ```text
-ardur cc-report [--home DIR] [--chain-dir DIR] [--keys-dir DIR]
-                [--trace TRACE_ID] [--json]
+ardur claude-code-report [--home DIR] [--chain-dir DIR] [--keys-dir DIR]
+                         [--verify-expiry] [--json]
 ```
+
+`--verify-expiry` also enforces short receipt expiry windows during chain
+verification (off by default so reports work on archived chains).
 
 ## Where to look next
 

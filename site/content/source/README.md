@@ -2,7 +2,7 @@
 title: "Ardur"
 description: "Ardur is the runtime governance and evidence layer for AI agents."
 source_path: "README.md"
-source_sha256: "cfbf2f00fdb3a3e69bdcee9f21c71f86db011d786360e6e7dfa3582cc0db5d26"
+source_sha256: "caa8fc42839ef9c5e58df23360851f2b47acc0bd86cb2e2de27334fb1020b543"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["orientation", "runtime-boundary"]
@@ -31,7 +31,15 @@ and the public Hugo evidence site. Re-runnable proof media, full packaging,
 and production deployment material are still being tightened before they are
 presented as release-ready.
 
-[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
+[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
+
+> **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
+> invocation. Side effects below the tool boundary — subprocess trees,
+> kernel events, network connections initiated by tool-spawned processes —
+> are not yet captured; the roadmap closes that gap in v0.2 (filesystem
+> snapshots), v0.5 (Linux eBPF), and v1.0 (macOS Endpoint Security
+> Framework). See [`docs/coverage-map.md`](/__ardur_internal__/source/docs/coverage-map/) for the
+> precise per-tool audit.
 
 ## Why Ardur
 

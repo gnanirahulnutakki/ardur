@@ -2,7 +2,7 @@
 title: "Ardur — Python Reference Implementation"
 description: "The public Python runtime for Ardur lives here: a runtime governance and evidence layer for AI agents that issues signed mission passports, enforces them at execution time, and rec"
 source_path: "python/README.md"
-source_sha256: "1bb1422f4c5dac0473b9bffa3931d99d5109f574758cb38da82ea295085bfa86"
+source_sha256: "3737f09ff018eb69074fd6850ff2c7c9466a8691f06ca6eb3666b6c1a3f830a9"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["runtime-boundary"]
@@ -32,11 +32,11 @@ pip install -e .
 ardur issue \
   --agent-id alice \
   --mission "summarize sales from sales/q1.csv into reports/" \
-  --allowed-tools read_file,write_report \
-  --resource-scope 'sales/*,reports/*'
+  --allowed-tools read_file write_report \
+  --resource-scope 'sales/*' 'reports/*'
 
-# Verify a passport
-ardur verify <token-from-issue-output>
+# Verify a passport (the issue command prints a JSON object containing "token")
+ardur verify --token <token-from-issue-output>
 ```
 
 That walks through key generation, mission compilation, ES256-signed passport issuance, and verification — all local, no LLM calls.

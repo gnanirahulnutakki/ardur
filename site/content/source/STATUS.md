@@ -1,8 +1,8 @@
 ---
 title: "Status"
-description: "Until every imported v0.1 spec has its companion fixtures and the Personal"
+description: "Today, Ardur captures every Claude Code tool-call invocation — file reads"
 source_path: "STATUS.md"
-source_sha256: "c980b3708db90517a637f63b7b123df5c9267843e181ba68c0483afc71c0ad34"
+source_sha256: "70f3920601bb9ee4ba0cf1116db11433679fa6d8a592b4fdc30da2f161b8d575"
 weight: 100
 maturity: ["in-progress", "public-now"]
 claim_types: ["status"]
@@ -17,6 +17,30 @@ evidence_levels: ["code-and-doc"]
 This page is generated from the public repository source file. Edit the source file, then run `python3 site/scripts/sync_source_docs.py` to refresh the Hugo mirror.
 {{< /proof-status >}}
 
+## Capture Boundary
+
+Today, Ardur captures every Claude Code tool-call invocation — file reads
+(`Read`), file writes (`Edit`/`Write`), shell command invocations (`Bash`),
+web access (`WebFetch`/`WebSearch`), and subagent dispatches (`Task`). Each
+invocation is signed (ES256) and chained (SHA-256).
+
+What we do **not** yet capture:
+
+- **Side effects of shell commands.** A `Bash("rm foo")` is recorded as the
+  command string; the actual `unlink` syscall is invisible.
+- **Subprocess trees** spawned by a tool call (e.g. by `Bash("./run.sh")`).
+- **Network connections** initiated by tool-spawned processes.
+- **Filesystem changes** outside the typed file tools.
+- **Provider-side reasoning, hidden state, server-side tool calls** — out
+  of scope by definition for any local tool.
+
+This boundary is intentional and disclosed. The roadmap closes the gap in
+phases: v0.2 adds filesystem snapshots within the protected scope; v0.5
+adds Linux eBPF kernel-level capture; v1.0 adds macOS Endpoint Security
+Framework. See [`docs/coverage-map.md`](/__ardur_internal__/source/docs/coverage-map/) for the full
+audit, [`docs/known-limitations.md`](/__ardur_internal__/source/docs/known-limitations/) for the
+caveat list, and [`ROADMAP.md`](/__ardur_internal__/source/roadmap/) for the phase plan.
+
 ## Public Now
 
 - the product category and public intent are defined
@@ -24,7 +48,7 @@ This page is generated from the public repository source file. Edit the source f
 - the public-facing brand has moved to `Ardur`
 - public v0.1 specs are present under `docs/specs/` (Mission Declaration, Delegation Grant, Execution Receipt and EAT profile, Verifier Contract, Conformance Profiles, IDM extension, Revocation)
 - curated Python runtime files and tests are present under `python/`, including the Ardur Personal Hub service (`personal_hub.py`), Claude Code hook (`claude_code_hook.py`), telemetry (`claude_code_telemetry.py`), reporting (`claude_code_report.py`), native-messaging host (`ardur_personal_native_host.py`), and `ARDUR.md` profile compiler (`ardur_profile.py`)
-- the `ardur` CLI ships subcommands for the protocol path (`issue`, `verify`, `attest`, `start`) and the Personal path (`hub`, `setup`, `status`, `doctor`, `doctor-claude-code`, `uninstall`, `run`, `desktop-observe`, `personal-native-host`, `personal-native-manifest`, `profile init`, `protect claude-code`, `cc-hook`, `cc-report`)
+- the `ardur` CLI ships subcommands for the protocol path (`issue`, `verify`, `attest`, `start`) and the Personal path (`hub`, `setup`, `status`, `doctor`, `doctor-claude-code`, `uninstall`, `run`, `desktop-observe`, `personal-native-host`, `personal-native-manifest`, `profile init`, `protect claude-code`, `claude-code-hook`, `claude-code-report`)
 - the Claude Code plugin is present under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks plus a smoke script
 - curated Go runtime, governance, and operator files are present under `go/` (the AAT package remains a fail-closed skeleton by design and is documented as such in `go/README.md`)
 - runnable framework examples are present under `examples/`: LangChain, LangGraph, and AutoGen quickstarts; the Ardur Personal browser extension; the Ardur Personal desktop-observe adapter; the Ardur Personal native-messaging host; and the Claude Code plugin pointer. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories are deferred adapter specs

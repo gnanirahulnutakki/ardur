@@ -25,7 +25,7 @@ without using GitHub as the documentation browser.
 - {{< repo-link "python/README.md" "Python package" >}} — current Python surface and runtime boundary.
 - {{< repo-link "go/README.md" "Go module" >}} — current Go surface and protocol support.
 - {{< repo-link "docs/guides/ardur-personal-hub.md" "Ardur Personal Hub guide" >}} — local product walkthrough covering `ardur protect claude-code`, `ardur hub`, browser extension, and desktop observe.
-- {{< repo-link "plugins/claude-code/README.md" "Claude Code plugin" >}} — runnable plugin with signed receipts on every tool call.
+- {{< repo-link "plugins/claude-code/README.md" "Claude Code plugin" >}} — runnable plugin with signed receipts on every tool call. See [the live session demo](claude-code-demo/) for a recorded walkthrough.
 - {{< repo-link "examples/README.md" "Examples index" >}} — framework examples and their maturity labels.
 - {{< repo-link "examples/langchain-quickstart/README.md" "LangChain quickstart" >}}
 - {{< repo-link "examples/langgraph-quickstart/README.md" "LangGraph quickstart" >}}
