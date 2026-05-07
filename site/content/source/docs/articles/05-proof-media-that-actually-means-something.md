@@ -19,7 +19,7 @@ This page is generated from the public repository source file. Edit the source f
 
 > Article 05 of the Ardur journey-log series. Date: 2026-04-29.
 > Prerequisite reading: none. Cross-references:
-> [`MEDIA.md`](/__ardur_internal__/source/media/),
+> [`MEDIA.md`](/__ardur_internal__/source/media-notes/),
 > [`media/selected-assets.json`](/__ardur_internal__/repo/media/selected-assets.json),
 > [`docs/specs/verifier-contract-v0.1.md`](/__ardur_internal__/source/docs/specs/verifier-contract-v0.1/),
 > [`docs/known-limitations.md`](/__ardur_internal__/source/docs/known-limitations/).
@@ -165,7 +165,7 @@ cannot do *yet* is `git clone`, `python docs/scripts/...` and
 produce the same artifacts on your own machine.
 
 We chose to ship the casts anyway, with
-[`MEDIA.md`](/__ardur_internal__/source/media/) calling this gap out as
+[`MEDIA.md`](/__ardur_internal__/source/media-notes/) calling this gap out as
 *archival walkthroughs, not re-runnable proofs* on its first page.
 The reasoning:
 

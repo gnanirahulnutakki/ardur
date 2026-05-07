@@ -11,6 +11,43 @@ params:
   sourceRef: "dev"
   description: "Runtime governance and verifier-backed evidence for AI agents."
 
+menus:
+  main:
+    - name: "Start"
+      pageRef: "/start-here"
+      weight: 10
+    - name: "Works Now"
+      pageRef: "/what-works-now"
+      weight: 20
+    - name: "Try It"
+      pageRef: "/try-it"
+      weight: 30
+    - name: "Docs"
+      pageRef: "/docs"
+      weight: 40
+    - name: "Examples"
+      pageRef: "/examples"
+      weight: 50
+    - name: "Evidence"
+      pageRef: "/evidence"
+      weight: 60
+    - name: "Roadmap"
+      pageRef: "/roadmap"
+      weight: 70
+  footer:
+    - name: "Work In Progress"
+      pageRef: "/work-in-progress"
+      weight: 10
+    - name: "Audiences"
+      pageRef: "/audiences"
+      weight: 20
+    - name: "Contribute"
+      pageRef: "/contribute"
+      weight: 30
+    - name: "Source Mirror"
+      pageRef: "/source"
+      weight: 40
+
 taxonomies:
   maturity: maturity
   claim_type: claim_types

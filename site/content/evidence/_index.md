@@ -13,5 +13,6 @@ Ardur's public rule is that claims should point to code, a spec, a verifier
 path, a media artifact, or a named limitation. The current media is useful, but
 not yet the final rerunnable proof story.
 
-Use the capability media catalog to see every current public cast surfaced by
-the site.
+Use the claim ledger for source-backed assertions and the capability catalog
+for the current `.cast` recordings. The site does not publish video cards until
+real rendered video artifacts exist.

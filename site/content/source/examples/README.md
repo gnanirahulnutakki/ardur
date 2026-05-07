@@ -2,7 +2,7 @@
 title: "Ardur Examples"
 description: "Working examples of Ardur governing AI agents across major frameworks and local"
 source_path: "examples/README.md"
-source_sha256: "24d7cec311c18df83cf4fc3b72ac1bce0574218b28d8be0e22627238d5aa68b9"
+source_sha256: "ad16fe48eafc7c51ddde85f005cdfc1f0cca2282b514ea36199c5ef524f7cb5e"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["integration"]
@@ -63,4 +63,9 @@ Each framework has its own tool-call interface, its own session-state model, and
 
 ## CI for examples
 
-Once at least one quickstart has runnable code, an `examples-smoke.yml` workflow will exercise it end-to-end on every PR — `langchain-quickstart` is the likely first because it has the lightest dependency surface (no extra system packages, Ollama already in the image). CodeQL handles static analysis automatically once Python files appear under `examples/*/src/`.
+The current CI surface is the repo-wide Python and Go workflow in
+`.github/workflows/tests.yml`, plus CodeQL, link-check, secret-scan, format
+validation, and the Hugo site build. The framework quickstarts are runnable
+from the checked-in example directories, but there is not yet a dedicated
+`examples-smoke.yml` workflow for every adapter. Treat that as future hardening,
+not current gate coverage.
