@@ -126,10 +126,27 @@ print('chain ok:', len(jwts), 'receipts')
 
 ## Boundaries
 
-- Ardur protects Claude Code local tool calls that pass through Claude Code's
-  hook system.
-- Ardur does not control hidden provider-side behavior, model sampling, or
-  tools that bypass Claude Code hooks.
+This plugin captures at the **tool-call boundary** — every Claude Code tool
+invocation (`Read`, `Edit`, `Write`, `Bash`, `WebFetch`, `WebSearch`,
+`Task`, MCP tools) is signed and chained.
+
+What is **not** captured today:
+
+- **Side effects of shell commands.** A `Bash("rm foo")` is recorded as the
+  command string; the actual `unlink` syscall is invisible.
+- **Subprocess trees** spawned by a tool call (e.g. by `Bash("./run.sh")`).
+- **Network connections** initiated by tool-spawned processes.
+- **Filesystem changes** outside the typed file tools.
+- **Provider-side reasoning, hidden state, server-side tool calls** — out
+  of scope by definition for any local tool.
+
+The roadmap closes these gaps in phases: v0.2 adds filesystem snapshots,
+v0.5 adds Linux eBPF kernel-level capture, v1.0 adds macOS Endpoint
+Security Framework. See [`docs/coverage-map.md`](../../docs/coverage-map.md)
+for the full per-tool audit.
+
+Other notes:
+
 - Ardur is not a sandbox. Use it with Claude Code's normal permissions and OS
   filesystem controls.
 - Codex and Claude Desktop are not first-class in this RC. They remain separate

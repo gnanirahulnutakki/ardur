@@ -2,7 +2,7 @@
 title: "Ardur Claude Code Plugin"
 description: "This plugin protects Claude Code at the local tool boundary. `PreToolUse` runs"
 source_path: "plugins/claude-code/README.md"
-source_sha256: "660cc335f077fae22164227db0790c310423a8b2946619230bfb8da4da378001"
+source_sha256: "adbd96628f8e7f5ec3e41650a5904500c0ba47512282f681c97e3c77f38d14a1"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -143,10 +143,27 @@ print('chain ok:', len(jwts), 'receipts')
 
 ## Boundaries
 
-- Ardur protects Claude Code local tool calls that pass through Claude Code's
-  hook system.
-- Ardur does not control hidden provider-side behavior, model sampling, or
-  tools that bypass Claude Code hooks.
+This plugin captures at the **tool-call boundary** — every Claude Code tool
+invocation (`Read`, `Edit`, `Write`, `Bash`, `WebFetch`, `WebSearch`,
+`Task`, MCP tools) is signed and chained.
+
+What is **not** captured today:
+
+- **Side effects of shell commands.** A `Bash("rm foo")` is recorded as the
+  command string; the actual `unlink` syscall is invisible.
+- **Subprocess trees** spawned by a tool call (e.g. by `Bash("./run.sh")`).
+- **Network connections** initiated by tool-spawned processes.
+- **Filesystem changes** outside the typed file tools.
+- **Provider-side reasoning, hidden state, server-side tool calls** — out
+  of scope by definition for any local tool.
+
+The roadmap closes these gaps in phases: v0.2 adds filesystem snapshots,
+v0.5 adds Linux eBPF kernel-level capture, v1.0 adds macOS Endpoint
+Security Framework. See [`docs/coverage-map.md`](/__ardur_internal__/source/docs/coverage-map/)
+for the full per-tool audit.
+
+Other notes:
+
 - Ardur is not a sandbox. Use it with Claude Code's normal permissions and OS
   filesystem controls.
 - Codex and Claude Desktop are not first-class in this RC. They remain separate

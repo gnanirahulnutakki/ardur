@@ -14,7 +14,15 @@ and the public Hugo evidence site. Re-runnable proof media, full packaging,
 and production deployment material are still being tightened before they are
 presented as release-ready.
 
-[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Evidence Site Source](site/README.md)
+[Research](RESEARCH.md) · [Status](STATUS.md) · [Coverage Map](docs/coverage-map.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Evidence Site Source](site/README.md)
+
+> **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
+> invocation. Side effects below the tool boundary — subprocess trees,
+> kernel events, network connections initiated by tool-spawned processes —
+> are not yet captured; the roadmap closes that gap in v0.2 (filesystem
+> snapshots), v0.5 (Linux eBPF), and v1.0 (macOS Endpoint Security
+> Framework). See [`docs/coverage-map.md`](docs/coverage-map.md) for the
+> precise per-tool audit.
 
 ## Why Ardur
 
