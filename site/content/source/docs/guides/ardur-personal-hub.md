@@ -2,7 +2,7 @@
 title: "Ardur Personal Hub"
 description: "Ardur Personal is the local product shape for regular users. It protects local"
 source_path: "docs/guides/ardur-personal-hub.md"
-source_sha256: "22bd6bda02333d2cf22b4ea0ae75d86b1401d2be4fadc74e8aea22d34b224d8a"
+source_sha256: "4a7c5fc592e4604c64c666c7b979691921ac7acbf7fb4d568f05670523532910"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -116,6 +116,12 @@ ardur hub
 it once for setup. Keep that token local. The browser extension uses it to talk
 to the Hub; arbitrary websites should not be able to read Hub exports or submit
 fake observations.
+
+On macOS, `ardur setup` also installs a per-user LaunchAgent plist at
+`~/Library/LaunchAgents/dev.ardur.personal-hub.plist` so the Hub can be managed
+through `launchctl` or `brew services start ardur-personal`. The plist is
+inert until you load it — `ardur hub` runs the Hub directly without going
+through `launchctl`. Run `ardur uninstall` to remove the plist.
 
 ## Browser Evidence
 

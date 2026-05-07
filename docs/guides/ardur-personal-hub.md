@@ -100,6 +100,12 @@ it once for setup. Keep that token local. The browser extension uses it to talk
 to the Hub; arbitrary websites should not be able to read Hub exports or submit
 fake observations.
 
+On macOS, `ardur setup` also installs a per-user LaunchAgent plist at
+`~/Library/LaunchAgents/dev.ardur.personal-hub.plist` so the Hub can be managed
+through `launchctl` or `brew services start ardur-personal`. The plist is
+inert until you load it — `ardur hub` runs the Hub directly without going
+through `launchctl`. Run `ardur uninstall` to remove the plist.
+
 ## Browser Evidence
 
 The browser extension is beta evidence collection, not enforcement over hidden

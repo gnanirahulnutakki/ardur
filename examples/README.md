@@ -33,9 +33,16 @@ advertised as runnable examples until code and tests land.
 cd ../python
 pip install -e .
 
-# Issue and verify a passport using one of the example mission files
-ardur issue --from-file ../examples/missions/minimal-mission.json
-ardur verify <token-from-issue-output>
+# Issue and verify a passport. ardur issue takes mission claims via flags,
+# not a JSON file — the example mission files under missions/ are reference
+# documents for the spec layer. To exercise the protocol path:
+ardur issue \
+  --agent-id alice \
+  --mission "summarize sales from sales/q1.csv into reports/" \
+  --allowed-tools read_file write_report \
+  --resource-scope 'sales/*' 'reports/*'
+
+ardur verify --token <token-from-issue-output>
 ```
 
 That exercises the core protocol surface end-to-end — mission compilation, passport issuance, signature, verification — without an LLM or framework in the loop. It's the fastest way to confirm a local install actually works.
