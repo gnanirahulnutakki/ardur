@@ -375,7 +375,10 @@ def walk_markdown_refs(root: Path, graph: Graph, files: list[str], file_set: set
     for path in files:
         if not path.endswith(".md"):
             continue
-        text = (root / path).read_text(encoding="utf-8", errors="replace")
+        markdown_path = root / path
+        if not markdown_path.exists():
+            continue
+        text = markdown_path.read_text(encoding="utf-8", errors="replace")
         for raw_target in MARKDOWN_LINK_RE.findall(text):
             target = raw_target.split("#", 1)[0].strip()
             if (

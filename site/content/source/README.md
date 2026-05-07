@@ -31,7 +31,7 @@ and the public Hugo evidence site. Re-runnable proof media, full packaging,
 and production deployment material are still being tightened before they are
 presented as release-ready.
 
-[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
+[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
 
 > **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
 > invocation. Side effects below the tool boundary — subprocess trees,
@@ -79,7 +79,7 @@ This repo currently includes:
 - bootstrap and verification scripts under `scripts/` (`conductor-bootstrap.sh`, `setup-dev.sh`, `check-local.sh`)
 - agent-specific public guides under [`docs/agent-instructions/`](/__ardur_internal__/source/docs/agent-instructions/readme/) (Conductor, Codex, Claude)
 - new technical reference pages under [`docs/reference/`](/__ardur_internal__/source/docs/reference/readme/) — CLI, Personal Hub HTTP API, and the `ARDUR.md` profile format
-- selected archival terminal recordings (the rerunnable proof path lands with the next public drop — see [MEDIA.md](/__ardur_internal__/source/media/))
+- selected archival terminal recordings (the rerunnable proof path lands with the next public drop — see [MEDIA.md](/__ardur_internal__/source/media-notes/))
 - a journey-log [article series](/__ardur_internal__/source/docs/articles/readme/) — Article 06 (Public Import Discipline) and Article 05 (Proof Media That Actually Means Something) are the first-wave shippers
 - a public audit trail at [`docs/audit/`](/__ardur_internal__/source/docs/audit/) mirroring the GitHub Code Scanning dismissal record so triage decisions are auditable from the repo tree without GitHub credentials
 

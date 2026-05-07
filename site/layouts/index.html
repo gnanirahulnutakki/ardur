@@ -1,44 +1,133 @@
 {{ define "main" }}
-  <section class="home-rail">
-    <div class="home-copy">
-      <p class="eyebrow">Runtime governance, rendered as evidence</p>
-      <h1>Ardur turns public claims into a navigable evidence ledger.</h1>
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Pre-release, source-backed, and explicit about limits</p>
+      <h1>Runtime governance for AI agents, with evidence you can inspect.</h1>
       <p>
-        This site organizes the repo's public-safe status, specs, ADRs, media,
-        examples, and limitations without replacing the source docs.
+        Ardur binds agent sessions to declared missions, checks tool and
+        resource boundaries before actions run, and records signed evidence
+        for later review. This public site separates what works now from what
+        is still being hardened.
       </p>
       <div class="action-row">
-        <a class="primary-link" href="{{ "claims/" | absURL }}">Open claim ledger</a>
-        <a class="secondary-link" href="{{ .Site.Params.repoURL }}">View source repo</a>
+        <a class="primary-link" href="{{ "try-it/" | absURL }}">Try the shortest path</a>
+        <a class="secondary-link" href="{{ "what-works-now/" | absURL }}">See what works now</a>
+        <a class="secondary-link" href="{{ .Site.Params.repoURL }}">View GitHub</a>
       </div>
     </div>
-    <div class="evidence-board" aria-label="Evidence flow">
-      <div class="node source">Repo Markdown<br><span>README, specs, ADRs</span></div>
-      <div class="node build">Hugo build<br><span>metadata checks</span></div>
-      <div class="node site">Public site<br><span>filters and caveats</span></div>
-      <div class="flow-line flow-one"></div>
-      <div class="flow-line flow-two"></div>
+    <div class="hero-console" aria-label="Ardur current state summary">
+      <div class="console-bar">
+        <span></span><span></span><span></span>
+      </div>
+      <div class="console-body">
+        <p><strong>ardur status</strong></p>
+        <dl>
+          <div><dt>Runtime</dt><dd>Python + Go surfaces public</dd></div>
+          <div><dt>Adapters</dt><dd>Claude Code, LangChain, LangGraph, AutoGen</dd></div>
+          <div><dt>Personal</dt><dd>Hub, browser extension, desktop observe</dd></div>
+          <div><dt>Media</dt><dd>Archival casts, not rerunnable proof yet</dd></div>
+        </dl>
+      </div>
     </div>
   </section>
 
-  <section class="band">
-    <div class="band-heading">
-      <p class="eyebrow">Current posture</p>
-      <h2>Public now, in progress, and deliberately bounded.</h2>
+  <section class="trust-strip" aria-label="Current public posture">
+    <div>
+      <strong>{{ len hugo.Data.claims.claims }}</strong>
+      <span>source-backed claim cards</span>
     </div>
-    <div class="metric-strip">
-      <div><strong>{{ len hugo.Data.claims.claims }}</strong><span>claim cards</span></div>
-      <div><strong>5</strong><span>taxonomy families</span></div>
-      <div><strong>{{ len hugo.Data.capabilities.included_now }}</strong><span>archival casts</span></div>
-      <div><strong>0</strong><span>server runtime cost</span></div>
+    <div>
+      <strong>{{ len hugo.Data.capabilities.included_now }}</strong>
+      <span>archival proof-media casts</span>
+    </div>
+    <div>
+      <strong>3</strong>
+      <span>runnable framework quickstarts</span>
+    </div>
+    <div>
+      <strong>0</strong>
+      <span>fake video placeholders</span>
     </div>
   </section>
 
-  <section class="page-shell compact">
+  <section class="section-band">
+    <div class="section-heading">
+      <p class="eyebrow">What works now</p>
+      <h2>Code-bearing surfaces, examples, and documentation are already public.</h2>
+      <p>
+        The current public repo is not just a product shell. It includes the
+        runtime imports, CLI, Personal Hub, Claude Code plugin, runnable
+        quickstarts, CI, specs, and evidence map.
+      </p>
+    </div>
+    <div class="feature-grid">
+      <article class="feature-card">
+        <span class="status-token status-public-now">public-now</span>
+        <h3>Runtime and CLI</h3>
+        <p>Mission issuance, verification, local Hub, profile compiler, reports, and signed receipt paths live under the Python and Go surfaces.</p>
+        <a href="{{ "docs/" | absURL }}">Open docs</a>
+      </article>
+      <article class="feature-card">
+        <span class="status-token status-public-now">public-now</span>
+        <h3>Agent integrations</h3>
+        <p>Claude Code plugin plus LangChain, LangGraph, AutoGen, browser, desktop, and native-host examples are linked from the examples surface.</p>
+        <a href="{{ "examples/" | absURL }}">Browse examples</a>
+      </article>
+      <article class="feature-card">
+        <span class="status-token status-in-progress">in-progress</span>
+        <h3>Proof media</h3>
+        <p>The current recordings are archival `.cast` files. They show product direction without pretending to be rerunnable public proof.</p>
+        <a href="{{ "evidence/media/" | absURL }}">Inspect media</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="journey-panel">
+    <div class="journey-copy">
+      <p class="eyebrow">For evaluators, users, and contributors</p>
+      <h2>Choose the path that matches why you are here.</h2>
+    </div>
+    <div class="journey-grid">
+      <a href="{{ "try-it/" | absURL }}">
+        <strong>Try it locally</strong>
+        <span>Install the Python package and issue/verify a mission passport.</span>
+      </a>
+      <a href="{{ "audiences/" | absURL }}">
+        <strong>Find your role</strong>
+        <span>Framework builders, coding-agent users, platform engineers, security reviewers, contributors.</span>
+      </a>
+      <a href="{{ "work-in-progress/" | absURL }}">
+        <strong>Track active work</strong>
+        <span>Adapter lifts, packaging, proof media, conformance vectors, deployment hardening.</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="section-band light">
+    <div class="section-heading">
+      <p class="eyebrow">Evidence ledger</p>
+      <h2>Claims stay tied to source paths, specs, tests, media, or limitations.</h2>
+    </div>
     <div class="claim-grid">
       {{ range first 3 hugo.Data.claims.claims }}
         {{ partial "claim-card.html" (dict "claim" . "site" $.Site) }}
       {{ end }}
     </div>
+    <div class="center-action">
+      <a class="secondary-link" href="{{ "claims/" | absURL }}">Open all claims</a>
+    </div>
+  </section>
+
+  <section class="roadmap-preview">
+    <div>
+      <p class="eyebrow">Roadmap discipline</p>
+      <h2>Ambition is visible, but never mixed with shipped capability.</h2>
+      <p>
+        OpenAI Agents SDK and Google ADK adapters, Codex hooks, Claude Desktop
+        MCP packaging, rerunnable media, conformance vectors, a tagged package,
+        and production deployment walkthroughs are still future-facing.
+      </p>
+    </div>
+    <a class="primary-link" href="{{ "roadmap/" | absURL }}">Read the roadmap</a>
   </section>
 {{ end }}

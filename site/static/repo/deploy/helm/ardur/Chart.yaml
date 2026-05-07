@@ -27,7 +27,7 @@ keywords:
   - runtime-governance
 
 annotations:
-  artifacthub.io/license: "TBD"
+  artifacthub.io/license: "MIT"
   artifacthub.io/prerelease: "true"
 
 # Dependencies — SPIRE is pulled in as a dependency chart. Biscuit
