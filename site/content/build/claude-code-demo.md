@@ -84,8 +84,11 @@ reordered.
 
 ## Cost and timing
 
-The `2026-05-06` capture used `claude-opus-4-7[1m]`. Two single-shot runs
-of the same prompt:
+Both runs used the same Claude Code session against the Anthropic API,
+with the same default model (CLI default at the time of capture; specific
+model identifiers are elided per the repo convention in
+[`CONTRIBUTING.md`](../../../CONTRIBUTING.md)). Two single-shot runs of
+the same prompt:
 
 | Run | Wall | API ms | Cost | Tool calls | Result |
 |---|---|---|---|---|---|
@@ -105,9 +108,8 @@ caught**, and the **9-receipt chain verifies**.
 
 ## Where the code lives
 
-- Hook entrypoints: [`plugins/claude-code/hooks/`](https://github.com/gnanirahulnutakki/ardur/tree/main/plugins/claude-code/hooks)
-- Hook adapter: [`python/vibap/claude_code_hook.py`](https://github.com/gnanirahulnutakki/ardur/blob/main/python/vibap/claude_code_hook.py)
-- Telemetry mapper (covers all Claude Code built-ins + MCP fallback):
-  [`python/vibap/claude_code_telemetry.py`](https://github.com/gnanirahulnutakki/ardur/blob/main/python/vibap/claude_code_telemetry.py)
-- Receipt chain primitives: [`python/vibap/receipt.py`](https://github.com/gnanirahulnutakki/ardur/blob/main/python/vibap/receipt.py)
-- Plugin README with full setup: [`plugins/claude-code/README.md`](https://github.com/gnanirahulnutakki/ardur/blob/main/plugins/claude-code/README.md)
+- Hook entrypoints: {{< repo-link "plugins/claude-code/hooks/" "plugins/claude-code/hooks/" >}}
+- Hook adapter: {{< repo-link "python/vibap/claude_code_hook.py" "python/vibap/claude_code_hook.py" >}}
+- Telemetry mapper (covers all Claude Code built-ins + MCP fallback): {{< repo-link "python/vibap/claude_code_telemetry.py" "python/vibap/claude_code_telemetry.py" >}}
+- Receipt chain primitives: {{< repo-link "python/vibap/receipt.py" "python/vibap/receipt.py" >}}
+- Plugin README with full setup: {{< repo-link "plugins/claude-code/README.md" "Claude Code plugin README" >}}
