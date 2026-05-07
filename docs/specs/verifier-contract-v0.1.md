@@ -4,8 +4,12 @@
 > research repo's `docs/spec/` layout. In the public ardur tree, migrated specs
 > live under `docs/specs/`. Any `docs/spec/...` path reference in the body of
 > this document refers to the original private layout; the public-tree mapping
-> is in [`docs/specs/README.md`](./README.md). Some companion specs (Mission
-> Declaration, Execution Receipt) have not yet been imported.
+> is in [`docs/specs/README.md`](./README.md). The Mission Declaration and
+> Execution Receipt companion specs are now public — see
+> [`mission-declaration-v0.1.md`](./mission-declaration-v0.1.md),
+> [`execution-receipt-v0.1.md`](./execution-receipt-v0.1.md), and
+> [`execution-receipt-eat-profile-v0.1.md`](./execution-receipt-eat-profile-v0.1.md).
+> Conformance test vectors (`docs/specs/conformance/`) remain to be imported.
 
 ## 1. Scope
 

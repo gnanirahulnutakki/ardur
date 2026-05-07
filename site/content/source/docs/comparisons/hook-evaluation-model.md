@@ -2,7 +2,7 @@
 title: "How Ardur evaluates an action it hasn't seen yet"
 description: "A reviewer raised a sharp point about the protocol's pre-action evaluation hook: **\"In practice, LLM-driven calls are often not deterministically known at pre-action time, which ma"
 source_path: "docs/comparisons/hook-evaluation-model.md"
-source_sha256: "a22f7fe7a46d2400d2a96ffdc738279c493b5ad7547ae507db335b479f0c0b80"
+source_sha256: "39f5634fd196f96c4fb7ecb0aa748afbd3e5491e786fc35cd4242538d7c864c0"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["comparison"]
@@ -91,7 +91,7 @@ If you're wiring up a framework adapter or building a custom agent against Ardur
 - **When you can't**: the verifier returns `insufficient_evidence` and fail-closed unless you opt out at deployment time. The opt-out is visible in every Receipt; reviewers can audit it.
 - **For inherently non-deterministic calls** (LLM queries, iterator/streaming results): split the evaluation. Pre-action approves the call's existence; post-action attestation evaluates the result against mission post-conditions.
 
-The framework example stubs under `examples/*-quickstart/` will demonstrate each of these three paths once the per-framework adapter code lands publicly.
+The runnable framework quickstarts under `examples/*-quickstart/` (LangChain, LangGraph, AutoGen) demonstrate each of these three paths against a working governance proxy. The OpenAI Agents SDK and Google ADK directories remain deferred adapter specs and will demonstrate the same paths once their code lift lands.
 
 ## Open question
 

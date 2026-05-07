@@ -2,7 +2,7 @@
 title: "Docs"
 description: "This repo is opening in phases."
 source_path: "docs/README.md"
-source_sha256: "6e9dc75d46c058b91024c0e6ff46a63b518a8016332f927f2563e7d714a9fc13"
+source_sha256: "2d821058e3d7cb4968a2fe374d1bfd0974f7c3fed2485f77c6788541adec103e"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -37,6 +37,9 @@ tighter quickstart are landing in follow-on phases.
 - [Architecture Decision Records](/__ardur_internal__/source/docs/decisions/readme/)
 - [MCEP Specifications (v0.1)](/__ardur_internal__/source/docs/specs/readme/)
 - [Comparisons and engineering responses](/__ardur_internal__/source/docs/comparisons/readme/)
+- [Technical Reference](/__ardur_internal__/source/docs/reference/readme/) — CLI, Personal Hub HTTP API, and `ARDUR.md` profile format
+- [Articles](/__ardur_internal__/source/docs/articles/readme/)
+- [CodeQL dismissal audit trail](/__ardur_internal__/source/docs/audit/)
 
 ## Start here
 
