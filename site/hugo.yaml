@@ -19,6 +19,9 @@ menus:
     - name: "Works Now"
       pageRef: "/what-works-now"
       weight: 20
+    - name: "Use Cases"
+      pageRef: "/use-cases"
+      weight: 25
     - name: "Try It"
       pageRef: "/try-it"
       weight: 30
