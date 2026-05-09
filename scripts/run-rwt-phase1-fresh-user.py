@@ -38,33 +38,32 @@ STATUS_SKIP_GATED = "SKIP_GATED"
 STATUS_BLOCKED = "BLOCKED"
 STATUS_INSUFFICIENT = "INSUFFICIENT_EVIDENCE"
 
-SECRET_SCAN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("api_key", re.compile(r"(?i)\bapi[-_ ]?key\s*[:=]\s*[^\s,}\]]+")),
-    ("authorization_bearer", re.compile(r"(?i)\bauthorization\s*[:=]\s*bearer\s+[^\s,}\]]+")),
-    ("password", re.compile(r"(?i)\bpassword\s*[:=]\s*[^\s,}\]]+")),
-    ("secret", re.compile(r"(?i)\bsecret\s*[:=]\s*[^\s,}\]]+")),
-    ("token", re.compile(r"(?i)\btoken\s*[:=]\s*[^\s,}\]]+")),
-    ("jwt", re.compile(r"(?i)\bjwt\s*[:=]\s*[^\s,}\]]+")),
-    (
-        "private_key",
-        re.compile(
-            r"-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH |)PRIVATE KEY-----",
-            re.IGNORECASE | re.DOTALL,
-        ),
-    ),
-    ("bare_jwt", re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{6,}")),
-    ("url_token_query", re.compile(r"(?i)([?&]token=)[^&#\s]+")),
-]
+SECRET_VALUE_PLACEHOLDER = "[REDACTED]"
+PRIVATE_KEY_PLACEHOLDER = "[REDACTED PRIVATE KEY]"
+JWT_PLACEHOLDER = "[REDACTED JWT]"
+
+AUTHORIZATION_BEARER_PATTERN = re.compile(
+    r"(?i)(?P<prefix>[\"']?authorization[\"']?\s*[:=]\s*)(?P<quote>[\"']?)bearer\s+(?P<token>[^\s,\"']+)(?P=quote)",
+)
+KEY_VALUE_QUOTED_PATTERN = re.compile(
+    r"(?P<prefix>[\"']?(?P<key>[A-Za-z0-9_-]+)[\"']?\s*[:=]\s*)(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+)
+KEY_VALUE_UNQUOTED_PATTERN = re.compile(
+    r"(?P<prefix>[\"']?(?P<key>[A-Za-z0-9_-]+)[\"']?\s*=\s*)(?P<value>(?![\"'])[^\s,}\]#&]+)",
+)
+PRIVATE_KEY_PATTERN = re.compile(
+    r"-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----",
+    re.IGNORECASE | re.DOTALL,
+)
+BARE_JWT_PATTERN = re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{6,}")
+URL_TOKEN_QUERY_PATTERN = re.compile(r"(?i)([?&](?:token|access_token|auth_token|api_key)=)([^&#\s]+)")
 
 REDACTION_PATTERN_NAMES = [
-    "api_key",
+    "secret_key_value",
     "authorization_bearer",
-    "password",
-    "secret",
-    "token",
-    "jwt",
-    "kubeconfig",
     "private_key",
+    "bare_jwt",
+    "url_token_query",
 ]
 
 
@@ -126,31 +125,105 @@ def repo_root_from_script() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _normalize_key_name(raw_key: str) -> str:
+    key = raw_key.strip().strip("\"'").replace("-", "_").replace(" ", "_")
+    key = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key)
+    key = re.sub(r"_+", "_", key)
+    return key.upper()
+
+
+def _is_secret_key_name(raw_key: str) -> bool:
+    key = _normalize_key_name(raw_key)
+    if key in {"API_KEY", "TOKEN", "ACCESS_TOKEN", "AUTH_TOKEN", "PASSWORD", "SECRET", "JWT", "PRIVATE_KEY"}:
+        return True
+    return key.endswith(("_API_KEY", "_TOKEN", "_PASSWORD", "_SECRET", "_JWT"))
+
+
+def _is_redacted_placeholder(value: str) -> bool:
+    cleaned = value.strip().strip("\"'")
+    if not cleaned:
+        return False
+    upper = cleaned.upper()
+    if upper in {SECRET_VALUE_PLACEHOLDER, PRIVATE_KEY_PLACEHOLDER, JWT_PLACEHOLDER, "***"}:
+        return True
+    if upper.startswith(SECRET_VALUE_PLACEHOLDER.rstrip("]")):
+        return True
+    return upper.startswith(f"BEARER {SECRET_VALUE_PLACEHOLDER}".rstrip("]"))
+
+
+def _is_authorization_bearer_key(raw_key: str, value: str) -> bool:
+    return _normalize_key_name(raw_key) == "AUTHORIZATION" and value.lstrip().lower().startswith("bearer ")
+
+
+def _redact_key_value_quoted(match: re.Match[str]) -> str:
+    key = match.group("key")
+    value = match.group("value")
+    quote = match.group("quote")
+    prefix = match.group("prefix")
+    if _is_secret_key_name(key):
+        return f"{prefix}{quote}{SECRET_VALUE_PLACEHOLDER}{quote}"
+    if _is_authorization_bearer_key(key, value):
+        return f"{prefix}{quote}Bearer {SECRET_VALUE_PLACEHOLDER}{quote}"
+    return match.group(0)
+
+
+def _redact_key_value_unquoted(match: re.Match[str]) -> str:
+    key = match.group("key")
+    value = match.group("value")
+    prefix = match.group("prefix")
+    if _is_secret_key_name(key):
+        return f"{prefix}{SECRET_VALUE_PLACEHOLDER}"
+    if _is_authorization_bearer_key(key, value):
+        return f"{prefix}Bearer {SECRET_VALUE_PLACEHOLDER}"
+    return match.group(0)
+
+
 def redact_text(text: str) -> str:
     """Redact secret-like material from text destined for shareable evidence."""
-    redacted = text
-    for name, pattern in SECRET_SCAN_PATTERNS:
-        if name == "url_token_query":
-            redacted = pattern.sub(r"\1[REDACTED]", redacted)
-        else:
-            redacted = pattern.sub(lambda match: _redact_match(name, match.group(0)), redacted)
+    redacted = PRIVATE_KEY_PATTERN.sub(PRIVATE_KEY_PLACEHOLDER, text)
+    redacted = AUTHORIZATION_BEARER_PATTERN.sub(
+        lambda match: f"{match.group('prefix')}{match.group('quote')}Bearer {SECRET_VALUE_PLACEHOLDER}{match.group('quote')}",
+        redacted,
+    )
+    redacted = URL_TOKEN_QUERY_PATTERN.sub(rf"\1{SECRET_VALUE_PLACEHOLDER}", redacted)
+    redacted = KEY_VALUE_QUOTED_PATTERN.sub(_redact_key_value_quoted, redacted)
+    redacted = KEY_VALUE_UNQUOTED_PATTERN.sub(_redact_key_value_unquoted, redacted)
+    redacted = BARE_JWT_PATTERN.sub(JWT_PLACEHOLDER, redacted)
     return redacted
 
 
-def _redact_match(name: str, value: str) -> str:
-    if name == "authorization_bearer":
-        return re.sub(r"(?i)(bearer\s+).+", r"\1[REDACTED]", value)
-    if name in {"api_key", "password", "secret", "token", "jwt"}:
-        return re.sub(r"([:=]\s*).+", r"\1[REDACTED]", value, count=1)
-    return "[REDACTED]"
-
-
 def secret_scan_hits(text: str) -> list[str]:
-    hits: list[str] = []
-    for name, pattern in SECRET_SCAN_PATTERNS:
-        if pattern.search(text):
-            hits.append(name)
-    return hits
+    hits: set[str] = set()
+    if PRIVATE_KEY_PATTERN.search(text):
+        hits.add("private_key")
+    for match in AUTHORIZATION_BEARER_PATTERN.finditer(text):
+        if not _is_redacted_placeholder(match.group("token")):
+            hits.add("authorization_bearer")
+    for match in URL_TOKEN_QUERY_PATTERN.finditer(text):
+        if not _is_redacted_placeholder(match.group(2)):
+            hits.add("url_token_query")
+    for match in KEY_VALUE_QUOTED_PATTERN.finditer(text):
+        key = match.group("key")
+        value = match.group("value")
+        if _is_secret_key_name(key) and not _is_redacted_placeholder(value):
+            hits.add("secret_key_value")
+        if _is_authorization_bearer_key(key, value):
+            token = value.split(None, 1)[1] if len(value.split(None, 1)) == 2 else ""
+            if token and not _is_redacted_placeholder(token):
+                hits.add("authorization_bearer")
+    for match in KEY_VALUE_UNQUOTED_PATTERN.finditer(text):
+        key = match.group("key")
+        value = match.group("value")
+        if _is_secret_key_name(key) and not _is_redacted_placeholder(value):
+            hits.add("secret_key_value")
+        if _is_authorization_bearer_key(key, value):
+            token = value.split(None, 1)[1] if len(value.split(None, 1)) == 2 else ""
+            if token and not _is_redacted_placeholder(token):
+                hits.add("authorization_bearer")
+    for match in BARE_JWT_PATTERN.finditer(text):
+        if not _is_redacted_placeholder(match.group(0)):
+            hits.add("bare_jwt")
+    return sorted(hits)
 
 
 def sha256_file(path: Path) -> str:
@@ -351,6 +424,20 @@ def validate_repo_preflight(ctx: HarnessContext) -> tuple[dict[str, Any], str | 
     return repo_info, None
 
 
+def _find_symlinks(root: Path) -> list[Path]:
+    links: list[Path] = []
+    if root.is_symlink():
+        links.append(root)
+        return links
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        base = Path(dirpath)
+        for name in [*dirnames, *filenames]:
+            candidate = base / name
+            if candidate.is_symlink():
+                links.append(candidate)
+    return sorted(links)
+
+
 def copy_python_source_for_wheel(ctx: HarnessContext) -> Path:
     """Copy the Python package into temp state before building a wheel.
 
@@ -358,8 +445,15 @@ def copy_python_source_for_wheel(ctx: HarnessContext) -> Path:
     source tree passed to ``pip wheel``. The RWT harness must exercise a source /
     local-wheel install without mutating the tested repo, so build from a temp
     copy and keep all packaging side effects under ``ctx.temp_root``.
+
+    The source copy fails closed when symlinks are present so future tracked or
+    dirty symlink paths cannot be silently dereferenced into the wheel context.
     """
     source = ctx.repo / "python"
+    symlinks = _find_symlinks(source)
+    if symlinks:
+        rel_links = [relpath(path, source) for path in symlinks]
+        raise RuntimeError(f"refusing to copy python source containing symlinks: {rel_links}")
     destination = ctx.temp_root / "source" / "python"
     shutil.copytree(
         source,
