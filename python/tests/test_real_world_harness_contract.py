@@ -195,6 +195,29 @@ def test_rwt_phase1_harness_copy_python_source_rejects_symlinks(tmp_path):
         harness.copy_python_source_for_wheel(ctx)
 
 
+def test_rwt_phase1_bundle_artifact_metadata_is_secret_scan_safe(tmp_path):
+    harness = _load_harness()
+    project = tmp_path / "project"
+    ardur_home = tmp_path / "ardur-home"
+    out_dir = tmp_path / "evidence" / "commands"
+    fixtures = tmp_path / "evidence" / "fixtures"
+    project.mkdir()
+    ardur_home.mkdir()
+    out_dir.mkdir(parents=True)
+    fixtures.mkdir(parents=True)
+    (project / "ARDUR.md").write_text("# test\n", encoding="utf-8")
+    (ardur_home / "active_mission.jwt").write_text(_FAKE_BARE_JWT, encoding="utf-8")
+    ctx = SimpleNamespace(project=project, ardur_home=ardur_home, out_dir=out_dir, output_dir=tmp_path / "evidence", fixtures=fixtures)
+
+    artifacts = harness.collect_artifacts(ctx)
+    serialized = json.dumps({"artifacts": artifacts}, sort_keys=True)
+
+    assert artifacts["active_mission_jwt_presence"] == "present_not_copied"
+    assert "active_mission_jwt" not in artifacts
+    assert _FAKE_BARE_JWT not in serialized
+    assert harness.secret_scan_hits(serialized) == []
+
+
 def test_rwt_phase1_harness_allows_clean_local_candidate_commit(monkeypatch, tmp_path):
     harness = _load_harness()
     fake_repo = tmp_path / "repo"

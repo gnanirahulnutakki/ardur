@@ -730,7 +730,9 @@ def collect_artifacts(ctx: HarnessContext) -> dict[str, Any]:
     active = ctx.ardur_home / "active_mission.jwt"
     artifacts: dict[str, Any] = {
         "ardur_md": sha256_file(ctx.project / "ARDUR.md") if (ctx.project / "ARDUR.md").exists() else None,
-        "active_mission_jwt": "present_not_copied" if active.exists() else "missing",
+        # Avoid a scan-self-false-positive key ending in `_jwt`: the bundle records
+        # only presence + digest metadata, never the raw active Mission JWT.
+        "active_mission_jwt_presence": "present_not_copied" if active.exists() else "missing",
         "active_mission_jwt_sha256": sha256_file(active) if active.exists() else None,
         "receipt_chain_paths": [relpath(path, ctx.ardur_home) for path in receipt_paths],
         "reports": [relpath(path, ctx.output_dir) for path in reports],
@@ -980,7 +982,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             bundle_path.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
             print(f"warning: failed to patch cleanup metadata in bundle: {redact_text(str(exc))}", file=sys.stderr)
-        print(json.dumps({"status": overall_status(ctx.gate_results), "bundle": str(bundle_path), "output_dir": str(ctx.output_dir)}, indent=2))
+            bundle = {"status": overall_status(ctx.gate_results)}
+        print(json.dumps({"status": bundle.get("status", overall_status(ctx.gate_results)), "bundle": str(bundle_path), "output_dir": str(ctx.output_dir)}, indent=2))
     return exit_code
 
 
