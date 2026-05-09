@@ -2,7 +2,7 @@
 title: "Ardur Claude Code Plugin"
 description: "This plugin protects Claude Code at the local tool boundary. `PreToolUse` runs"
 source_path: "plugins/claude-code/README.md"
-source_sha256: "adbd96628f8e7f5ec3e41650a5904500c0ba47512282f681c97e3c77f38d14a1"
+source_sha256: "7608fe2969efbacadba7f83c6f6fe66c0e44d9b751698d0c124a7635802b1185"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -73,6 +73,45 @@ environment where Ardur is installed. It will look like:
 ```bash
 VIBAP_HOME=/path/to/.vibap claude --plugin-dir /path/to/plugins/claude-code
 ```
+
+## Low-latency PreToolUse path
+
+`ardur protect claude-code` also tries to build a native PreToolUse daemon
+client at `$VIBAP_HOME/claude-code-pre_tool_use` when a local C compiler is
+available. The hook wrapper attempts the fast path first, then falls back to
+Python handling when no daemon is listening, the native client is missing, or
+the daemon response is invalid.
+
+To use the daemon path, start the daemon from the same Python environment where
+Ardur is installed before launching Claude Code:
+
+```bash
+VIBAP_HOME=/path/to/.vibap python -m vibap.claude_code_daemon
+```
+
+By default, the Unix socket lives at:
+
+```text
+$VIBAP_HOME/daemon/claude-code-hook-daemon.sock
+```
+
+The daemon creates the `daemon/` directory as `0700` and the socket as `0600`.
+If the socket path already contains a non-socket file, Ardur fails closed rather
+than deleting it.
+
+Operational toggles:
+
+- `ARDUR_CC_HOOK_DAEMON=0` disables daemon-first dispatch.
+- `ARDUR_CC_HOOK_DAEMON_SOCKET=/path/to/socket` uses a custom socket path.
+- `ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS=5` changes the daemon client timeout.
+- `ARDUR_CC_HOOK_STRICT_NATIVE=1` forces the wrapper to use only the native
+  client when benchmarking or diagnosing the fast path; do not use it if you
+  want Python fallback behavior.
+
+Claim boundary: the gated release test targets the native daemon-client path.
+Shell wrapper latency is recorded as telemetry because `/bin/bash` startup and
+workstation scheduler tails can dominate p95 even when the native hot path is
+fast.
 
 ## Built-In Options
 

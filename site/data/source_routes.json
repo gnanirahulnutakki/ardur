@@ -100,6 +100,7 @@
     "python": "source/python/",
     "python/vibap": "source/python/vibap/",
     "python/vibap/_specs": "source/python/vibap/_specs/",
+    "reports": "source/reports/",
     "site": "source/site/"
   },
   "markdown": {
@@ -173,6 +174,7 @@
     "go/spec/mission-governance/v0alpha1/README.md": "source/go/spec/mission-governance/v0alpha1/readme/",
     "plugins/claude-code/README.md": "source/plugins/claude-code/readme/",
     "python/README.md": "source/python/readme/",
+    "reports/hook-latency-canonical-reconciliation-2026-05-08.md": "source/reports/hook-latency-canonical-reconciliation-2026-05-08/",
     "site/README.md": "source/site/readme/"
   }
 }
