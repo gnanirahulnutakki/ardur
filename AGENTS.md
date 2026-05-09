@@ -70,6 +70,9 @@ workflow files are the authority for what currently runs.
 Public, repo-safe agent instructions live in this tracked `AGENTS.md` file.
 Everything else is local-only:
 
+- `.ardur/` and `.vibap/` for runtime state, generated receipts, sockets, and
+  local key material. These paths are allowlisted in `.gitleaks.toml` only so
+  tests can run before the local secret scan; they must stay untracked.
 - `.context/skills/` for Conductor/session skills and notes.
 - `.agents/` for local agent runtimes that expect that folder name.
 - `.local-skills/` for imported or experimental local skills.

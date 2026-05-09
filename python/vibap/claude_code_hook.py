@@ -1,10 +1,11 @@
 """Ardur runtime governance adapter for Claude Code hooks.
 
 Wires Claude Code's PreToolUse / PostToolUse hooks to Ardur's policy
-backends and signed Execution Receipts. Stateless per call: each invocation
-    is a fresh `python -m vibap.claude_code_hook <phase>` process that reads
-hook input from stdin, writes hook output to stdout, and appends one
-receipt to the per-trace JSONL chain.
+backends and signed Execution Receipts. Default mode is stateless per call:
+each invocation is a fresh `python -m vibap.claude_code_hook <phase>` process
+that reads hook input from stdin, writes hook output to stdout, and appends
+one receipt to the per-trace JSONL chain. The `pre` phase can optionally try
+a local daemon fast path first, then fall back to the in-process handler.
 """
 
 from __future__ import annotations
@@ -1043,6 +1044,28 @@ def handle_subagent_stop(
     return _handle_subagent_lifecycle(hook_input, keys_dir=keys_dir, lifecycle="stop")
 
 
+def _handle_pre_tool_use_daemon_first(
+    hook_input: dict[str, Any],
+    *,
+    keys_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Attempt daemon dispatch first, then fall back to local handling.
+
+    The fallback preserves existing behavior when no daemon is running or when
+    daemon I/O fails. We do not fail the hook call on daemon availability.
+    """
+    try:
+        from .claude_code_daemon import dispatch_pre_tool_use, is_valid_pre_tool_use_output
+
+        daemon_output = dispatch_pre_tool_use(hook_input, keys_dir=keys_dir)
+    except Exception:  # pragma: no cover - defensive daemon boundary
+        daemon_output = None
+
+    if daemon_output is not None and is_valid_pre_tool_use_output(daemon_output):
+        return daemon_output
+    return handle_pre_tool_use(hook_input, keys_dir=keys_dir)
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Reads hook input JSON from stdin, writes hook
     output JSON to stdout. Exit code is 0 on success (handler returned
@@ -1072,7 +1095,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     handlers = {
-        "pre": handle_pre_tool_use,
+        "pre": _handle_pre_tool_use_daemon_first,
         "post": handle_post_tool_use,
         "subagent-start": handle_subagent_start,
         "subagent-stop": handle_subagent_stop,

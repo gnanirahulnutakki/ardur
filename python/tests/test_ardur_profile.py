@@ -180,6 +180,24 @@ def test_protect_claude_code_quotes_plugin_dir_with_spaces(tmp_path):
     ]
 
 
+def test_protect_claude_code_keeps_preexisting_explicit_home_mode_when_using_default_daemon_subdir(tmp_path):
+    from vibap.claude_code_daemon import resolve_daemon_socket_path
+
+    project = tmp_path / "project"
+    project.mkdir()
+    home = tmp_path / "explicit-home"
+    home.mkdir(mode=0o755)
+
+    result = protect_claude_code(
+        _protect_args(scope=project, mode="read-only", home=home, keys_dir=tmp_path / "keys")
+    )
+
+    assert result["home"] == str(home.resolve())
+    assert stat.S_IMODE(home.stat().st_mode) == 0o755
+    assert resolve_daemon_socket_path(home=home.resolve()) == home.resolve() / "daemon" / "claude-code-hook-daemon.sock"
+
+
+
 def test_hook_wrapper_uses_recorded_python_interpreter(tmp_path):
     project = tmp_path / "project"
     project.mkdir()

@@ -40,6 +40,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "PyYAML>=6.0",
     "cedarpy>=4.0",
     "z3-solver>=4.16",
     "biscuit-python==0.4.0",

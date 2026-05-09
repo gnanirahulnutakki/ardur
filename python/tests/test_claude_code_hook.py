@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -22,6 +23,10 @@ from vibap.passport import (
     generate_keypair,
     issue_passport,
 )
+
+
+_FAKE_DAEMON_ACCEPT_TIMEOUT_S = 10.0
+_TEST_DAEMON_TIMEOUT_MS = "1000"
 
 
 def _issue_test_passport(tmp_path: Path) -> tuple[str, ec.EllipticCurvePrivateKey]:
@@ -683,6 +688,1481 @@ def test_main_pre_reads_stdin_writes_stdout(tmp_path, monkeypatch):
     assert result.returncode == 0, f"stderr: {result.stderr}"
     output = json.loads(result.stdout)
     assert output["continue"] is True
+
+
+def test_pre_daemon_first_uses_daemon_output(tmp_path, monkeypatch):
+    from vibap import claude_code_daemon as daemon_module
+    from vibap import claude_code_hook as hook_module
+
+    monkeypatch.setattr(
+        daemon_module,
+        "dispatch_pre_tool_use",
+        lambda hook_input, *, keys_dir=None: {
+            "continue": True,
+            "systemMessage": "ardur: daemon pre hook",
+        },
+    )
+
+    def _local_should_not_run(*_args, **_kwargs):
+        raise AssertionError("local pre handler should not run when daemon returns output")
+
+    monkeypatch.setattr(hook_module, "handle_pre_tool_use", _local_should_not_run)
+    output = hook_module._handle_pre_tool_use_daemon_first(
+        {"tool_name": "Read", "tool_input": {"file_path": "/tmp/x.txt"}},
+        keys_dir=tmp_path,
+    )
+    assert output["continue"] is True
+    assert output["systemMessage"] == "ardur: daemon pre hook"
+
+
+def test_pre_daemon_first_falls_back_when_daemon_unavailable(tmp_path, monkeypatch):
+    from vibap import claude_code_daemon as daemon_module
+    from vibap import claude_code_hook as hook_module
+
+    monkeypatch.setattr(
+        daemon_module,
+        "dispatch_pre_tool_use",
+        lambda hook_input, *, keys_dir=None: None,
+    )
+
+    observed: dict[str, Any] = {}
+
+    def _local_fallback(hook_input, *, keys_dir=None):
+        observed["tool_name"] = hook_input["tool_name"]
+        observed["keys_dir"] = keys_dir
+        return {"continue": True, "systemMessage": "ardur: local fallback"}
+
+    monkeypatch.setattr(hook_module, "handle_pre_tool_use", _local_fallback)
+    output = hook_module._handle_pre_tool_use_daemon_first(
+        {"tool_name": "Read", "tool_input": {"file_path": "/tmp/fallback.txt"}},
+        keys_dir=tmp_path,
+    )
+    assert output == {"continue": True, "systemMessage": "ardur: local fallback"}
+    assert observed == {"tool_name": "Read", "keys_dir": tmp_path}
+
+
+def test_pre_daemon_first_falls_back_when_daemon_output_is_malformed(tmp_path, monkeypatch):
+    from vibap import claude_code_daemon as daemon_module
+    from vibap import claude_code_hook as hook_module
+
+    monkeypatch.setattr(
+        daemon_module,
+        "dispatch_pre_tool_use",
+        lambda hook_input, *, keys_dir=None: {"ok": True, "output": {"not": "hook-output"}},
+    )
+
+    observed: dict[str, Any] = {}
+
+    def _local_fallback(hook_input, *, keys_dir=None):
+        observed["tool_name"] = hook_input["tool_name"]
+        observed["keys_dir"] = keys_dir
+        return {"continue": True, "systemMessage": "ardur: local fallback from malformed daemon output"}
+
+    monkeypatch.setattr(hook_module, "handle_pre_tool_use", _local_fallback)
+    output = hook_module._handle_pre_tool_use_daemon_first(
+        {"tool_name": "Read", "tool_input": {"file_path": "/tmp/malformed.txt"}},
+        keys_dir=tmp_path,
+    )
+    assert output == {
+        "continue": True,
+        "systemMessage": "ardur: local fallback from malformed daemon output",
+    }
+    assert observed == {"tool_name": "Read", "keys_dir": tmp_path}
+
+
+def test_daemon_benchmark_helper_returns_duration_samples(tmp_path, monkeypatch):
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+
+    result = daemon_module.benchmark_pre_tool_use_hot_path(
+        hook_input={"tool_name": "Read", "tool_input": {"file_path": "/tmp/bench.txt"}},
+        keys_dir=tmp_path,
+        iterations=3,
+    )
+    samples = result["durations_ms"]
+    assert isinstance(samples, list)
+    assert len(samples) == 3
+    assert all(sample >= 0 for sample in samples)
+    assert result["p95_ms"] >= 0
+
+
+def test_dispatch_pre_tool_use_rejects_malformed_ok_envelope(tmp_path, monkeypatch):
+    import os
+    import socket
+    import threading
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    socket_parent = Path(f"/tmp/ardur-daemon-malformed-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON", "1")
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON_SOCKET", str(socket_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS", _TEST_DAEMON_TIMEOUT_MS)
+
+    ready = threading.Event()
+    failures: list[Exception] = []
+    observed = {"requests": 0}
+
+    def _serve_malformed_response() -> None:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(2)
+                # Allow enough time for client connect under CI scheduling jitter.
+                server.settimeout(_FAKE_DAEMON_ACCEPT_TIMEOUT_S)
+                ready.set()
+                while observed["requests"] < 1:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        break
+                    with conn:
+                        _ = conn.recv(8192)
+                        observed["requests"] += 1
+                        conn.sendall(b'{"ok":true,"output":{"not":"hook-output"}}\\n')
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve_malformed_response, daemon=True)
+    thread.start()
+
+    try:
+        assert ready.wait(timeout=2)
+        output = daemon_module.dispatch_pre_tool_use(
+            {
+                "session_id": "daemon-malformed-envelope-session",
+                "tool_name": "Read",
+                "tool_input": {"file_path": "/tmp/daemon-malformed-envelope.txt"},
+                "tool_use_id": "daemon-malformed-envelope-call",
+            },
+            keys_dir=tmp_path,
+        )
+
+        thread.join(timeout=3)
+        assert not failures
+        assert observed["requests"] == 1
+        assert output is None
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+def test_pre_daemon_first_end_to_end_unix_socket(tmp_path, monkeypatch):
+    import os
+    import threading
+    import time
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    socket_parent = Path(f"/tmp/ardur-daemon-e2e-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON", "1")
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON_SOCKET", str(socket_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS", _TEST_DAEMON_TIMEOUT_MS)
+
+    observed: dict[str, Any] = {}
+    failures: list[Exception] = []
+
+    def _serve() -> None:
+        try:
+            observed["handled"] = daemon_module.serve_pre_tool_use_daemon(
+                socket_path=socket_path,
+                keys_dir=tmp_path,
+                max_requests=1,
+            )
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve, daemon=True)
+    thread.start()
+
+    for _ in range(100):
+        if socket_path.exists():
+            break
+        time.sleep(0.01)
+    assert socket_path.exists()
+
+    output = None
+    for _ in range(100):
+        output = daemon_module.dispatch_pre_tool_use(
+            {
+                "session_id": "daemon-e2e-session",
+                "tool_name": "Read",
+                "tool_input": {"file_path": "/tmp/daemon-e2e.txt"},
+                "tool_use_id": "daemon-e2e-call",
+            },
+            keys_dir=tmp_path,
+        )
+        if output is not None:
+            break
+        time.sleep(0.01)
+    assert output is not None
+    assert output["continue"] is True
+    assert "ardur:" in output["systemMessage"].lower()
+
+    thread.join(timeout=5)
+    assert not failures
+    assert not thread.is_alive()
+    assert observed["handled"] == 1
+
+    if socket_path.exists():
+        socket_path.unlink()
+    if socket_parent.exists():
+        socket_parent.rmdir()
+
+
+def test_daemon_ignores_response_write_failures(tmp_path, monkeypatch):
+    import os
+    import socket
+    import threading
+    import time
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    socket_parent = Path(f"/tmp/ardur-daemon-broken-pipe-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON_SOCKET", str(socket_path))
+
+    def _always_raise(*_args, **_kwargs):
+        raise BrokenPipeError("simulated client disconnect")
+
+    monkeypatch.setattr(daemon_module, "_write_json_line", _always_raise)
+
+    observed: dict[str, Any] = {}
+    failures: list[Exception] = []
+
+    def _serve() -> None:
+        try:
+            observed["handled"] = daemon_module.serve_pre_tool_use_daemon(
+                socket_path=socket_path,
+                keys_dir=tmp_path,
+                max_requests=1,
+            )
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve, daemon=True)
+    thread.start()
+
+    for _ in range(100):
+        if socket_path.exists():
+            break
+        time.sleep(0.01)
+    assert socket_path.exists()
+
+    connected = False
+    for _ in range(100):
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+                conn.connect(str(socket_path))
+                conn.sendall(
+                    b'{"phase":"pre","hook_input":{"tool_name":"Read","tool_input":{"file_path":"/tmp/disconnect.txt"}}}\n'
+                )
+            connected = True
+            break
+        except ConnectionRefusedError:
+            time.sleep(0.01)
+    assert connected, "daemon socket never accepted connections"
+
+    thread.join(timeout=5)
+    assert not failures
+    assert not thread.is_alive()
+    assert observed["handled"] == 1
+
+    if socket_path.exists():
+        socket_path.unlink()
+    if socket_parent.exists():
+        socket_parent.rmdir()
+
+
+def test_daemon_refuses_to_unlink_non_socket_stale_path(tmp_path):
+    from vibap import claude_code_daemon as daemon_module
+
+    stale_path = tmp_path / "not-a-socket.sock"
+    stale_path.write_text("this is not a unix socket", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="non-socket"):
+        daemon_module.serve_pre_tool_use_daemon(
+            socket_path=stale_path,
+            max_requests=1,
+        )
+
+
+def test_daemon_unlinks_stale_unix_socket_path(tmp_path):
+    import os
+    import socket
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    # AF_UNIX paths are short on macOS, so use /tmp rather than pytest's deep
+    # tmp_path for this socket-specific regression.
+    stale_path = Path(f"/tmp/ardur-stale-socket-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        server.bind(str(stale_path))
+    finally:
+        server.close()
+
+    try:
+        assert stale_path.exists()
+        daemon_module._unlink_only_if_socket(stale_path)
+        assert not stale_path.exists()
+    finally:
+        if stale_path.exists():
+            stale_path.unlink()
+
+
+def test_daemon_creates_private_socket_parent_when_missing(tmp_path, monkeypatch):
+    import os
+    import stat as stat_module
+    import threading
+    import time
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    socket_parent = Path(f"/tmp/ardur-daemon-private-created-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_path = socket_parent / "hook.sock"
+    assert not socket_parent.exists()
+
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON", "1")
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON_SOCKET", str(socket_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS", _TEST_DAEMON_TIMEOUT_MS)
+
+    observed: dict[str, Any] = {}
+    failures: list[Exception] = []
+
+    def _serve() -> None:
+        try:
+            observed["handled"] = daemon_module.serve_pre_tool_use_daemon(
+                socket_path=socket_path,
+                keys_dir=tmp_path,
+                max_requests=1,
+            )
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve, daemon=True)
+    thread.start()
+
+    try:
+        for _ in range(100):
+            if socket_path.exists():
+                break
+            time.sleep(0.01)
+        assert socket_path.exists()
+
+        parent_mode = stat_module.S_IMODE(socket_parent.stat().st_mode)
+        socket_mode = stat_module.S_IMODE(socket_path.stat().st_mode)
+        assert parent_mode == 0o700
+        assert socket_mode == 0o600
+
+        output = daemon_module.dispatch_pre_tool_use(
+            {
+                "session_id": "daemon-private-session",
+                "tool_name": "Read",
+                "tool_input": {"file_path": "/tmp/daemon-private.txt"},
+                "tool_use_id": "daemon-private-call",
+            },
+            keys_dir=tmp_path,
+        )
+        assert output is not None
+        assert output["continue"] is True
+
+        thread.join(timeout=5)
+        assert not failures
+        assert not thread.is_alive()
+        assert observed["handled"] == 1
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+def test_daemon_refuses_preexisting_shared_socket_parent_without_chmod(tmp_path):
+    import os
+    import stat as stat_module
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    socket_path = Path(f"/tmp/ardur-daemon-shared-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock")
+    tmp_dir = Path("/tmp")
+    original_mode = stat_module.S_IMODE(tmp_dir.stat().st_mode)
+
+    chmod_calls: list[tuple[str, int]] = []
+    real_chmod = daemon_module.os.chmod
+
+    def _tracking_chmod(path: os.PathLike[str] | str, mode: int) -> None:
+        chmod_calls.append((str(path), mode))
+        real_chmod(path, mode)
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(daemon_module.os, "chmod", _tracking_chmod)
+    try:
+        with pytest.raises(RuntimeError, match="must already be private"):
+            daemon_module.serve_pre_tool_use_daemon(
+                socket_path=socket_path,
+                keys_dir=tmp_path,
+                max_requests=1,
+            )
+    finally:
+        monkeypatch.undo()
+
+    assert not socket_path.exists()
+    assert stat_module.S_IMODE(tmp_dir.stat().st_mode) == original_mode
+    assert not chmod_calls
+
+
+def test_daemon_refuses_to_replace_active_socket(tmp_path, monkeypatch):
+    import os
+    import threading
+    import time
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    socket_parent = Path(f"/tmp/ardur-daemon-active-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    monkeypatch.setenv("ARDUR_MISSION_PASSPORT", token)
+    monkeypatch.setenv("VIBAP_HOME", str(tmp_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DIR", str(tmp_path / "chain"))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON", "1")
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON_SOCKET", str(socket_path))
+    monkeypatch.setenv("ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS", _TEST_DAEMON_TIMEOUT_MS)
+
+    observed: dict[str, Any] = {}
+    failures: list[Exception] = []
+
+    def _serve() -> None:
+        try:
+            observed["handled"] = daemon_module.serve_pre_tool_use_daemon(
+                socket_path=socket_path,
+                keys_dir=tmp_path,
+                max_requests=2,
+            )
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve, daemon=True)
+    thread.start()
+
+    try:
+        for _ in range(100):
+            if socket_path.exists():
+                break
+            time.sleep(0.01)
+        assert socket_path.exists()
+
+        with pytest.raises(RuntimeError, match="active daemon socket"):
+            daemon_module.serve_pre_tool_use_daemon(
+                socket_path=socket_path,
+                keys_dir=tmp_path,
+                max_requests=1,
+            )
+
+        output = daemon_module.dispatch_pre_tool_use(
+            {
+                "session_id": "daemon-active-session",
+                "tool_name": "Read",
+                "tool_input": {"file_path": "/tmp/daemon-active.txt"},
+                "tool_use_id": "daemon-active-call",
+            },
+            keys_dir=tmp_path,
+        )
+        assert output is not None
+        assert output["continue"] is True
+
+        thread.join(timeout=5)
+        assert not failures
+        assert not thread.is_alive()
+        assert observed["handled"] == 2
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+def test_wrapper_accepts_native_client_env_alias_before_python_fallback(tmp_path):
+    import json
+    import os
+    import socket
+    import subprocess
+    import uuid
+
+    repo_root = Path(__file__).resolve().parents[2]
+    wrapper = repo_root / "plugins" / "claude-code" / "hooks" / "pre_tool_use"
+
+    socket_parent = Path(f"/tmp/ardur-wrapper-native-alias-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+    capture_path = tmp_path / "native-stdin.txt"
+    native_client = tmp_path / "fake-native-client"
+    native_client.write_text(
+        "#!/usr/bin/env sh\n"
+        "cat > \"$ARDUR_NATIVE_ALIAS_CAPTURE\"\n"
+        "printf '{\"continue\":true}\\n'\n",
+        encoding="utf-8",
+    )
+    native_client.chmod(0o700)
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        server.bind(str(socket_path))
+        assert socket_path.exists()
+
+        hook_input = {
+            "session_id": "native-alias-session",
+            "tool_name": "Read",
+            "tool_input": {"file_path": "/tmp/native-alias.txt"},
+            "tool_use_id": "native-alias-call",
+        }
+        env = {
+            "HOME": str(tmp_path / "user-home"),
+            "PATH": os.environ.get("PATH", ""),
+            "VIBAP_HOME": str(tmp_path / "home"),
+            "ARDUR_CC_HOOK_DIR": str(tmp_path / "chain"),
+            "ARDUR_CC_HOOK_DAEMON": "1",
+            "ARDUR_CC_HOOK_DAEMON_SOCKET": str(socket_path),
+            "ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS": _TEST_DAEMON_TIMEOUT_MS,
+            "ARDUR_CC_HOOK_NATIVE_CLIENT": str(native_client),
+            "ARDUR_HOOK_PYTHON": "/bin/false",
+            "ARDUR_NATIVE_ALIAS_CAPTURE": str(capture_path),
+        }
+
+        result = subprocess.run(
+            [str(wrapper)],
+            input=json.dumps(hook_input),
+            text=True,
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == {"continue": True}
+        assert json.loads(capture_path.read_text(encoding="utf-8")) == hook_input
+    finally:
+        server.close()
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+
+def test_wrapper_accepts_pretty_printed_hook_json_when_daemon_disabled(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).resolve().parents[2]
+    wrapper = repo_root / "plugins" / "claude-code" / "hooks" / "pre_tool_use"
+
+    hook_input = {
+        "session_id": "wrapper-pretty-json-session",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": {"file_path": "/tmp/wrapper-pretty-json.txt"},
+        "tool_use_id": "wrapper-pretty-json-call",
+    }
+
+    env = {**os.environ}
+    env["VIBAP_HOME"] = str(tmp_path)
+    env["VIBAP_KEYS_DIR"] = str(tmp_path)
+    env["ARDUR_CC_HOOK_DIR"] = str(tmp_path / "chain")
+    env["ARDUR_CC_HOOK_DAEMON"] = "0"
+    env["ARDUR_HOOK_PYTHON"] = sys.executable
+    env["PYTHONPATH"] = (
+        str(repo_root / "python")
+        if not env.get("PYTHONPATH")
+        else str(repo_root / "python") + os.pathsep + env["PYTHONPATH"]
+    )
+
+    result = subprocess.run(
+        [str(wrapper)],
+        input=json.dumps(hook_input, indent=2),
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "invalid hook input json" not in result.stderr.lower()
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
+
+
+
+def test_wrapper_falls_back_when_daemon_returns_error_payload(tmp_path):
+    import json
+    import os
+    import socket
+    import subprocess
+    import sys
+    import threading
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    repo_root = Path(__file__).resolve().parents[2]
+    wrapper = repo_root / "plugins" / "claude-code" / "hooks" / "pre_tool_use"
+
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=True)
+    if native_pre_tool_use_command is None:
+        pytest.xfail("native PreToolUse daemon client could not be built on this host")
+
+    socket_parent = Path(f"/tmp/ardur-wrapper-error-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    ready = threading.Event()
+    failures: list[Exception] = []
+    observed = {"requests": 0}
+
+    def _serve_bad_response() -> None:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(2)
+                # Wrapper invocation includes shell + Python startup overhead;
+                # keep accept timeout comfortably above typical client latency.
+                server.settimeout(_FAKE_DAEMON_ACCEPT_TIMEOUT_S)
+                ready.set()
+                while observed["requests"] < 1:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        break
+                    with conn:
+                        _ = conn.recv(8192)
+                        observed["requests"] += 1
+                        conn.sendall(b'{"ok":false,"error":"simulated daemon failure"}\\n')
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve_bad_response, daemon=True)
+    thread.start()
+
+    try:
+        assert ready.wait(timeout=2)
+        env = {**os.environ}
+        env["ARDUR_MISSION_PASSPORT"] = token
+        env["VIBAP_HOME"] = str(tmp_path)
+        env["VIBAP_KEYS_DIR"] = str(tmp_path)
+        env["ARDUR_CC_HOOK_DIR"] = str(tmp_path / "chain")
+        env["ARDUR_CC_HOOK_DAEMON"] = "1"
+        env["ARDUR_CC_HOOK_DAEMON_SOCKET"] = str(socket_path)
+        env["ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS"] = "100"
+        env["ARDUR_HOOK_PYTHON"] = sys.executable
+        env["ARDUR_CC_HOOK_NATIVE_PRE_TOOL_USE"] = str(native_pre_tool_use_command)
+        env["PYTHONPATH"] = (
+            str(repo_root / "python")
+            if not env.get("PYTHONPATH")
+            else str(repo_root / "python") + os.pathsep + env["PYTHONPATH"]
+        )
+
+        hook_input = json.dumps(
+            {
+                "session_id": "wrapper-daemon-error-session",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Read",
+                "tool_input": {"file_path": "/tmp/wrapper-daemon-error.txt"},
+                "tool_use_id": "wrapper-daemon-error-call",
+            }
+        )
+        result = subprocess.run(
+            [str(wrapper)],
+            input=hook_input,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+
+        thread.join(timeout=3)
+        assert not failures
+        assert observed["requests"] == 1
+        assert result.returncode == 0, result.stderr
+
+        output = json.loads(result.stdout)
+        assert output.get("continue") is True
+        assert output.get("ok") is None
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+@pytest.mark.parametrize(
+    "malformed_daemon_response",
+    [
+        b'{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":5}}\\n',
+        b'{"hookSpecificOutput":"oops","hookEventName":"PreToolUse"}\\n',
+    ],
+)
+def test_wrapper_and_python_fallback_rejects_malformed_pretooluse_shape(
+    tmp_path,
+    malformed_daemon_response,
+):
+    import json
+    import os
+    import socket
+    import subprocess
+    import sys
+    import threading
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    repo_root = Path(__file__).resolve().parents[2]
+    wrapper = repo_root / "plugins" / "claude-code" / "hooks" / "pre_tool_use"
+
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=True)
+    if native_pre_tool_use_command is None:
+        pytest.xfail("native PreToolUse daemon client could not be built on this host")
+
+    socket_parent = Path(f"/tmp/ardur-wrapper-invalid-output-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    ready = threading.Event()
+    failures: list[Exception] = []
+    observed = {"requests": 0}
+
+    def _serve_invalid_hook_output() -> None:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(2)
+                # Wrapper invocation includes shell + Python startup overhead;
+                # keep accept timeout comfortably above typical client latency.
+                server.settimeout(_FAKE_DAEMON_ACCEPT_TIMEOUT_S)
+                ready.set()
+                while observed["requests"] < 1:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        break
+                    with conn:
+                        _ = conn.recv(8192)
+                        observed["requests"] += 1
+                        conn.sendall(malformed_daemon_response)
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve_invalid_hook_output, daemon=True)
+    thread.start()
+
+    try:
+        assert ready.wait(timeout=2)
+        env = {**os.environ}
+        env["ARDUR_MISSION_PASSPORT"] = token
+        env["VIBAP_HOME"] = str(tmp_path)
+        env["VIBAP_KEYS_DIR"] = str(tmp_path)
+        env["ARDUR_CC_HOOK_DIR"] = str(tmp_path / "chain")
+        env["ARDUR_CC_HOOK_DAEMON"] = "1"
+        env["ARDUR_CC_HOOK_DAEMON_SOCKET"] = str(socket_path)
+        env["ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS"] = "100"
+        env["ARDUR_HOOK_PYTHON"] = sys.executable
+        env["ARDUR_CC_HOOK_NATIVE_PRE_TOOL_USE"] = str(native_pre_tool_use_command)
+        env["PYTHONPATH"] = (
+            str(repo_root / "python")
+            if not env.get("PYTHONPATH")
+            else str(repo_root / "python") + os.pathsep + env["PYTHONPATH"]
+        )
+
+        hook_input = json.dumps(
+            {
+                "session_id": "wrapper-invalid-output-session",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Read",
+                "tool_input": {"file_path": "/tmp/wrapper-invalid-output.txt"},
+                "tool_use_id": "wrapper-invalid-output-call",
+            }
+        )
+        result = subprocess.run(
+            [str(wrapper)],
+            input=hook_input,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+
+        thread.join(timeout=3)
+        assert not failures
+        assert observed["requests"] == 1
+        assert result.returncode == 0, result.stderr
+
+        output = json.loads(result.stdout)
+        assert output.get("continue") is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") != 5
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+def test_native_pre_tool_use_client_rejects_truncated_ok_envelope(tmp_path):
+    import json
+    import os
+    import socket
+    import subprocess
+    import threading
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=True)
+    if native_pre_tool_use_command is None:
+        pytest.xfail("native PreToolUse daemon client could not be built on this host")
+
+    # Exercise the installed non-force path: legacy installs can predate current
+    # source and miss provenance metadata. Removing the stamp here ensures this
+    # test covers reinstalling a stale/unstamped command before probe execution.
+    command_stamp = native_pre_tool_use_command.parent / f"{native_pre_tool_use_command.name}.sha256"
+    if command_stamp.exists():
+        command_stamp.unlink()
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=False)
+    assert native_pre_tool_use_command is not None
+
+    socket_parent = Path(f"/tmp/ardur-native-malformed-envelope-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    ready = threading.Event()
+    failures: list[Exception] = []
+    observed = {"requests": 0}
+    malformed_envelope = b'{"ok":true,"output":{"continue":true}\\n'
+
+    def _serve_truncated_envelope() -> None:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(2)
+                server.settimeout(_FAKE_DAEMON_ACCEPT_TIMEOUT_S)
+                ready.set()
+                while observed["requests"] < 1:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        break
+                    with conn:
+                        _ = conn.recv(8192)
+                        observed["requests"] += 1
+                        conn.sendall(malformed_envelope)
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve_truncated_envelope, daemon=True)
+    thread.start()
+
+    try:
+        assert ready.wait(timeout=2)
+        hook_input = json.dumps(
+            {
+                "session_id": "native-malformed-envelope-session",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "echo bypass-attempt"},
+                "tool_use_id": "native-malformed-envelope-call",
+            }
+        )
+        result = subprocess.run(
+            [str(native_pre_tool_use_command), str(socket_path), "100"],
+            input=hook_input,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        thread.join(timeout=3)
+        assert not failures
+        assert observed["requests"] == 1
+        assert result.returncode != 0
+        assert result.stdout.strip() != '{"continue":true}'
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+def test_native_pre_tool_use_client_rejects_spaced_false_ok_envelope_with_hook_output(tmp_path):
+    import json
+    import os
+    import socket
+    import subprocess
+    import threading
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=True)
+    if native_pre_tool_use_command is None:
+        pytest.xfail("native PreToolUse daemon client could not be built on this host")
+
+    socket_parent = Path(f"/tmp/ardur-native-spaced-ok-false-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    ready = threading.Event()
+    failures: list[Exception] = []
+    observed = {"requests": 0}
+    malformed_envelope = b'{"ok": false, "hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}\n'
+
+    def _serve_spaced_false_ok_envelope() -> None:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(2)
+                server.settimeout(_FAKE_DAEMON_ACCEPT_TIMEOUT_S)
+                ready.set()
+                while observed["requests"] < 1:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        break
+                    with conn:
+                        _ = conn.recv(8192)
+                        observed["requests"] += 1
+                        conn.sendall(malformed_envelope)
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve_spaced_false_ok_envelope, daemon=True)
+    thread.start()
+
+    try:
+        assert ready.wait(timeout=2)
+        hook_input = json.dumps(
+            {
+                "session_id": "native-spaced-ok-false-session",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "echo bypass-attempt"},
+                "tool_use_id": "native-spaced-ok-false-call",
+            }
+        )
+        result = subprocess.run(
+            [str(native_pre_tool_use_command), str(socket_path), "100"],
+            input=hook_input,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        thread.join(timeout=3)
+        assert not failures
+        assert observed["requests"] == 1
+        assert result.returncode != 0
+        assert '"permissionDecision":"allow"' not in result.stdout
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+def test_install_native_pre_tool_use_command_rebuilds_tampered_executable_with_intact_stamp(tmp_path):
+    from vibap import claude_code_daemon as daemon_module
+
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=True)
+    if native_pre_tool_use_command is None:
+        pytest.xfail("native PreToolUse daemon client could not be built on this host")
+
+    command_stamp = native_pre_tool_use_command.parent / f"{native_pre_tool_use_command.name}.sha256"
+    assert command_stamp.exists()
+
+    tampered = b"#!/bin/sh\necho tampered\n"
+    native_pre_tool_use_command.write_bytes(tampered)
+    native_pre_tool_use_command.chmod(0o700)
+    assert native_pre_tool_use_command.read_bytes() == tampered
+
+    rebuilt = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=False)
+    assert rebuilt is not None
+    assert rebuilt == native_pre_tool_use_command
+    assert native_pre_tool_use_command.read_bytes() != tampered
+
+
+
+def test_wrapper_local_fallback_denies_forbidden_tool_after_truncated_ok_envelope(tmp_path):
+    import json
+    import os
+    import socket
+    import subprocess
+    import sys
+    import threading
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    repo_root = Path(__file__).resolve().parents[2]
+    wrapper = repo_root / "plugins" / "claude-code" / "hooks" / "pre_tool_use"
+
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=True)
+    if native_pre_tool_use_command is None:
+        pytest.xfail("native PreToolUse daemon client could not be built on this host")
+
+    # Ensure wrapper coverage uses the installed command refresh path as well.
+    command_stamp = native_pre_tool_use_command.parent / f"{native_pre_tool_use_command.name}.sha256"
+    if command_stamp.exists():
+        command_stamp.unlink()
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=False)
+    assert native_pre_tool_use_command is not None
+
+    socket_parent = Path(f"/tmp/ardur-wrapper-truncated-envelope-deny-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    ready = threading.Event()
+    failures: list[Exception] = []
+    observed = {"requests": 0}
+    malformed_envelope = b'{"ok":true,"output":{"continue":true}\\n'
+
+    def _serve_invalid_hook_output() -> None:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(2)
+                # Wrapper invocation includes shell + Python startup overhead;
+                # keep accept timeout comfortably above typical client latency.
+                server.settimeout(_FAKE_DAEMON_ACCEPT_TIMEOUT_S)
+                ready.set()
+                while observed["requests"] < 1:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        break
+                    with conn:
+                        _ = conn.recv(8192)
+                        observed["requests"] += 1
+                        conn.sendall(malformed_envelope)
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve_invalid_hook_output, daemon=True)
+    thread.start()
+
+    try:
+        assert ready.wait(timeout=2)
+        env = {**os.environ}
+        env["ARDUR_MISSION_PASSPORT"] = token
+        env["VIBAP_HOME"] = str(tmp_path)
+        env["VIBAP_KEYS_DIR"] = str(tmp_path)
+        env["ARDUR_CC_HOOK_DIR"] = str(tmp_path / "chain")
+        env["ARDUR_CC_HOOK_DAEMON"] = "1"
+        env["ARDUR_CC_HOOK_DAEMON_SOCKET"] = str(socket_path)
+        env["ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS"] = "100"
+        env["ARDUR_HOOK_PYTHON"] = sys.executable
+        env["ARDUR_CC_HOOK_NATIVE_PRE_TOOL_USE"] = str(native_pre_tool_use_command)
+        env["PYTHONPATH"] = (
+            str(repo_root / "python")
+            if not env.get("PYTHONPATH")
+            else str(repo_root / "python") + os.pathsep + env["PYTHONPATH"]
+        )
+
+        hook_input = json.dumps(
+            {
+                "session_id": "wrapper-truncated-envelope-deny-session",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "echo bypass-attempt"},
+                "tool_use_id": "wrapper-truncated-envelope-deny-call",
+            }
+        )
+        result = subprocess.run(
+            [str(wrapper)],
+            input=hook_input,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+
+        thread.join(timeout=3)
+        assert not failures
+        assert observed["requests"] == 1
+        assert result.returncode == 0, result.stderr
+
+        output = json.loads(result.stdout)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert "ardur:" in output["hookSpecificOutput"]["permissionDecisionReason"].lower()
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+def test_wrapper_local_fallback_denies_forbidden_tool_after_spaced_false_ok_envelope(tmp_path):
+    import json
+    import os
+    import socket
+    import subprocess
+    import sys
+    import threading
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    repo_root = Path(__file__).resolve().parents[2]
+    wrapper = repo_root / "plugins" / "claude-code" / "hooks" / "pre_tool_use"
+
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=True)
+    if native_pre_tool_use_command is None:
+        pytest.xfail("native PreToolUse daemon client could not be built on this host")
+
+    socket_parent = Path(f"/tmp/ardur-wrapper-spaced-ok-false-deny-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    ready = threading.Event()
+    failures: list[Exception] = []
+    observed = {"requests": 0}
+    malformed_envelope = b'{"ok": false, "hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}\n'
+
+    def _serve_spaced_false_ok_envelope() -> None:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(2)
+                # Wrapper invocation includes shell + Python startup overhead;
+                # keep accept timeout comfortably above typical client latency.
+                server.settimeout(_FAKE_DAEMON_ACCEPT_TIMEOUT_S)
+                ready.set()
+                while observed["requests"] < 1:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        break
+                    with conn:
+                        _ = conn.recv(8192)
+                        observed["requests"] += 1
+                        conn.sendall(malformed_envelope)
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve_spaced_false_ok_envelope, daemon=True)
+    thread.start()
+
+    try:
+        assert ready.wait(timeout=2)
+        env = {**os.environ}
+        env["ARDUR_MISSION_PASSPORT"] = token
+        env["VIBAP_HOME"] = str(tmp_path)
+        env["VIBAP_KEYS_DIR"] = str(tmp_path)
+        env["ARDUR_CC_HOOK_DIR"] = str(tmp_path / "chain")
+        env["ARDUR_CC_HOOK_DAEMON"] = "1"
+        env["ARDUR_CC_HOOK_DAEMON_SOCKET"] = str(socket_path)
+        env["ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS"] = "100"
+        env["ARDUR_HOOK_PYTHON"] = sys.executable
+        env["ARDUR_CC_HOOK_NATIVE_PRE_TOOL_USE"] = str(native_pre_tool_use_command)
+        env["PYTHONPATH"] = (
+            str(repo_root / "python")
+            if not env.get("PYTHONPATH")
+            else str(repo_root / "python") + os.pathsep + env["PYTHONPATH"]
+        )
+
+        hook_input = json.dumps(
+            {
+                "session_id": "wrapper-spaced-ok-false-deny-session",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "echo bypass-attempt"},
+                "tool_use_id": "wrapper-spaced-ok-false-deny-call",
+            }
+        )
+        result = subprocess.run(
+            [str(wrapper)],
+            input=hook_input,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+
+        thread.join(timeout=3)
+        assert not failures
+        assert observed["requests"] == 1
+        assert result.returncode == 0, result.stderr
+
+        output = json.loads(result.stdout)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert "ardur:" in output["hookSpecificOutput"]["permissionDecisionReason"].lower()
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+def test_wrapper_local_fallback_still_denies_forbidden_tool_after_malformed_daemon_output(tmp_path):
+    import json
+    import os
+    import socket
+    import subprocess
+    import sys
+    import threading
+    import uuid
+
+    from vibap import claude_code_daemon as daemon_module
+
+    token, _ = _issue_test_passport(tmp_path)
+    repo_root = Path(__file__).resolve().parents[2]
+    wrapper = repo_root / "plugins" / "claude-code" / "hooks" / "pre_tool_use"
+
+    native_pre_tool_use_command = daemon_module.install_native_pre_tool_use_command(home=tmp_path, force=True)
+    if native_pre_tool_use_command is None:
+        pytest.xfail("native PreToolUse daemon client could not be built on this host")
+
+    socket_parent = Path(f"/tmp/ardur-wrapper-malformed-deny-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    ready = threading.Event()
+    failures: list[Exception] = []
+    observed = {"requests": 0}
+
+    def _serve_invalid_hook_output() -> None:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(2)
+                # Wrapper invocation includes shell + Python startup overhead;
+                # keep accept timeout comfortably above typical client latency.
+                server.settimeout(_FAKE_DAEMON_ACCEPT_TIMEOUT_S)
+                ready.set()
+                while observed["requests"] < 1:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        break
+                    with conn:
+                        _ = conn.recv(8192)
+                        observed["requests"] += 1
+                        conn.sendall(b'{"ok":true,"output":{"not":"hook-output"}}\\n')
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve_invalid_hook_output, daemon=True)
+    thread.start()
+
+    try:
+        assert ready.wait(timeout=2)
+        env = {**os.environ}
+        env["ARDUR_MISSION_PASSPORT"] = token
+        env["VIBAP_HOME"] = str(tmp_path)
+        env["VIBAP_KEYS_DIR"] = str(tmp_path)
+        env["ARDUR_CC_HOOK_DIR"] = str(tmp_path / "chain")
+        env["ARDUR_CC_HOOK_DAEMON"] = "1"
+        env["ARDUR_CC_HOOK_DAEMON_SOCKET"] = str(socket_path)
+        env["ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS"] = "100"
+        env["ARDUR_HOOK_PYTHON"] = sys.executable
+        env["ARDUR_CC_HOOK_NATIVE_PRE_TOOL_USE"] = str(native_pre_tool_use_command)
+        env["PYTHONPATH"] = (
+            str(repo_root / "python")
+            if not env.get("PYTHONPATH")
+            else str(repo_root / "python") + os.pathsep + env["PYTHONPATH"]
+        )
+
+        hook_input = json.dumps(
+            {
+                "session_id": "wrapper-malformed-deny-session",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "echo bypass-attempt"},
+                "tool_use_id": "wrapper-malformed-deny-call",
+            }
+        )
+        result = subprocess.run(
+            [str(wrapper)],
+            input=hook_input,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+
+        thread.join(timeout=3)
+        assert not failures
+        assert observed["requests"] == 1
+        assert result.returncode == 0, result.stderr
+
+        output = json.loads(result.stdout)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert "ardur:" in output["hookSpecificOutput"]["permissionDecisionReason"].lower()
+    finally:
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
+
+
+def test_wrapper_stalled_daemon_socket_respects_millisecond_timeout(tmp_path):
+    import json
+    import os
+    import socket
+    import subprocess
+    import sys
+    import threading
+    import time
+    import uuid
+
+    token, _ = _issue_test_passport(tmp_path)
+    repo_root = Path(__file__).resolve().parents[2]
+    wrapper = repo_root / "plugins" / "claude-code" / "hooks" / "pre_tool_use"
+
+    socket_parent = Path(f"/tmp/ardur-wrapper-stall-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    socket_parent.mkdir(mode=0o700)
+    socket_path = socket_parent / "hook.sock"
+
+    ready = threading.Event()
+    release = threading.Event()
+    failures: list[Exception] = []
+    observed = {"requests": 0}
+
+    def _serve_stalled_response() -> None:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(2)
+                # Wrapper invocation includes shell + Python startup overhead;
+                # keep accept timeout comfortably above typical client latency.
+                server.settimeout(_FAKE_DAEMON_ACCEPT_TIMEOUT_S)
+                ready.set()
+                while observed["requests"] < 1:
+                    try:
+                        conn, _ = server.accept()
+                    except TimeoutError:
+                        break
+                    with conn:
+                        _ = conn.recv(8192)
+                        observed["requests"] += 1
+                        if observed["requests"] == 1:
+                            # Simulate a daemon that stalls before sending a line.
+                            release.wait(timeout=2)
+                        else:
+                            conn.sendall(b'{"ok":false,"error":"unexpected second daemon attempt"}\\n')
+        except Exception as exc:  # pragma: no cover - surfaced via assertion
+            failures.append(exc)
+
+    thread = threading.Thread(target=_serve_stalled_response, daemon=True)
+    thread.start()
+
+    try:
+        assert ready.wait(timeout=2)
+        env = {**os.environ}
+        env["ARDUR_MISSION_PASSPORT"] = token
+        env["VIBAP_HOME"] = str(tmp_path)
+        env["VIBAP_KEYS_DIR"] = str(tmp_path)
+        env["ARDUR_CC_HOOK_DIR"] = str(tmp_path / "chain")
+        env["ARDUR_CC_HOOK_DAEMON"] = "1"
+        env["ARDUR_CC_HOOK_DAEMON_SOCKET"] = str(socket_path)
+        env["ARDUR_CC_HOOK_DAEMON_TIMEOUT_MS"] = "50"
+        env["ARDUR_HOOK_PYTHON"] = sys.executable
+        env["PYTHONPATH"] = (
+            str(repo_root / "python")
+            if not env.get("PYTHONPATH")
+            else str(repo_root / "python") + os.pathsep + env["PYTHONPATH"]
+        )
+
+        hook_input = json.dumps(
+            {
+                "session_id": "wrapper-stall-session",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Read",
+                "tool_input": {"file_path": "/tmp/wrapper-stall.txt"},
+                "tool_use_id": "wrapper-stall-call",
+            }
+        )
+
+        baseline_env = {**env, "ARDUR_CC_HOOK_DAEMON": "0"}
+        baseline_started = time.perf_counter()
+        baseline_result = subprocess.run(
+            [str(wrapper)],
+            input=hook_input,
+            capture_output=True,
+            text=True,
+            env=baseline_env,
+            check=False,
+        )
+        baseline_elapsed_ms = (time.perf_counter() - baseline_started) * 1000.0
+        assert baseline_result.returncode == 0, baseline_result.stderr
+
+        started = time.perf_counter()
+        result = subprocess.run(
+            [str(wrapper)],
+            input=hook_input,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
+
+        release.set()
+        thread.join(timeout=3)
+
+        assert not failures
+        assert observed["requests"] == 1
+        assert result.returncode == 0, result.stderr
+        output = json.loads(result.stdout)
+        assert output.get("continue") is True
+        assert elapsed_ms < baseline_elapsed_ms + 1000, (
+            "stalled daemon fallback added too much overhead: "
+            f"baseline={baseline_elapsed_ms:.2f}ms stalled={elapsed_ms:.2f}ms"
+        )
+    finally:
+        release.set()
+        if socket_path.exists():
+            socket_path.unlink()
+        if socket_parent.exists():
+            socket_parent.rmdir()
 
 
 def test_three_call_session_chain_verifies(tmp_path, monkeypatch):

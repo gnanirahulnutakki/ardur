@@ -34,6 +34,7 @@ from .personal_hub import (
 )
 from .claude_code_report import build_claude_code_report
 from .claude_code_hook import main as claude_code_hook_main
+from .claude_code_daemon import install_native_pre_tool_use_command, resolve_native_pre_tool_use_command_path
 from .proxy import GovernanceProxy, serve_proxy
 
 
@@ -390,6 +391,8 @@ def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
     _write_private_text(active_passport, token + "\n")
     hook_python = home / "claude-code-hook-python"
     _write_private_text(hook_python, sys.executable + "\n")
+    native_pre_hook_command = install_native_pre_tool_use_command(home=home)
+    native_pre_hook_command_expected = resolve_native_pre_tool_use_command_path(home)
     run_command = f"VIBAP_HOME={shlex.quote(str(home))} claude --plugin-dir {shlex.quote(str(plugin_dir))}"
     return {
         "ok": True,
@@ -400,6 +403,8 @@ def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
         "home": str(home),
         "active_passport": str(active_passport),
         "hook_python": str(hook_python),
+        "native_pre_hook_command": str(native_pre_hook_command) if native_pre_hook_command else None,
+        "native_pre_hook_command_expected": str(native_pre_hook_command_expected),
         "plugin_dir": str(plugin_dir),
         "run_command": run_command,
         "allowed_tools": allowed_tools,
