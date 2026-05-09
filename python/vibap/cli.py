@@ -402,6 +402,10 @@ def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
         "scope": str(scope),
         "home": str(home),
         "active_passport": str(active_passport),
+        # Matrix-compatible alias for real-world test harnesses and docs that
+        # describe this artifact as an active Mission path. Keep the original
+        # ``active_passport`` key for existing callers.
+        "active_mission_path": str(active_passport),
         "hook_python": str(hook_python),
         "native_pre_hook_command": str(native_pre_hook_command) if native_pre_hook_command else None,
         "native_pre_hook_command_expected": str(native_pre_hook_command_expected),
