@@ -2,7 +2,7 @@
 title: "Ardur Phase 2 eBPF MVP Plan — 2026-05-10"
 description: "Status: active local implementation plan."
 source_path: "reports/PHASE2_EBPF_MVP_PLAN_2026-05-10.md"
-source_sha256: "2072b879a6ed5082a0da5d033aeb58001a6bf6d5290c202891ee56c73020997d"
+source_sha256: "c04eebd649c3a516cbbd2b4c3100b03aa0745a63947f993f8f8b282c4b95c795"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -112,7 +112,7 @@ Implement the smallest live-kernel path that proves the Phase 2 architecture dir
 
 Create/use:
 
-`/Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/phase2-ebpf-mvp-2026-05-10`
+`phase2-ebpf-mvp-2026-05-10 worktree`
 
 Local branch:
 
@@ -124,7 +124,7 @@ Diff base:
 
 The existing dirty proof harness worktree remains preserved as source evidence:
 
-`/Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/ebpf-correlation-proof`
+`ebpf-correlation-proof worktree`
 
 ## Continuous 5-hour operator loop
 

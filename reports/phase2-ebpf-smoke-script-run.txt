@@ -10,4 +10,4 @@ CapEff:	000001ffffffffff
 --- PASS: TestLinuxEBPFExecSmoke (0.12s)
 PASS
 ok  	github.com/gnanirahulnutakki/ardur/go/pkg/kernelcapture	0.128s
-wrote /Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/phase2-ebpf-mvp-2026-05-10/reports/phase2-ebpf-smoke-output-rootful.txt
+wrote reports/phase2-ebpf-smoke-output-rootful.txt inside the Phase 2 eBPF MVP worktree

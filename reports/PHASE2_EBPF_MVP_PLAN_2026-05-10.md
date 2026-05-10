@@ -95,7 +95,7 @@ Implement the smallest live-kernel path that proves the Phase 2 architecture dir
 
 Create/use:
 
-`/Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/phase2-ebpf-mvp-2026-05-10`
+`phase2-ebpf-mvp-2026-05-10 worktree`
 
 Local branch:
 
@@ -107,7 +107,7 @@ Diff base:
 
 The existing dirty proof harness worktree remains preserved as source evidence:
 
-`/Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/ebpf-correlation-proof`
+`ebpf-correlation-proof worktree`
 
 ## Continuous 5-hour operator loop
 

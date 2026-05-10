@@ -2,7 +2,7 @@
 title: "Ardur Phase 2 eBPF MVP Verification Report — 2026-05-10"
 description: "Status: PASS for the narrow local Linux process lifecycle eBPF MVP (`exec` + `exit`) plus a cgroup-guarded userspace process-tree/session smoke."
 source_path: "reports/PHASE2_EBPF_MVP_VERIFICATION_2026-05-10.md"
-source_sha256: "d8df2ddff872b470c0547098f80301fccf7ed10a6208877462e43c70e1cc4de9"
+source_sha256: "5d3756aacbf4a7fdc8d99e1e9ece60949fd18a7fb2d175ce7198874aa6bb0cb9"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -18,7 +18,7 @@ This page is generated from the public repository source file. Edit the source f
 {{< /proof-status >}}
 
 Status: PASS for the narrow local Linux process lifecycle eBPF MVP (`exec` + `exit`) plus a cgroup-guarded userspace process-tree/session smoke.
-Worktree: `/Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/phase2-ebpf-mvp-2026-05-10`
+Worktree: `phase2-ebpf-mvp-2026-05-10 worktree`
 Branch: `phase2-ebpf-mvp-2026-05-10`
 Base: `origin/dev` at `7341186`
 

@@ -2,7 +2,7 @@
 title: "Hook latency canonical reconciliation — 2026-05-08"
 description: "Timestamp: 2026-05-08 00:21:46 CDT"
 source_path: "reports/hook-latency-canonical-reconciliation-2026-05-08.md"
-source_sha256: "9479be3b4260057257aa2f363d44a25afe381169527873c759d4fcfdfcbf8a78"
+source_sha256: "3bf605201fcc1c7494265981f3c220245e3e03d513cd8c0e75a1ddbf17b81ba7"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -19,7 +19,7 @@ This page is generated from the public repository source file. Edit the source f
 
 Timestamp: 2026-05-08 00:21:46 CDT
 Kanban task: t_93dc6df1
-Worktree: /Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/audit-latency-thesis
+Worktree: audit-latency-thesis worktree
 
 ## Objective
 

@@ -18,8 +18,11 @@ This package is the Ardur Linux proof harness for process-exec capture with pair
 - Includes a Linux-only Phase 2 eBPF MVP smoke path that:
   - loads the embedded `sched/sched_process_exec` + `sched/sched_process_exit` eBPF tracepoint programs.
   - reads scoped process exec+exit lifecycle samples from a ringbuf.
-  - runs a deterministic child command.
+  - runs deterministic root and child commands.
   - projects the observed exec and exit events through the same correlator.
+- Includes a local-only daemon custody scaffold that validates the future
+  root-owned config/state/socket/bpffs boundary without installing or starting
+  a daemon.
 
 ## Capture sources
 
@@ -38,6 +41,11 @@ This package is the Ardur Linux proof harness for process-exec capture with pair
 3. `ReplayEventSource` (fallback)
    - Unprivileged deterministic source for local tests/demos.
    - Used to prove correlation/loss/restart behavior when privileged loading is unavailable.
+
+4. `BuildDaemonCustodyPlan` (local-only scaffold)
+   - Validates root-owned daemon custody defaults for `/etc/ardur`, `/var/lib/ardur`, `/run/ardur`, and `/sys/fs/bpf/ardur`.
+   - Rejects repository-controlled privileged paths when repository-root validation context is provided, plus daemon installation flags, daemon startup flags, permissive modes, and non-permission mode bits.
+   - Returns a dry-run plan only. It does not create directories, bind sockets, pin maps, install service units, or start a privileged process.
 
 ## Generate the eBPF object
 
@@ -70,7 +78,7 @@ sudo podman run --rm --privileged --pid=host --ulimit memlock=-1:-1 \
   -w /workspace/go \
   -e ARDUR_RUN_EBPF_SMOKE=1 \
   ardur-ebpf-dev:fedora43 \
-  go test -v ./pkg/kernelcapture -run TestLinuxEBPFExecSmoke -count=1
+  go test -v ./pkg/kernelcapture -run TestLinuxEBPF -count=1
 ```
 
 Rootless privileged containers can still fail if memlock cannot be raised or tracefs/debugfs are not visible. Treat that as environment evidence, not a product pass.
@@ -78,7 +86,14 @@ Rootless privileged containers can still fail if memlock cannot be raised or tra
 ## Privileged boundary
 
 This package does not install a daemon, persist maps, open a service, or manage system startup.
-For a future daemon path:
+`BuildDaemonCustodyPlan` now records the local-only future daemon boundary as validated data:
+
+- config path: `/etc/ardur/kernelcapture-daemon.toml`, `0600`, root-owned
+- state dir: `/var/lib/ardur/kernelcapture`, `0700`, root-owned
+- runtime dir/socket: `/run/ardur/kernelcapture/control.sock`, socket `0600` or `0660`, root-owned
+- bpffs dir/map: `/sys/fs/bpf/ardur/process_lifecycle_events`, root-owned
+
+It rejects repository-controlled privileged paths when repository-root validation context is supplied, and it rejects any request to install or start a daemon in this scaffold slice. Path containment is lexical-only because this slice is dry-run/no-IO; future privileged preflight/install work must add symlink-aware realpath, ownership, and on-disk mode checks before touching config, state, socket, or bpffs paths. The scaffold records the future daemon-boundary requirement that repo/mission config must not select privileged map paths; integration with mission config remains future work. For the future daemon path:
 
 - `pinnedMapPath` must come from daemon-owned privileged config.
 - Repository / mission config must not control privileged map-path selection.
@@ -101,6 +116,8 @@ Ardur has a local Linux eBPF process-exec MVP with paired process-exit evidence:
 Not claimed yet:
 
 - production daemon readiness
+- daemon installation or startup
+- kernel-enforced session/cgroup filtering
 - universal CLI capture
 - file/network/privilege side-effect capture
 - macOS/Windows kernel capture

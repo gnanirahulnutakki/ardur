@@ -2,7 +2,7 @@
 
 Owner: Hermes
 Reviewer: Codex worker, supervised by Hermes
-Scope: local-only adversarial status/drift review of `/Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/phase2-ebpf-mvp-2026-05-10`.
+Scope: local-only adversarial status/drift review of `phase2-ebpf-mvp-2026-05-10 worktree`.
 
 ## Verdict
 

@@ -2,7 +2,7 @@
 title: "Ardur Phase 2 eBPF MVP Drift Review — 2026-05-10"
 description: "Owner: Hermes"
 source_path: "reports/PHASE2_EBPF_DRIFT_REVIEW_2026-05-10.md"
-source_sha256: "024243d341ce527c86e10ac293877665c11b69b67f01b0563d44eb9f3fc89779"
+source_sha256: "8ea1719fbc6f0ab0b7d85ad32a88914460f1558be46c7f91bc3733d2a86c6e4f"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -19,7 +19,7 @@ This page is generated from the public repository source file. Edit the source f
 
 Owner: Hermes
 Reviewer: Codex worker, supervised by Hermes
-Scope: local-only adversarial status/drift review of `/Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/phase2-ebpf-mvp-2026-05-10`.
+Scope: local-only adversarial status/drift review of `phase2-ebpf-mvp-2026-05-10 worktree`.
 
 ## Verdict
 

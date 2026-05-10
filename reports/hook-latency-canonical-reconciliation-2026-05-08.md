@@ -2,7 +2,7 @@
 
 Timestamp: 2026-05-08 00:21:46 CDT
 Kanban task: t_93dc6df1
-Worktree: /Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/audit-latency-thesis
+Worktree: audit-latency-thesis worktree
 
 ## Objective
 
