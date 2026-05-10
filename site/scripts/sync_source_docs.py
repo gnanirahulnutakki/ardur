@@ -23,6 +23,7 @@ INTERNAL_URL_PREFIX = "/__ardur_internal__/"
 
 PUBLIC_MARKDOWN_EXCLUDED_PREFIXES = (
     ".context/",
+    "logs/",
     "site/content/",
     "site/public/",
     "site/resources/"
