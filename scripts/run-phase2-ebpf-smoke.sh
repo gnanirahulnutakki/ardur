@@ -13,7 +13,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/run-phase2-ebpf-smoke.sh
 
-Runs the gated Phase 2 Linux eBPF process-exec smoke test and writes the
+Runs the gated Phase 2 Linux eBPF process lifecycle/session smoke tests and writes the
 rootful smoke output to reports/phase2-ebpf-smoke-output-rootful.txt.
 
 Requirements:
@@ -66,7 +66,7 @@ sudo podman run --rm --privileged --pid=host --ulimit memlock=-1:-1 \\
   -w /workspace/go \\
   -e ARDUR_RUN_EBPF_SMOKE=1 \\
   $Q_IMAGE \\
-  sh -lc 'set -e; date -u +%Y-%m-%dT%H:%M:%SZ; uname -a; test -r /sys/kernel/btf/vmlinux && echo BTF=yes || echo BTF=no; mount | grep -E "'"'"tracefs|debugfs"'"'" || true; ulimit -l; grep CapEff /proc/self/status; go test -v ./pkg/kernelcapture -run TestLinuxEBPFExecSmoke -count=1'
+  sh -lc 'set -e; date -u +%Y-%m-%dT%H:%M:%SZ; uname -a; test -r /sys/kernel/btf/vmlinux && echo BTF=yes || echo BTF=no; mount | grep -E "'"'"tracefs|debugfs"'"'" || true; ulimit -l; grep CapEff /proc/self/status; go test -v ./pkg/kernelcapture -run TestLinuxEBPF -count=1'
 "
 
 case "$(uname -s)" in

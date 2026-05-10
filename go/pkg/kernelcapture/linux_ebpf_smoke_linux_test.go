@@ -118,3 +118,86 @@ func TestLinuxEBPFExecSmoke(t *testing.T) {
 		result.Receipts[1].Verdict,
 	)
 }
+
+func TestLinuxEBPFSessionSmoke(t *testing.T) {
+	if os.Getenv("ARDUR_RUN_EBPF_SMOKE") != "1" {
+		t.Skip("set ARDUR_RUN_EBPF_SMOKE=1 to run privileged Linux eBPF session smoke")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	result, err := RunLinuxEBPFSessionSmoke(ctx, LinuxEBPFSessionSmokeOptions{
+		SessionID: "phase2-ebpf-session-smoke-test",
+		Command:   "/bin/sh",
+		Args:      []string{"-c", "/usr/bin/true; /usr/bin/true"},
+		Timeout:   10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("RunLinuxEBPFSessionSmoke failed: %v", err)
+	}
+	if result.Platform != "linux" {
+		t.Fatalf("platform = %q, want linux", result.Platform)
+	}
+	if !result.BTFAvailable {
+		t.Fatal("expected /sys/kernel/btf/vmlinux to be readable")
+	}
+	if result.RootPID == 0 || result.SessionCgroupID == 0 {
+		t.Fatalf("incomplete session metadata: root_pid=%d cgroup=%d", result.RootPID, result.SessionCgroupID)
+	}
+	if result.ObservedEvents < 4 {
+		t.Fatalf("observed events = %d, want at least root exec/exit and child exec/exit", result.ObservedEvents)
+	}
+	if result.ChildExecPID == 0 || result.ChildExitPID == 0 || result.ChildExecPID != result.ChildExitPID {
+		t.Fatalf("expected same child exec/exit pid, got exec=%d exit=%d", result.ChildExecPID, result.ChildExitPID)
+	}
+	if len(result.Events) != len(result.Receipts) {
+		t.Fatalf("events len %d != receipts len %d", len(result.Events), len(result.Receipts))
+	}
+	childExecSeen := false
+	childExitSeen := false
+	rootExitSeen := false
+	mediumCgroupCorrelationSeen := false
+	for i, evt := range result.Events {
+		if evt.SessionID != "phase2-ebpf-session-smoke-test" {
+			t.Fatalf("event %d session_id = %q", i, evt.SessionID)
+		}
+		if evt.CgroupID != result.SessionCgroupID {
+			t.Fatalf("event %d cgroup = %d, want %d", i, evt.CgroupID, result.SessionCgroupID)
+		}
+		if evt.PID == result.RootPID && evt.Type == ProcessEventExit {
+			rootExitSeen = true
+		}
+		if evt.PID == result.ChildExecPID && evt.Type == ProcessEventExec {
+			childExecSeen = true
+		}
+		if evt.PID == result.ChildExecPID && evt.Type == ProcessEventExit {
+			childExitSeen = true
+		}
+		receipt := result.Receipts[i]
+		if receipt.Verdict != "compliant" {
+			t.Fatalf("receipt %d verdict=%q coverage=%q method=%q confidence=%q", i, receipt.Verdict, receipt.CoverageStatus, receipt.CorrelationMethod, receipt.CorrelationConfidence)
+		}
+		if evt.PID != result.RootPID && receipt.CorrelationMethod == "cgroup_time_window" && receipt.CorrelationConfidence == "medium" {
+			mediumCgroupCorrelationSeen = true
+		}
+	}
+	if !rootExitSeen || !childExecSeen || !childExitSeen {
+		t.Fatalf("missing lifecycle events: root_exit=%t child_exec=%t child_exit=%t events=%+v", rootExitSeen, childExecSeen, childExitSeen, result.Events)
+	}
+	if !mediumCgroupCorrelationSeen {
+		t.Fatalf("expected at least one child event correlated by cgroup_time_window/medium, receipts=%+v", result.Receipts)
+	}
+
+	t.Logf("kernel=%s btf=%t tracepoints=%v command=%v root_pid=%d cgroup=%d observed_events=%d child_pid=%d child_exit_pid=%d",
+		result.KernelRelease,
+		result.BTFAvailable,
+		result.AttachedTracepoints,
+		result.Command,
+		result.RootPID,
+		result.SessionCgroupID,
+		result.ObservedEvents,
+		result.ChildExecPID,
+		result.ChildExitPID,
+	)
+}

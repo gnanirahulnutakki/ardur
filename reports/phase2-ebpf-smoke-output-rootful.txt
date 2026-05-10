@@ -1,12 +1,15 @@
-2026-05-10T07:50:27Z
-Linux 091ee6a0b7dc 6.19.7-200.fc43.aarch64 #1 SMP PREEMPT_DYNAMIC Thu Mar 12 15:54:05 UTC 2026 aarch64 GNU/Linux
+2026-05-10T08:30:07Z
+Linux 2ffaeb3b2449 6.19.7-200.fc43.aarch64 #1 SMP PREEMPT_DYNAMIC Thu Mar 12 15:54:05 UTC 2026 aarch64 GNU/Linux
 BTF=yes
 tracefs on /sys/kernel/tracing type tracefs (rw,relatime,seclabel)
 debugfs on /sys/kernel/debug type debugfs (rw,nosuid,nodev,noexec,relatime,seclabel)
 unlimited
 CapEff:	000001ffffffffff
 === RUN   TestLinuxEBPFExecSmoke
-    linux_ebpf_smoke_linux_test.go:92: kernel=6.19.7-200.fc43.aarch64 btf=true tracepoints=[sched/sched_process_exec sched/sched_process_exit] command=[/usr/bin/true] observed_events=2 exec_pid=28165 exec_ppid=28159 exec_tid=28165 exec_pid_ns=4026531836 exec_cgroup=18578 exec_comm="true" exit_pid=28165 exit_ppid=28159 exit_tid=28165 exit_pid_ns=4026531836 exit_cgroup=18578 exit_comm="true" exit_code=0 exec_coverage=complete exec_correlation=explicit_pid/high exec_verdict=compliant exit_coverage=complete exit_correlation=explicit_pid/high exit_verdict=compliant
---- PASS: TestLinuxEBPFExecSmoke (0.19s)
+    linux_ebpf_smoke_linux_test.go:92: kernel=6.19.7-200.fc43.aarch64 btf=true tracepoints=[sched/sched_process_exec sched/sched_process_exit] command=[/usr/bin/true] observed_events=2 exec_pid=31679 exec_ppid=31673 exec_tid=31679 exec_pid_ns=4026531836 exec_cgroup=19440 exec_comm="true" exit_pid=31679 exit_ppid=31673 exit_tid=31679 exit_pid_ns=4026531836 exit_cgroup=19440 exit_comm="true" exit_code=0 exec_coverage=complete exec_correlation=explicit_pid/high exec_verdict=compliant exit_coverage=complete exit_correlation=explicit_pid/high exit_verdict=compliant
+--- PASS: TestLinuxEBPFExecSmoke (0.17s)
+=== RUN   TestLinuxEBPFSessionSmoke
+    linux_ebpf_smoke_linux_test.go:192: kernel=6.19.7-200.fc43.aarch64 btf=true tracepoints=[sched/sched_process_exec sched/sched_process_exit] command=[/bin/sh -c /usr/bin/true; /usr/bin/true] root_pid=31680 cgroup=19440 observed_events=5 child_pid=31681 child_exit_pid=31681
+--- PASS: TestLinuxEBPFSessionSmoke (0.11s)
 PASS
-ok  	github.com/gnanirahulnutakki/ardur/go/pkg/kernelcapture	0.197s
+ok  	github.com/gnanirahulnutakki/ardur/go/pkg/kernelcapture	0.292s

@@ -158,3 +158,53 @@ func TestDecodeRingbufRecordExitIncludesExitCode(t *testing.T) {
 		t.Fatalf("comm = %q, want python3", evt.Comm)
 	}
 }
+
+func TestProcessTreeScopeTracksDescendantsAndRejectsSiblings(t *testing.T) {
+	t.Parallel()
+
+	scope := NewProcessTreeScope(100, 77)
+	root := ProcessEvent{Type: ProcessEventExec, PID: 100, PPID: 90, CgroupID: 77, ProcessStartMonotonicNS: 1_000}
+	if !scope.MatchesAndTrack(root) {
+		t.Fatalf("expected root process to match")
+	}
+
+	child := ProcessEvent{Type: ProcessEventExec, PID: 101, PPID: 100, CgroupID: 77, ProcessStartMonotonicNS: 1_100}
+	if !scope.MatchesAndTrack(child) {
+		t.Fatalf("expected direct child to match and be tracked")
+	}
+
+	grandchild := ProcessEvent{Type: ProcessEventExec, PID: 102, PPID: 101, CgroupID: 77, ProcessStartMonotonicNS: 1_200}
+	if !scope.MatchesAndTrack(grandchild) {
+		t.Fatalf("expected grandchild of tracked process to match")
+	}
+
+	sibling := ProcessEvent{Type: ProcessEventExec, PID: 200, PPID: 90, CgroupID: 77, ProcessStartMonotonicNS: 2_000}
+	if scope.MatchesAndTrack(sibling) {
+		t.Fatalf("did not expect unrelated process in same cgroup to match")
+	}
+
+	otherCgroupChild := ProcessEvent{Type: ProcessEventExec, PID: 103, PPID: 100, CgroupID: 88, ProcessStartMonotonicNS: 1_300}
+	if scope.MatchesAndTrack(otherCgroupChild) {
+		t.Fatalf("did not expect child with mismatched cgroup to match")
+	}
+}
+
+func TestProcessTreeScopeRetiresExitedPIDBeforeReuse(t *testing.T) {
+	t.Parallel()
+
+	scope := NewProcessTreeScope(100, 77)
+	if !scope.MatchesAndTrack(ProcessEvent{Type: ProcessEventExec, PID: 100, PPID: 90, CgroupID: 77, ProcessStartMonotonicNS: 1_000}) {
+		t.Fatalf("expected root process to match")
+	}
+	if !scope.MatchesAndTrack(ProcessEvent{Type: ProcessEventExec, PID: 101, PPID: 100, CgroupID: 77, ProcessStartMonotonicNS: 1_100}) {
+		t.Fatalf("expected child process to match")
+	}
+	if !scope.MatchesAndTrack(ProcessEvent{Type: ProcessEventExit, PID: 101, PPID: 100, CgroupID: 77, ProcessStartMonotonicNS: 1_100}) {
+		t.Fatalf("expected child exit to match")
+	}
+
+	reusedSiblingPID := ProcessEvent{Type: ProcessEventExec, PID: 101, PPID: 90, CgroupID: 77, ProcessStartMonotonicNS: 9_999}
+	if scope.MatchesAndTrack(reusedSiblingPID) {
+		t.Fatalf("did not expect reused PID outside tracked lineage to match")
+	}
+}
