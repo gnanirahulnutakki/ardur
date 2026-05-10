@@ -24,17 +24,17 @@ Owner-facing objective: deliver a narrow, evidence-backed Linux eBPF MVP without
 Implement the smallest live-kernel path that proves the Phase 2 architecture direction:
 
 1. Add a Go `kernelcapture` package from the existing local proof harness if it is not already in the clean worktree.
-2. Add a Linux-only eBPF process-exec producer:
-   - tracepoint: `sched/sched_process_exec` or equivalent low-risk process exec surface.
-   - map: ringbuf emitting the existing fixed process sample layout.
-   - fields: event type, monotonic timestamp, PID, PPID, TID, cgroup id, comm.
+2. Add a Linux-only eBPF process-exec producer with paired process-exit evidence:
+   - tracepoints: `sched/sched_process_exec` and `sched/sched_process_exit`.
+   - map: ringbuf emitting the existing fixed process exec+exit metadata layout.
+   - fields: event type, monotonic timestamp, PID, PPID, TID, PID namespace id, cgroup id, comm, and `exit_code` on exit events.
 3. Add a Linux-only loader/smoke path:
    - loads the compiled eBPF object with `github.com/cilium/ebpf`.
    - attaches tracepoint locally.
    - starts ringbuf reader.
    - runs a deterministic child command.
-   - confirms at least one exec event for the target process/session boundary.
-   - passes the sample through the existing decoder/correlator projection.
+   - confirms scoped exec and exit events for the target process/session boundary.
+   - passes the samples through the existing decoder/correlator projection.
 4. Add an explicit gated test or command:
    - normal `go test ./pkg/kernelcapture` remains unprivileged/offline and passes on macOS.
    - live kernel smoke runs only when `ARDUR_RUN_EBPF_SMOKE=1` and on Linux with privileges.
@@ -65,7 +65,7 @@ Implement the smallest live-kernel path that proves the Phase 2 architecture dir
    - or an equivalent repo-local smoke script/command with persisted output.
 5. The smoke output includes:
    - kernel, distro/container, BTF, privilege/capability evidence.
-   - attached tracepoint name.
+   - attached tracepoint names.
    - event observed count.
    - no ringbuf loss reported in normal smoke.
    - a synthetic kernel-effect projection with honest `coverage_status`, `correlation_method`, and `verdict`.
@@ -74,7 +74,7 @@ Implement the smallest live-kernel path that proves the Phase 2 architecture dir
 
 ### Allowed MVP claim if all required gates pass
 
-“Ardur has a local Linux eBPF process-exec MVP: in a privileged Podman Linux VM/container it can load an eBPF tracepoint producer, read ringbuf process lifecycle events, and project them into honest synthetic kernel-effect evidence.”
+“Ardur has a local Linux eBPF process-exec MVP with paired process-exit evidence: in a privileged Podman Linux VM/container it can load `sched_process_exec`/`sched_process_exit` tracepoint producers, read scoped ringbuf exec+exit metadata events, and project them into honest synthetic kernel-effect evidence.”
 
 ### Disallowed claims after this MVP
 

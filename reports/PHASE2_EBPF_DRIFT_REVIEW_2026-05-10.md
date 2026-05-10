@@ -8,7 +8,7 @@ Scope: local-only adversarial status/drift review of `/Users/gnutakki/.hermes/wo
 
 ON TRACK for Rahul's narrow Phase 2 MVP presentation.
 
-No significant drift or looping detected. The implementation remains tightly scoped to the intended MVP: local Linux privileged `sched_process_exec` eBPF capture, ringbuf transport, Go decode/correlation, and honest synthetic kernel-effect evidence. It does not drift into production daemonization, cross-platform claims, file/network capture, public release, or universal CLI coverage.
+No significant drift or looping detected. The implementation remains tightly scoped to the intended MVP: local Linux privileged `sched_process_exec` capture with paired `sched_process_exit` lifecycle evidence, ringbuf transport, Go decode/correlation, and honest synthetic kernel-effect evidence. It does not drift into production daemonization, cross-platform claims, file/network capture, public release, or universal CLI coverage.
 
 ## Evidence checked
 
@@ -59,6 +59,9 @@ Resolved during follow-up:
 2. Handoff durability was weak because the smoke command was only documented as an expanded manual command.
    - Fixed by adding and executing `scripts/run-phase2-ebpf-smoke.sh`.
 
+3. Verification/report language lagged the exec+exit smoke update and still described a single exec tracepoint/sample.
+   - Fixed by tightening README, plan, inventory, verification, and drift-review wording to `sched_process_exec` + paired `sched_process_exit` metadata evidence without expanding into broader side-effect claims.
+
 Still open:
 
 1. Files remain local/uncommitted in the worktree.
@@ -74,7 +77,7 @@ Still open:
 
 Allowed:
 
-Ardur has a local Linux eBPF process-exec MVP: in a privileged Podman Linux VM/container it can load an eBPF tracepoint producer, read ringbuf process lifecycle events, and project them into honest synthetic kernel-effect evidence.
+Ardur has a local Linux eBPF process-exec MVP with paired process-exit evidence: in a privileged Podman Linux VM/container it can load `sched_process_exec`/`sched_process_exit` tracepoint producers, read scoped ringbuf exec+exit metadata events, and project them into honest synthetic kernel-effect evidence.
 
 Not allowed:
 

@@ -6,7 +6,7 @@ Public/GitHub action: none.
 
 ## Objective
 
-Start Phase 2 with a narrow Linux eBPF MVP: prove Ardur can load a Linux eBPF process-lifecycle producer in a local Linux test environment, read its ringbuf events through the Go kernelcapture path, and render honest synthetic kernel-effect evidence. This is not a production daemon or broad side-effect-capture claim.
+Start Phase 2 with a narrow Linux eBPF MVP: prove Ardur can load Linux eBPF process-exec and paired process-exit producers in a local Linux test environment, read their scoped ringbuf metadata events through the Go kernelcapture path, and render honest synthetic kernel-effect evidence. This is not a production daemon or broad side-effect-capture claim.
 
 ## Required tools and current status
 
@@ -65,7 +65,7 @@ Implementation may start after these are true:
 Allowed after a passing MVP smoke:
 
 - “Local Linux eBPF process-exec smoke harness works in a privileged Podman VM/container.”
-- “Ardur can read eBPF ringbuf process-lifecycle samples and project them into synthetic kernel-effect receipts.”
+- “Ardur can read eBPF ringbuf process exec+exit metadata samples and project them into synthetic kernel-effect receipts.”
 
 Not allowed yet:
 
