@@ -52,7 +52,7 @@ finalize_checkpoint() {
   local checkpoint="$1"
   {
     printf '\n## Drift guard\n\n'
-    printf -- '- Stay inside the narrow MVP: privileged local Linux process-exec eBPF capture, ringbuf decode, honest synthetic receipt projection.\n'
+    printf -- '- Stay inside the narrow MVP: privileged local Linux process exec+exit eBPF capture, ringbuf decode, honest synthetic receipt projection.\n'
     printf -- '- Do not expand into production daemon, public release, universal CLI, file/network capture, or cross-platform kernel claims during this loop.\n'
   } >>"$LOGDIR/${checkpoint}.md"
 }
