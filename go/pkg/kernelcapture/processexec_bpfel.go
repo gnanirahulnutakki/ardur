@@ -61,7 +61,9 @@ type processExecProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type processExecMapSpecs struct {
-	Events *ebpf.MapSpec `ebpf:"events"`
+	AllowedCgroups *ebpf.MapSpec `ebpf:"allowed_cgroups"`
+	Events         *ebpf.MapSpec `ebpf:"events"`
+	FilterControl  *ebpf.MapSpec `ebpf:"filter_control"`
 }
 
 // processExecObjects contains all objects after they have been loaded into the kernel.
@@ -83,12 +85,16 @@ func (o *processExecObjects) Close() error {
 //
 // It can be passed to loadProcessExecObjects or ebpf.CollectionSpec.LoadAndAssign.
 type processExecMaps struct {
-	Events *ebpf.Map `ebpf:"events"`
+	AllowedCgroups *ebpf.Map `ebpf:"allowed_cgroups"`
+	Events         *ebpf.Map `ebpf:"events"`
+	FilterControl  *ebpf.Map `ebpf:"filter_control"`
 }
 
 func (m *processExecMaps) Close() error {
 	return _ProcessExecClose(
+		m.AllowedCgroups,
 		m.Events,
+		m.FilterControl,
 	)
 }
 

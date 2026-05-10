@@ -12,6 +12,10 @@
 
 #define ARDUR_EVENT_EXEC 1
 #define ARDUR_EVENT_EXIT 2
+#define ARDUR_FILTER_CONTROL_KEY 0
+#define ARDUR_FILTER_DISABLED 0
+#define ARDUR_FILTER_ENABLED 1
+#define ARDUR_ALLOWED_CGROUPS_MAX 1024
 
 struct ns_common {
     unsigned int inum;
@@ -50,13 +54,50 @@ struct {
     __uint(max_entries, 1 << 12);
 } events SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u8);
+} filter_control SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, ARDUR_ALLOWED_CGROUPS_MAX);
+    __type(key, __u64);
+    __type(value, __u8);
+} allowed_cgroups SEC(".maps");
+
+static __always_inline int cgroup_allowed(__u64 cgroup_id) {
+    __u32 control_key = ARDUR_FILTER_CONTROL_KEY;
+    __u8 *filter_enabled;
+    __u8 *allowed;
+
+    filter_enabled = bpf_map_lookup_elem(&filter_control, &control_key);
+    if (!filter_enabled || *filter_enabled == ARDUR_FILTER_DISABLED) {
+        return 1;
+    }
+    if (*filter_enabled != ARDUR_FILTER_ENABLED) {
+        return 0;
+    }
+
+    allowed = bpf_map_lookup_elem(&allowed_cgroups, &cgroup_id);
+    return allowed != 0;
+}
+
 static __always_inline int submit_process_event(__u8 event_type) {
     struct ardur_process_event *event;
     __u64 pid_tgid;
+    __u64 cgroup_id;
     struct task_struct *task;
     struct task_struct *parent;
     struct nsproxy *nsproxy;
     struct pid_namespace *pidns;
+
+    cgroup_id = bpf_get_current_cgroup_id();
+    if (!cgroup_allowed(cgroup_id)) {
+        return 0;
+    }
 
     event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
     if (!event) {
@@ -70,7 +111,7 @@ static __always_inline int submit_process_event(__u8 event_type) {
     event->monotonic_ns = bpf_ktime_get_ns();
     event->pid = pid_tgid >> 32;
     event->tid = (__u32)pid_tgid;
-    event->cgroup_id = bpf_get_current_cgroup_id();
+    event->cgroup_id = cgroup_id;
     bpf_get_current_comm(&event->comm, sizeof(event->comm));
 
     task = (struct task_struct *)bpf_get_current_task_btf();

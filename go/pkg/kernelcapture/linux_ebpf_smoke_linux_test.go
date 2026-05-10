@@ -201,3 +201,101 @@ func TestLinuxEBPFSessionSmoke(t *testing.T) {
 		result.ChildExitPID,
 	)
 }
+
+func TestLinuxEBPFCgroupFilterPositiveSmoke(t *testing.T) {
+	if os.Getenv("ARDUR_RUN_EBPF_SMOKE") != "1" {
+		t.Skip("set ARDUR_RUN_EBPF_SMOKE=1 to run privileged Linux eBPF cgroup-filter smoke")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	result, err := RunLinuxEBPFCgroupFilterPositiveSmoke(ctx, LinuxEBPFCgroupFilterSmokeOptions{
+		SessionID: "phase2-ebpf-cgroup-filter-positive-smoke-test",
+		Command:   "/usr/bin/true",
+		Timeout:   10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("RunLinuxEBPFCgroupFilterPositiveSmoke failed: %v", err)
+	}
+	if result.Platform != "linux" {
+		t.Fatalf("platform = %q, want linux", result.Platform)
+	}
+	if !result.FilterEnabled {
+		t.Fatal("filter_enabled = false, want true")
+	}
+	if result.TestRunnerCgroupID == 0 || result.AllowedCgroupID != result.TestRunnerCgroupID {
+		t.Fatalf("unexpected cgroup metadata: test_runner=%d allowed=%d", result.TestRunnerCgroupID, result.AllowedCgroupID)
+	}
+	if result.TargetPID == 0 {
+		t.Fatal("target pid is zero")
+	}
+	if result.ExecEvent.Type != ProcessEventExec || result.ExitEvent.Type != ProcessEventExit {
+		t.Fatalf("event types = [%q %q], want [exec exit]", result.ExecEvent.Type, result.ExitEvent.Type)
+	}
+	if result.ExecEvent.PID != result.TargetPID || result.ExitEvent.PID != result.TargetPID {
+		t.Fatalf("event pids = [%d %d], want target pid %d", result.ExecEvent.PID, result.ExitEvent.PID, result.TargetPID)
+	}
+	if result.ExecEvent.CgroupID != result.AllowedCgroupID || result.ExitEvent.CgroupID != result.AllowedCgroupID {
+		t.Fatalf("event cgroups = [%d %d], want allowed cgroup %d", result.ExecEvent.CgroupID, result.ExitEvent.CgroupID, result.AllowedCgroupID)
+	}
+	if result.ObservedEvents < 2 {
+		t.Fatalf("observed events = %d, want >= 2", result.ObservedEvents)
+	}
+
+	t.Logf("kernel=%s btf=%t tracepoints=%v command=%v filter_enabled=%t allowed_cgroup=%d target_pid=%d exec_cgroup=%d exit_cgroup=%d",
+		result.KernelRelease,
+		result.BTFAvailable,
+		result.AttachedTracepoints,
+		result.Command,
+		result.FilterEnabled,
+		result.AllowedCgroupID,
+		result.TargetPID,
+		result.ExecEvent.CgroupID,
+		result.ExitEvent.CgroupID,
+	)
+}
+
+func TestLinuxEBPFCgroupFilterNegativeSmoke(t *testing.T) {
+	if os.Getenv("ARDUR_RUN_EBPF_SMOKE") != "1" {
+		t.Skip("set ARDUR_RUN_EBPF_SMOKE=1 to run privileged Linux eBPF cgroup-filter smoke")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	result, err := RunLinuxEBPFCgroupFilterNegativeSmoke(ctx, LinuxEBPFCgroupFilterSmokeOptions{
+		SessionID: "phase2-ebpf-cgroup-filter-negative-smoke-test",
+		Command:   "/usr/bin/true",
+		Timeout:   2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("RunLinuxEBPFCgroupFilterNegativeSmoke failed: %v", err)
+	}
+	if result.Platform != "linux" {
+		t.Fatalf("platform = %q, want linux", result.Platform)
+	}
+	if !result.FilterEnabled {
+		t.Fatal("filter_enabled = false, want true")
+	}
+	if result.TestRunnerCgroupID == 0 || result.NegativeTargetPID == 0 {
+		t.Fatalf("incomplete negative metadata: cgroup=%d pid=%d", result.TestRunnerCgroupID, result.NegativeTargetPID)
+	}
+	if !result.NegativeTimedOut {
+		t.Fatal("negative smoke did not time out waiting for blocked target events")
+	}
+	if result.UnexpectedTargetSeen {
+		t.Fatal("negative smoke observed a target event despite no matching allowed cgroup")
+	}
+
+	t.Logf("kernel=%s btf=%t tracepoints=%v command=%v filter_enabled=%t blocked_cgroup=%d target_pid=%d negative_timed_out=%t",
+		result.KernelRelease,
+		result.BTFAvailable,
+		result.AttachedTracepoints,
+		result.Command,
+		result.FilterEnabled,
+		result.TestRunnerCgroupID,
+		result.NegativeTargetPID,
+		result.NegativeTimedOut,
+	)
+}
