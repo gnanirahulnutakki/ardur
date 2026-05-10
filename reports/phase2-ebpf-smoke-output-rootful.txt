@@ -1,0 +1,12 @@
+2026-05-10T06:40:31Z
+Linux 1a8ebf40ddd1 6.19.7-200.fc43.aarch64 #1 SMP PREEMPT_DYNAMIC Thu Mar 12 15:54:05 UTC 2026 aarch64 GNU/Linux
+BTF=yes
+debugfs on /sys/kernel/debug type debugfs (rw,nosuid,nodev,noexec,relatime,seclabel)
+tracefs on /sys/kernel/tracing type tracefs (rw,relatime,seclabel)
+unlimited
+CapEff:	000001ffffffffff
+=== RUN   TestLinuxEBPFExecSmoke
+    linux_ebpf_smoke_linux_test.go:56: kernel=6.19.7-200.fc43.aarch64 btf=true tracepoint=sched/sched_process_exec command=[/usr/bin/true] observed_events=1 event_pid=23437 ppid=23430 tid=23437 pid_ns=4026531836 cgroup=16518 comm="true" coverage=complete correlation=explicit_pid/high verdict=compliant
+--- PASS: TestLinuxEBPFExecSmoke (0.12s)
+PASS
+ok  	github.com/gnanirahulnutakki/ardur/go/pkg/kernelcapture	0.128s

@@ -18,6 +18,7 @@ __pycache__/
 .agent-context/
 .codex/
 .local-skills/
+logs/
 agent-instructions.local/
 HANDOFF.md
 workdone-so-far.md
