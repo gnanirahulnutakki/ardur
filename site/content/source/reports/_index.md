@@ -15,4 +15,8 @@ This section lists hosted documentation and mirrored artifacts generated from `r
 
 ## Hosted Docs
 
+- [`PHASE2_EBPF_DRIFT_REVIEW_2026-05-10.md`](/__ardur_internal__/source/reports/phase2_ebpf_drift_review_2026-05-10/)
+- [`PHASE2_EBPF_MVP_PLAN_2026-05-10.md`](/__ardur_internal__/source/reports/phase2_ebpf_mvp_plan_2026-05-10/)
+- [`PHASE2_EBPF_MVP_VERIFICATION_2026-05-10.md`](/__ardur_internal__/source/reports/phase2_ebpf_mvp_verification_2026-05-10/)
+- [`PHASE2_EBPF_TOOL_INVENTORY_2026-05-10.md`](/__ardur_internal__/source/reports/phase2_ebpf_tool_inventory_2026-05-10/)
 - [`hook-latency-canonical-reconciliation-2026-05-08.md`](/__ardur_internal__/source/reports/hook-latency-canonical-reconciliation-2026-05-08/)
