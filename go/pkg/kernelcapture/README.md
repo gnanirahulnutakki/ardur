@@ -1,6 +1,6 @@
 # kernelcapture proof harness
 
-This package is the Ardur Linux proof harness for process-lifecycle capture and kernel-effect synthetic receipts.
+This package is the Ardur Linux proof harness for process-exec capture with paired process-exit lifecycle metadata and kernel-effect synthetic receipts.
 
 ## What it currently does
 
@@ -16,17 +16,17 @@ This package is the Ardur Linux proof harness for process-lifecycle capture and 
   - capture loss / consumer lag => degraded `insufficient_evidence`
   - daemon restart gap => unknown `insufficient_evidence`
 - Includes a Linux-only Phase 2 eBPF MVP smoke path that:
-  - loads the embedded `sched/sched_process_exec` eBPF tracepoint program.
-  - reads process exec samples from a ringbuf.
+  - loads the embedded `sched/sched_process_exec` + `sched/sched_process_exit` eBPF tracepoint programs.
+  - reads scoped process exec+exit lifecycle samples from a ringbuf.
   - runs a deterministic child command.
-  - projects the observed exec event through the same correlator.
+  - projects the observed exec and exit events through the same correlator.
 
 ## Capture sources
 
 1. `RunLinuxEBPFExecSmoke` (Linux only, privileged/gated)
    - Loads the generated eBPF object with `github.com/cilium/ebpf`.
-   - Attaches `sched/sched_process_exec` through tracefs/debugfs.
-   - Emits metadata-only exec events: PID, PPID, TID, PID namespace id, cgroup id, monotonic timestamp, and `comm`.
+   - Attaches `sched/sched_process_exec` and `sched/sched_process_exit` through tracefs/debugfs.
+   - Emits metadata-only lifecycle events: PID, PPID, TID, PID namespace id, cgroup id, monotonic timestamp, `comm`, and `exit_code` on exit events.
    - Does not collect argv, env, file contents, network destinations, or raw command payloads.
 
 2. `RingbufProcessSource` (Linux only)
@@ -96,7 +96,7 @@ For a future daemon path:
 
 Allowed claim after the gated smoke passes:
 
-Ardur has a local Linux eBPF process-exec MVP: in a privileged Linux container/VM it can load an eBPF tracepoint producer, read ringbuf process lifecycle events, and project them into honest synthetic kernel-effect evidence.
+Ardur has a local Linux eBPF process-exec MVP with paired process-exit evidence: in a privileged Linux container/VM it can load `sched_process_exec`/`sched_process_exit` tracepoint producers, read scoped ringbuf exec+exit metadata events, and project them into honest synthetic kernel-effect evidence.
 
 Not claimed yet:
 

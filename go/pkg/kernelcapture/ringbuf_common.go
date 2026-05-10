@@ -120,8 +120,8 @@ func decodeRingbufRecord(raw []byte) (ProcessEvent, error) {
 		return ProcessEvent{}, err
 	}
 
-	// exit code present for future use; currently consumed and ignored.
-	if _, err := reader.Seek(4, 1); err != nil {
+	var exitCode int32
+	if err := binary.Read(reader, binary.LittleEndian, &exitCode); err != nil {
 		return ProcessEvent{}, err
 	}
 
@@ -139,6 +139,7 @@ func decodeRingbufRecord(raw []byte) (ProcessEvent, error) {
 		PIDNamespaceID:      uint64(pidNamespaceID),
 		CgroupID:            cgroupID,
 		Comm:                comm,
+		ExitCode:            exitCode,
 		ObservedMonotonicNS: monotonicNS,
 	}, nil
 }

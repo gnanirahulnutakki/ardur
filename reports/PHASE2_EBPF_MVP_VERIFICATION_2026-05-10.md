@@ -1,6 +1,6 @@
 # Ardur Phase 2 eBPF MVP Verification Report — 2026-05-10
 
-Status: PASS for the narrow local Linux process-exec eBPF MVP.
+Status: PASS for the narrow local Linux process lifecycle eBPF MVP (`exec` + `exit`).
 Worktree: `/Users/gnutakki/.hermes/workspace/projects/ardur/worktrees/phase2-ebpf-mvp-2026-05-10`
 Branch: `phase2-ebpf-mvp-2026-05-10`
 Base: `origin/dev` at `7f001bc`
@@ -11,14 +11,14 @@ Added `go/pkg/kernelcapture` as a Linux process-capture proof harness with:
 
 - Correlator for kernel process events -> synthetic kernel-effect receipts.
 - Replay event source for unprivileged deterministic tests.
-- Ringbuf decoder/source with explicit PID namespace and cgroup fields.
-- Linux-only generated eBPF object for `sched/sched_process_exec`.
+- Ringbuf decoder/source with explicit PID namespace, cgroup, and exit-code fields.
+- Linux-only generated eBPF object for `sched/sched_process_exec` and `sched/sched_process_exit`.
 - Linux-only loader/smoke path using `github.com/cilium/ebpf`.
 - Repo-local smoke runner: `scripts/run-phase2-ebpf-smoke.sh`.
 - Gated live smoke test `TestLinuxEBPFExecSmoke` behind `ARDUR_RUN_EBPF_SMOKE=1`.
 - README claim boundary and verification instructions.
 
-The eBPF producer emits metadata-only exec events:
+The eBPF producer emits metadata-only exec+exit events:
 
 - event type
 - kernel monotonic timestamp
@@ -28,6 +28,7 @@ The eBPF producer emits metadata-only exec events:
 - PID namespace id
 - cgroup id
 - `comm`
+- `exit_code` on exit events
 
 It does not collect argv, env, file contents, network destinations, or raw payloads.
 
@@ -133,18 +134,18 @@ sudo podman run --rm --privileged --pid=host --ulimit memlock=-1:-1 \
 Result excerpt from `reports/phase2-ebpf-smoke-output-rootful.txt` after the repo-local smoke runner:
 
 ```text
-2026-05-10T06:40:31Z
-Linux 1a8ebf40ddd1 6.19.7-200.fc43.aarch64 #1 SMP PREEMPT_DYNAMIC Thu Mar 12 15:54:05 UTC 2026 aarch64 GNU/Linux
+2026-05-10T07:50:27Z
+Linux 091ee6a0b7dc 6.19.7-200.fc43.aarch64 #1 SMP PREEMPT_DYNAMIC Thu Mar 12 15:54:05 UTC 2026 aarch64 GNU/Linux
 BTF=yes
-debugfs on /sys/kernel/debug type debugfs (rw,nosuid,nodev,noexec,relatime,seclabel)
 tracefs on /sys/kernel/tracing type tracefs (rw,relatime,seclabel)
+debugfs on /sys/kernel/debug type debugfs (rw,nosuid,nodev,noexec,relatime,seclabel)
 unlimited
 CapEff:	000001ffffffffff
 === RUN   TestLinuxEBPFExecSmoke
-    linux_ebpf_smoke_linux_test.go:56: kernel=6.19.7-200.fc43.aarch64 btf=true tracepoint=sched/sched_process_exec command=[/usr/bin/true] observed_events=1 event_pid=23437 ppid=23430 tid=23437 pid_ns=4026531836 cgroup=16518 comm="true" coverage=complete correlation=explicit_pid/high verdict=compliant
---- PASS: TestLinuxEBPFExecSmoke (0.12s)
+    linux_ebpf_smoke_linux_test.go:92: kernel=6.19.7-200.fc43.aarch64 btf=true tracepoints=[sched/sched_process_exec sched/sched_process_exit] command=[/usr/bin/true] observed_events=2 exec_pid=28165 exec_ppid=28159 exec_tid=28165 exec_pid_ns=4026531836 exec_cgroup=18578 exec_comm="true" exit_pid=28165 exit_ppid=28159 exit_tid=28165 exit_pid_ns=4026531836 exit_cgroup=18578 exit_comm="true" exit_code=0 exec_coverage=complete exec_correlation=explicit_pid/high exec_verdict=compliant exit_coverage=complete exit_correlation=explicit_pid/high exit_verdict=compliant
+--- PASS: TestLinuxEBPFExecSmoke (0.19s)
 PASS
-ok  	github.com/gnanirahulnutakki/ardur/go/pkg/kernelcapture	0.128s
+ok  	github.com/gnanirahulnutakki/ardur/go/pkg/kernelcapture	0.197s
 ```
 
 ### Local quick repo hygiene
@@ -166,7 +167,7 @@ all quick checks passed
 
 PASS for the narrow MVP:
 
-Ardur can load a local Linux eBPF tracepoint producer, attach `sched/sched_process_exec`, stream one process exec sample through a ringbuf, decode process identity metadata, and produce a synthetic kernel-effect receipt with:
+Ardur can load local Linux eBPF tracepoint producers, attach `sched/sched_process_exec` and `sched/sched_process_exit`, stream scoped process exec+exit metadata samples through a ringbuf, decode process identity and exit-code metadata, and produce synthetic kernel-effect receipts with:
 
 - `coverage_status=complete`
 - `correlation_method=explicit_pid`
@@ -177,7 +178,7 @@ Ardur can load a local Linux eBPF tracepoint producer, attach `sched/sched_proce
 
 Allowed claim:
 
-Ardur has a local Linux eBPF process-exec MVP: in a privileged Linux container/VM it can load an eBPF tracepoint producer, read ringbuf process lifecycle events, and project them into honest synthetic kernel-effect evidence.
+Ardur has a local Linux eBPF process lifecycle MVP: in a privileged Linux container/VM it can load `sched_process_exec`/`sched_process_exit` tracepoint producers, read scoped metadata-only ringbuf exec+exit events, and project them into honest synthetic kernel-effect evidence.
 
 Not claimed:
 
@@ -190,8 +191,8 @@ Not claimed:
 
 ## Next engineering tasks
 
-1. Add an actual daemon boundary and root-owned config for eBPF object loading/map custody.
-2. Add process-exit event capture.
-3. Add cgroup/session-scoped filtering before ringbuf emission to reduce userspace filtering.
+1. Harden exec/exit ordering and loss semantics under concurrent process churn.
+2. Add cgroup/session-scoped filtering before ringbuf emission to reduce userspace filtering.
+3. Add an actual daemon boundary and root-owned config for eBPF object loading/map custody.
 4. Add file/network side-effect event classes separately with explicit claim boundaries.
 5. Add installation and operator docs only after daemon custody and privilege model are reviewed.

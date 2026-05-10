@@ -28,6 +28,7 @@ type ProcessEvent struct {
 	ProcessStartMonotonicNS uint64
 	CgroupID                uint64
 	Comm                    string
+	ExitCode                int32
 	ObservedAt              time.Time
 	ObservedMonotonicNS     uint64
 }

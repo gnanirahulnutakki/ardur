@@ -54,6 +54,7 @@ type processExecSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type processExecProgramSpecs struct {
 	HandleSchedProcessExec *ebpf.ProgramSpec `ebpf:"handle_sched_process_exec"`
+	HandleSchedProcessExit *ebpf.ProgramSpec `ebpf:"handle_sched_process_exit"`
 }
 
 // processExecMapSpecs contains maps before they are loaded into the kernel.
@@ -96,11 +97,13 @@ func (m *processExecMaps) Close() error {
 // It can be passed to loadProcessExecObjects or ebpf.CollectionSpec.LoadAndAssign.
 type processExecPrograms struct {
 	HandleSchedProcessExec *ebpf.Program `ebpf:"handle_sched_process_exec"`
+	HandleSchedProcessExit *ebpf.Program `ebpf:"handle_sched_process_exit"`
 }
 
 func (p *processExecPrograms) Close() error {
 	return _ProcessExecClose(
 		p.HandleSchedProcessExec,
+		p.HandleSchedProcessExit,
 	)
 }
 

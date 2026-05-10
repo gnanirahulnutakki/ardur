@@ -1,7 +1,7 @@
 //go:build ignore
 
 // This source is compiled by bpf2go into embedded eBPF object files.
-// It intentionally captures only process exec lifecycle metadata for the
+// It intentionally captures process exec/exit lifecycle metadata for the
 // Phase 2 local MVP; it does not collect argv, env, file contents, or network
 // destinations.
 
@@ -11,6 +11,7 @@
 #include <bpf/bpf_core_read.h>
 
 #define ARDUR_EVENT_EXEC 1
+#define ARDUR_EVENT_EXIT 2
 
 struct ns_common {
     unsigned int inum;
@@ -28,6 +29,7 @@ struct task_struct {
     struct task_struct *real_parent;
     struct nsproxy *nsproxy;
     unsigned int tgid;
+    int exit_code;
 } __attribute__((preserve_access_index));
 
 struct ardur_process_event {
@@ -48,8 +50,7 @@ struct {
     __uint(max_entries, 1 << 12);
 } events SEC(".maps");
 
-SEC("tracepoint/sched/sched_process_exec")
-int handle_sched_process_exec(void *ctx) {
+static __always_inline int submit_process_event(__u8 event_type) {
     struct ardur_process_event *event;
     __u64 pid_tgid;
     struct task_struct *task;
@@ -65,7 +66,7 @@ int handle_sched_process_exec(void *ctx) {
     __builtin_memset(event, 0, sizeof(*event));
 
     pid_tgid = bpf_get_current_pid_tgid();
-    event->event_type = ARDUR_EVENT_EXEC;
+    event->event_type = event_type;
     event->monotonic_ns = bpf_ktime_get_ns();
     event->pid = pid_tgid >> 32;
     event->tid = (__u32)pid_tgid;
@@ -85,10 +86,23 @@ int handle_sched_process_exec(void *ctx) {
                 event->pid_namespace_id = BPF_CORE_READ(pidns, ns.inum);
             }
         }
+        if (event_type == ARDUR_EVENT_EXIT) {
+            event->exit_code = BPF_CORE_READ(task, exit_code);
+        }
     }
 
     bpf_ringbuf_submit(event, 0);
     return 0;
+}
+
+SEC("tracepoint/sched/sched_process_exec")
+int handle_sched_process_exec(void *ctx) {
+    return submit_process_event(ARDUR_EVENT_EXEC);
+}
+
+SEC("tracepoint/sched/sched_process_exit")
+int handle_sched_process_exit(void *ctx) {
+    return submit_process_event(ARDUR_EVENT_EXIT);
 }
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";

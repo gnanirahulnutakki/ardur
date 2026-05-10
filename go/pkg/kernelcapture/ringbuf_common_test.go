@@ -2,6 +2,7 @@ package kernelcapture
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
@@ -113,5 +114,47 @@ func TestApplyRingbufCaptureLossNoopOnNonLossError(t *testing.T) {
 	}
 	if eventCtx.CaptureLoss.RingbufDropped != 0 || eventCtx.CaptureLoss.DaemonQueueDropped != 0 {
 		t.Fatalf("expected zero loss counters, got %+v", eventCtx.CaptureLoss)
+	}
+}
+
+func TestDecodeRingbufRecordExitIncludesExitCode(t *testing.T) {
+	t.Parallel()
+
+	raw := make([]byte, ringbufRecordMinSize)
+	raw[0] = 2
+	binary.LittleEndian.PutUint64(raw[8:16], 9_900_000_000)
+	binary.LittleEndian.PutUint32(raw[16:20], 5151)
+	binary.LittleEndian.PutUint32(raw[20:24], 5000)
+	binary.LittleEndian.PutUint32(raw[24:28], 5151)
+	binary.LittleEndian.PutUint32(raw[28:32], 4026531836)
+	binary.LittleEndian.PutUint64(raw[32:40], 777)
+	exitCode := int32(-13)
+	binary.LittleEndian.PutUint32(raw[40:44], uint32(exitCode))
+	copy(raw[44:60], []byte("python3"))
+
+	evt, err := decodeRingbufRecord(raw)
+	if err != nil {
+		t.Fatalf("decodeRingbufRecord error: %v", err)
+	}
+	if evt.Type != ProcessEventExit {
+		t.Fatalf("type = %q, want exit", evt.Type)
+	}
+	if evt.ExitCode != -13 {
+		t.Fatalf("exit_code = %d, want -13", evt.ExitCode)
+	}
+	if evt.PID != 5151 || evt.PPID != 5000 || evt.TID != 5151 {
+		t.Fatalf("unexpected pid tuple: pid=%d ppid=%d tid=%d", evt.PID, evt.PPID, evt.TID)
+	}
+	if evt.PIDNamespaceID != 4026531836 {
+		t.Fatalf("pid_namespace_id = %d, want 4026531836", evt.PIDNamespaceID)
+	}
+	if evt.CgroupID != 777 {
+		t.Fatalf("cgroup_id = %d, want 777", evt.CgroupID)
+	}
+	if evt.ObservedMonotonicNS != 9_900_000_000 {
+		t.Fatalf("observed_monotonic_ns = %d, want 9900000000", evt.ObservedMonotonicNS)
+	}
+	if evt.Comm != "python3" {
+		t.Fatalf("comm = %q, want python3", evt.Comm)
 	}
 }

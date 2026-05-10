@@ -65,6 +65,60 @@ func TestCorrelateExecEventProducesCompliantReceiptWhenCorrelationIsClear(t *tes
 	}
 }
 
+func TestCorrelateExitEventProducesCompliantReceiptWhenCorrelationIsClear(t *testing.T) {
+	t.Parallel()
+
+	now := time.Unix(1_778_200_050, 0).UTC()
+	c := NewCorrelator(CorrelatorOptions{
+		Platform:       "linux",
+		CaptureBackend: "linux_ebpf",
+	})
+	c.RegisterReceipt(ToolReceipt{
+		ReceiptID:               "receipt:tool-exit-1",
+		SessionID:               "session-a",
+		PID:                     6001,
+		PIDNamespaceID:          4026531836,
+		ProcessStartMonotonicNS: 9_200_000_000,
+		CgroupID:                88,
+		SpanStart:               now.Add(-200 * time.Millisecond),
+		SpanEnd:                 now.Add(200 * time.Millisecond),
+		ObservedAt:              now.Add(-100 * time.Millisecond),
+	})
+
+	receipt := c.Correlate(ProcessEvent{
+		EventID:                 "evt-exit-1",
+		SessionID:               "session-a",
+		Type:                    ProcessEventExit,
+		PID:                     6001,
+		PPID:                    5999,
+		TID:                     6001,
+		PIDNamespaceID:          4026531836,
+		ProcessStartMonotonicNS: 9_200_000_000,
+		CgroupID:                88,
+		Comm:                    "python3",
+		ObservedAt:              now,
+	}, EventContext{})
+
+	if receipt.KernelEventType != "exit" {
+		t.Fatalf("kernel_event_type = %q, want exit", receipt.KernelEventType)
+	}
+	if receipt.CorrelationMethod != "explicit_pid" {
+		t.Fatalf("correlation_method = %q, want explicit_pid", receipt.CorrelationMethod)
+	}
+	if receipt.CorrelationConfidence != "high" {
+		t.Fatalf("correlation_confidence = %q, want high", receipt.CorrelationConfidence)
+	}
+	if receipt.CoverageStatus != "complete" {
+		t.Fatalf("coverage_status = %q, want complete", receipt.CoverageStatus)
+	}
+	if receipt.CausedByReceiptID != "receipt:tool-exit-1" {
+		t.Fatalf("caused_by_receipt_id = %q, want receipt:tool-exit-1", receipt.CausedByReceiptID)
+	}
+	if receipt.Verdict != "compliant" {
+		t.Fatalf("verdict = %q, want compliant", receipt.Verdict)
+	}
+}
+
 func TestCorrelateEventMarksAmbiguousAttributionAsInsufficientEvidence(t *testing.T) {
 	t.Parallel()
 

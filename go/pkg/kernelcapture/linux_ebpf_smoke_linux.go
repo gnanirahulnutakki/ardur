@@ -16,7 +16,10 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-const linuxEBPFExecTracepoint = "sched/sched_process_exec"
+const (
+	linuxEBPFExecTracepoint = "sched/sched_process_exec"
+	linuxEBPFExitTracepoint = "sched/sched_process_exit"
+)
 
 // LinuxEBPFExecSmokeOptions configures the narrow Phase 2 eBPF MVP smoke.
 type LinuxEBPFExecSmokeOptions struct {
@@ -29,19 +32,24 @@ type LinuxEBPFExecSmokeOptions struct {
 // LinuxEBPFExecSmokeResult is intentionally small and metadata-only. It is a
 // local proof artifact, not a production daemon receipt.
 type LinuxEBPFExecSmokeResult struct {
-	Platform           string
-	KernelRelease      string
-	BTFAvailable       bool
-	AttachedTracepoint string
-	Command            []string
-	ObservedEvents     int
-	Event              ProcessEvent
-	Receipt            SyntheticKernelReceipt
+	Platform            string
+	KernelRelease       string
+	BTFAvailable        bool
+	AttachedTracepoint  string
+	AttachedTracepoints []string
+	Command             []string
+	ObservedEvents      int
+	Event               ProcessEvent
+	Receipt             SyntheticKernelReceipt
+	ExecEvent           ProcessEvent
+	ExitEvent           ProcessEvent
+	Receipts            []SyntheticKernelReceipt
 }
 
-// RunLinuxEBPFExecSmoke loads the generated process-exec eBPF producer, attaches
-// a tracepoint, runs one deterministic command, reads its ringbuf sample, and
-// projects the sample through the existing correlation/receipt logic.
+// RunLinuxEBPFExecSmoke loads the generated process lifecycle eBPF producer,
+// attaches exec/exit tracepoints, runs one deterministic command, reads scoped
+// ringbuf samples, and projects them through the existing correlation/receipt
+// logic.
 //
 // This function requires a Linux host/container with privileges sufficient to
 // load eBPF programs. It does not install a daemon, persist maps, expose a
@@ -75,11 +83,17 @@ func RunLinuxEBPFExecSmoke(ctx context.Context, opts LinuxEBPFExecSmokeOptions) 
 	}
 	defer objs.Close()
 
-	tp, err := link.Tracepoint("sched", "sched_process_exec", objs.HandleSchedProcessExec, nil)
+	execTP, err := link.Tracepoint("sched", "sched_process_exec", objs.HandleSchedProcessExec, nil)
 	if err != nil {
 		return nil, fmt.Errorf("attach %s tracepoint: %w", linuxEBPFExecTracepoint, err)
 	}
-	defer tp.Close()
+	defer execTP.Close()
+
+	exitTP, err := link.Tracepoint("sched", "sched_process_exit", objs.HandleSchedProcessExit, nil)
+	if err != nil {
+		return nil, fmt.Errorf("attach %s tracepoint: %w", linuxEBPFExitTracepoint, err)
+	}
+	defer exitTP.Close()
 
 	reader, err := ringbuf.NewReader(objs.Events)
 	if err != nil {
@@ -88,58 +102,92 @@ func RunLinuxEBPFExecSmoke(ctx context.Context, opts LinuxEBPFExecSmokeOptions) 
 	source := &RingbufProcessSource{reader: &linuxRingbufReader{reader: reader}, closeFn: reader.Close}
 	defer source.Close()
 
-	cmd := exec.CommandContext(ctx, opts.Command, opts.Args...)
+	smokeCtx, cancelSmoke := context.WithTimeout(ctx, opts.Timeout)
+	defer cancelSmoke()
+
+	cmd := exec.CommandContext(smokeCtx, opts.Command, opts.Args...)
 	spanStart := time.Now().UTC().Add(-250 * time.Millisecond)
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start smoke command %q: %w", opts.Command, err)
 	}
 	targetPID := uint32(cmd.Process.Pid)
+	scope := SessionScope{PIDs: map[uint32]struct{}{targetPID: {}}}
 
-	readCtx, cancel := context.WithTimeout(ctx, opts.Timeout)
-	defer cancel()
-	evt, ok, readErr := source.Next(readCtx, SessionScope{PIDs: map[uint32]struct{}{targetPID: {}}})
+	var execEvent ProcessEvent
+	var exitEvent ProcessEvent
+	haveExec := false
+	haveExit := false
+	var readErr error
+
+	for !(haveExec && haveExit) {
+		evt, ok, err := source.Next(smokeCtx, scope)
+		if err != nil {
+			readErr = err
+			break
+		}
+		if !ok {
+			continue
+		}
+		evt.SessionID = opts.SessionID
+		evt.ObservedAt = time.Now().UTC()
+		evt.EventID = fmt.Sprintf("kernel-%s:%d:%d", evt.Type, evt.PID, evt.ObservedMonotonicNS)
+
+		switch evt.Type {
+		case ProcessEventExec:
+			if !haveExec {
+				execEvent = evt
+				haveExec = true
+			}
+		case ProcessEventExit:
+			if !haveExit {
+				exitEvent = evt
+				haveExit = true
+			}
+		}
+	}
+
 	waitErr := cmd.Wait()
 	if readErr != nil {
-		return nil, fmt.Errorf("read eBPF ringbuf event for pid %d: %w", targetPID, readErr)
+		return nil, fmt.Errorf("read eBPF ringbuf lifecycle event for pid %d: %w", targetPID, readErr)
 	}
-	if !ok {
-		return nil, fmt.Errorf("no scoped eBPF exec event observed for pid %d", targetPID)
+	if !haveExec || !haveExit {
+		return nil, fmt.Errorf("no scoped eBPF lifecycle exec+exit observed for pid %d (exec=%t exit=%t)", targetPID, haveExec, haveExit)
 	}
 	if waitErr != nil {
 		return nil, fmt.Errorf("smoke command %q failed after event capture: %w", opts.Command, waitErr)
 	}
-
-	eventWall := time.Now().UTC()
-	evt.EventID = fmt.Sprintf("kernel-exec:%d:%d", evt.PID, evt.ObservedMonotonicNS)
-	evt.SessionID = opts.SessionID
-	evt.ObservedAt = eventWall
 
 	correlator := NewCorrelator(CorrelatorOptions{
 		Platform:       "linux",
 		CaptureBackend: "linux_ebpf",
 	})
 	correlator.RegisterReceipt(ToolReceipt{
-		ReceiptID:      fmt.Sprintf("tool:phase2-smoke:%d", evt.PID),
+		ReceiptID:      fmt.Sprintf("tool:phase2-smoke:%d", execEvent.PID),
 		SessionID:      opts.SessionID,
-		PID:            evt.PID,
-		PIDNamespaceID: evt.PIDNamespaceID,
-		CgroupID:       evt.CgroupID,
+		PID:            execEvent.PID,
+		PIDNamespaceID: execEvent.PIDNamespaceID,
+		CgroupID:       execEvent.CgroupID,
 		SpanStart:      spanStart,
-		SpanEnd:        eventWall.Add(250 * time.Millisecond),
+		SpanEnd:        time.Now().UTC().Add(250 * time.Millisecond),
 		ObservedAt:     spanStart,
 	})
-	receipt := correlator.Correlate(evt, EventContext{})
+	execReceipt := correlator.Correlate(execEvent, EventContext{})
+	exitReceipt := correlator.Correlate(exitEvent, EventContext{})
 
 	command := append([]string{opts.Command}, opts.Args...)
 	return &LinuxEBPFExecSmokeResult{
-		Platform:           "linux",
-		KernelRelease:      strings.TrimSpace(string(kernelRelease)),
-		BTFAvailable:       btfAvailable,
-		AttachedTracepoint: linuxEBPFExecTracepoint,
-		Command:            command,
-		ObservedEvents:     1,
-		Event:              evt,
-		Receipt:            receipt,
+		Platform:            "linux",
+		KernelRelease:       strings.TrimSpace(string(kernelRelease)),
+		BTFAvailable:        btfAvailable,
+		AttachedTracepoint:  linuxEBPFExecTracepoint,
+		AttachedTracepoints: []string{linuxEBPFExecTracepoint, linuxEBPFExitTracepoint},
+		Command:             command,
+		ObservedEvents:      2,
+		Event:               execEvent,
+		Receipt:             execReceipt,
+		ExecEvent:           execEvent,
+		ExitEvent:           exitEvent,
+		Receipts:            []SyntheticKernelReceipt{execReceipt, exitReceipt},
 	}, nil
 }
 
