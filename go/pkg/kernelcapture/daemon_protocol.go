@@ -221,7 +221,7 @@ func containsPrivilegedDaemonProtocolField(value any) bool {
 	for key, nested := range obj {
 		switch strings.ToLower(key) {
 		case "config_path", "state_dir", "run_dir", "socket_path", "bpffs_dir", "ringbuf_map_path", "pinned_map_path", "map_path",
-			"peer_uid", "peer_gid", "peer_pid", "peer_credentials", "so_peercred", "ucred":
+			"peer_uid", "peer_gid", "peer_pid", "peer_credentials", "so_peercred", "linux_so_peercred", "ucred", "credential_source":
 			return true
 		default:
 			if containsPrivilegedDaemonProtocolField(nested) {

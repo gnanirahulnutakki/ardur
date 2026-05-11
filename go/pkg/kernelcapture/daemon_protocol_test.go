@@ -163,6 +163,14 @@ func TestDaemonProtocolRejectsRawPrivilegedPathFields(t *testing.T) {
 			name: "mixed case so peercred",
 			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"health","health":{},"So_PeerCred":{"uid":501}}` + "\n"),
 		},
+		{
+			name: "credential source",
+			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"register_session","register_session":{"session_id":"session-1","event_classes":["process_lifecycle"],"ttl_seconds":60,"credential_source":"linux_so_peercred"}}` + "\n"),
+		},
+		{
+			name: "mixed case credential source",
+			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"health","health":{},"Credential_Source":"linux_so_peercred"}` + "\n"),
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
