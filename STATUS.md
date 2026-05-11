@@ -40,7 +40,10 @@ caveat list, and [`ROADMAP.md`](ROADMAP.md) for the phase plan.
 - bootstrap and local-validation scripts ship under `scripts/` (`conductor-bootstrap.sh`, `setup-dev.sh`, `check-local.sh`)
 - agent-specific public guides live under `docs/agent-instructions/` (Conductor, Codex, Claude, plus a shared contract)
 - new technical reference pages live under `docs/reference/` (CLI, Personal Hub HTTP API, `ARDUR.md` profile format)
-- selected archival walkthrough recordings are public starter media; a re-runnable proof path lands with the next media drop — see `MEDIA.md`
+- selected archival walkthrough recordings are public starter media; the Claude
+  Code MVP path also has a re-runnable no-key evidence harness and
+  `bundle.redacted.json` reader guide. Re-runnable proof media remains in
+  progress — see `MEDIA.md` and `docs/guides/read-phase1-evidence-bundle.md`
 - a public audit trail is maintained under `docs/audit/`, mirroring the GitHub Code Scanning dismissal record
 - the journey-log article series (`docs/articles/`) ships Article 05 (Proof Media That Actually Means Something) and Article 06 (Public Import Discipline) as first-wave entries
 
@@ -48,7 +51,9 @@ caveat list, and [`ROADMAP.md`](ROADMAP.md) for the phase plan.
 
 - runnable OpenAI Agents SDK and Google ADK adapter lifts to replace the current deferred-spec READMEs
 - Codex hooks and Claude Desktop MCP packaging as separate next-cycle integrations
-- re-runnable public proof media — recordings made against the public runtime with stable verifier commands and artifact paths
+- re-runnable public proof media — recordings made against the public runtime
+  with stable verifier commands and artifact paths; this is separate from the
+  current no-key JSON evidence harness
 - a tagged release with a regenerated Homebrew formula carrying Python resource stanzas, so non-technical users can install Ardur Personal without a source checkout
 - conformance test vectors (`docs/specs/conformance/`) — the v0.1 specs reference them by private layout; they are not yet imported into the public tree
 - broader deployment material beyond the SPIRE design surface

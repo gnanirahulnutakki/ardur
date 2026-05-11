@@ -2,7 +2,7 @@
 title: "Claude Code MVP Quickstart"
 description: "This is the shortest product-facing path through Ardur today from a source"
 source_path: "docs/guides/claude-code-mvp-quickstart.md"
-source_sha256: "873d3b3d33f16e8dc02741b48e183e8d71ef0638e3606ea084a0eeff4b66e448"
+source_sha256: "a6b0b041f7c0f506aa74b28c13c0bd27c5edc2808fd16d8d1a14cb0d7ea1504c"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -79,6 +79,10 @@ Expected result for a clean source checkout:
 - `secret_scan_hits` is `0`
 - `raw_secret_values_copied` is `false`
 
+For field-by-field interpretation, including which public claims a no-key
+bundle can support, read
+[`docs/guides/read-phase1-evidence-bundle.md`](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/).
+
 ## 3. Run a live Claude Code session
 
 Only run this if `claude` is already installed and logged in. The demo creates a
@@ -125,6 +129,7 @@ coverage, or package-manager release readiness.
 Related references:
 
 - [`plugins/claude-code/README.md`](/__ardur_internal__/source/plugins/claude-code/readme/)
+- [`docs/guides/read-phase1-evidence-bundle.md`](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/)
 - [`docs/reference/cli.md`](/__ardur_internal__/source/docs/reference/cli/)
 - [`docs/reference/ardur-md-profile.md`](/__ardur_internal__/source/docs/reference/ardur-md-profile/)
 - [`docs/coverage-map.md`](/__ardur_internal__/source/docs/coverage-map/)

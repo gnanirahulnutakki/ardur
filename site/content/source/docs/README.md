@@ -2,7 +2,7 @@
 title: "Docs"
 description: "This repo is opening in phases."
 source_path: "docs/README.md"
-source_sha256: "5dba5c5fea03d1a4aad61a5a109f1f0ea95d57353482224dc26847b2f8632cf2"
+source_sha256: "e502ea9001e79f607b012bb26eac1192b9804d1bc06cb9b1488a128ba791b2a7"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -29,6 +29,9 @@ readiness and broader host coverage remain in follow-on phases.
 - [Claude Code MVP Quickstart](/__ardur_internal__/source/docs/guides/claude-code-mvp-quickstart/) — source
   checkout setup, no-key fresh-user evidence harness, live-Claude demo path, and
   claim boundary
+- [Read The Phase 1 Evidence Bundle](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/) —
+  how to interpret `bundle.redacted.json`, RWT gate semantics, redaction checks,
+  and the claims a no-key run does and does not support
 - [Security Model](/__ardur_internal__/source/docs/security-model/)
 - [Known Limitations](/__ardur_internal__/source/docs/known-limitations/)
 - [Protocol Roots](/__ardur_internal__/source/docs/protocol-roots/)
@@ -49,5 +52,8 @@ readiness and broader host coverage remain in follow-on phases.
 
 1. Read the root [README](/__ardur_internal__/source/readme/).
 2. Check [STATUS](/__ardur_internal__/source/status/) for what is public now versus still in flight.
-3. Use [MEDIA](/__ardur_internal__/source/media-notes/) for example recordings and context on the current
+3. Run the quickstart harness, then use the
+   [evidence-bundle guide](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/) to read the
+   resulting `bundle.redacted.json` honestly.
+4. Use [MEDIA](/__ardur_internal__/source/media-notes/) for example recordings and context on the current
    implementation lineage.

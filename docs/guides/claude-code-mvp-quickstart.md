@@ -62,6 +62,10 @@ Expected result for a clean source checkout:
 - `secret_scan_hits` is `0`
 - `raw_secret_values_copied` is `false`
 
+For field-by-field interpretation, including which public claims a no-key
+bundle can support, read
+[`docs/guides/read-phase1-evidence-bundle.md`](read-phase1-evidence-bundle.md).
+
 ## 3. Run a live Claude Code session
 
 Only run this if `claude` is already installed and logged in. The demo creates a
@@ -108,6 +112,7 @@ coverage, or package-manager release readiness.
 Related references:
 
 - [`plugins/claude-code/README.md`](../../plugins/claude-code/README.md)
+- [`docs/guides/read-phase1-evidence-bundle.md`](read-phase1-evidence-bundle.md)
 - [`docs/reference/cli.md`](../reference/cli.md)
 - [`docs/reference/ardur-md-profile.md`](../reference/ardur-md-profile.md)
 - [`docs/coverage-map.md`](../coverage-map.md)
