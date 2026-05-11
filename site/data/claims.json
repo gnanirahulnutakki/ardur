@@ -47,6 +47,24 @@
       ]
     },
     {
+      "id": "phase1-no-key-bundle",
+      "title": "The Phase 1 no-key bundle is the current rerunnable Claude Code MVP proof",
+      "body": "The fresh-user harness writes a redacted bundle that exercises source checkout setup, ARDUR.md profile creation, Claude Code protection, simulated allow/deny hook receipts, report verification, redaction checks, and explicit claim mapping. It supports a no-key local tool-boundary claim, not a live-Claude, package-release, eBPF, or universal-CLI claim.",
+      "evidence_level": "code-and-doc",
+      "maturity": "public-now",
+      "claim_type": "evidence-semantics",
+      "surface": ["docs", "python", "scripts"],
+      "framework": ["claude-code", "framework-agnostic"],
+      "source_paths": [
+        "docs/guides/claude-code-mvp-quickstart.md",
+        "docs/guides/read-phase1-evidence-bundle.md",
+        "docs/guides/phase1-demo-packet.md",
+        "scripts/run-rwt-phase1-fresh-user.py",
+        "python/tests/test_real_world_harness_contract.py",
+        "plugins/claude-code/README.md"
+      ]
+    },
+    {
       "id": "archival-media",
       "title": "Starter media is archival, not yet a rerunnable public proof path",
       "body": "The included casts show the product direction, but the repo explicitly marks them archival until verifier commands and artifact paths are public and re-recorded from this tree.",

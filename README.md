@@ -14,7 +14,7 @@ and the public Hugo evidence site. Re-runnable proof media, full packaging,
 and production deployment material are still being tightened before they are
 presented as release-ready.
 
-[Research](RESEARCH.md) · [Status](STATUS.md) · [Coverage Map](docs/coverage-map.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Read the Phase 1 Evidence Bundle](docs/guides/read-phase1-evidence-bundle.md) · [Evidence Site Source](site/README.md)
+[Research](RESEARCH.md) · [Status](STATUS.md) · [Coverage Map](docs/coverage-map.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Phase 1 Demo Packet](docs/guides/phase1-demo-packet.md) · [Read the Phase 1 Evidence Bundle](docs/guides/read-phase1-evidence-bundle.md) · [Evidence Site Source](site/README.md)
 
 ## Fastest MVP Path: Claude Code
 
@@ -31,6 +31,11 @@ It gives two bounded paths:
 That guide also separates **Works now**, **Not claimed**, and **Coming soon** so
 Ardur stays honest about package-manager release status, provider-hidden
 behavior, and subprocess/kernel/network side-effect gaps.
+
+After a run, use the
+[`Phase 1 Demo Packet`](docs/guides/phase1-demo-packet.md) to assemble a bounded
+handoff: tested commit, `bundle.redacted.json`, optional live-Claude report, and
+the exact claims the artifacts do and do not support.
 
 > **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
 > invocation. Side effects below the tool boundary — subprocess trees,

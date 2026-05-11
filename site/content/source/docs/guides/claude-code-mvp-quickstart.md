@@ -2,7 +2,7 @@
 title: "Claude Code MVP Quickstart"
 description: "This is the shortest product-facing path through Ardur today from a source"
 source_path: "docs/guides/claude-code-mvp-quickstart.md"
-source_sha256: "a6b0b041f7c0f506aa74b28c13c0bd27c5edc2808fd16d8d1a14cb0d7ea1504c"
+source_sha256: "b0a5fc5821168cbda4efe074fcaf4a6a60be5ea425e012a56aef83d1c5839a08"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -82,6 +82,8 @@ Expected result for a clean source checkout:
 For field-by-field interpretation, including which public claims a no-key
 bundle can support, read
 [`docs/guides/read-phase1-evidence-bundle.md`](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/).
+For a compact reviewer/demo handoff after the run, use
+[`docs/guides/phase1-demo-packet.md`](/__ardur_internal__/source/docs/guides/phase1-demo-packet/).
 
 ## 3. Run a live Claude Code session
 
@@ -129,6 +131,7 @@ coverage, or package-manager release readiness.
 Related references:
 
 - [`plugins/claude-code/README.md`](/__ardur_internal__/source/plugins/claude-code/readme/)
+- [`docs/guides/phase1-demo-packet.md`](/__ardur_internal__/source/docs/guides/phase1-demo-packet/)
 - [`docs/guides/read-phase1-evidence-bundle.md`](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/)
 - [`docs/reference/cli.md`](/__ardur_internal__/source/docs/reference/cli/)
 - [`docs/reference/ardur-md-profile.md`](/__ardur_internal__/source/docs/reference/ardur-md-profile/)

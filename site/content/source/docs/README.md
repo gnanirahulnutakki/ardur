@@ -2,7 +2,7 @@
 title: "Docs"
 description: "This repo is opening in phases."
 source_path: "docs/README.md"
-source_sha256: "e502ea9001e79f607b012bb26eac1192b9804d1bc06cb9b1488a128ba791b2a7"
+source_sha256: "2fa06dbe1b03c280a05e83b25ab0bac916b57bfbca1fa8c278dfcee0a0322ffd"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -32,6 +32,9 @@ readiness and broader host coverage remain in follow-on phases.
 - [Read The Phase 1 Evidence Bundle](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/) —
   how to interpret `bundle.redacted.json`, RWT gate semantics, redaction checks,
   and the claims a no-key run does and does not support
+- [Phase 1 Demo Packet](/__ardur_internal__/source/docs/guides/phase1-demo-packet/) — a compact handoff for
+  the current source-checkout Claude Code MVP proof path, including artifacts to
+  attach and claims to avoid
 - [Security Model](/__ardur_internal__/source/docs/security-model/)
 - [Known Limitations](/__ardur_internal__/source/docs/known-limitations/)
 - [Protocol Roots](/__ardur_internal__/source/docs/protocol-roots/)
@@ -55,5 +58,7 @@ readiness and broader host coverage remain in follow-on phases.
 3. Run the quickstart harness, then use the
    [evidence-bundle guide](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/) to read the
    resulting `bundle.redacted.json` honestly.
-4. Use [MEDIA](/__ardur_internal__/source/media-notes/) for example recordings and context on the current
+4. Use the [Phase 1 Demo Packet](/__ardur_internal__/source/docs/guides/phase1-demo-packet/) when you need a
+   concise demo or reviewer handoff from that run.
+5. Use [MEDIA](/__ardur_internal__/source/media-notes/) for example recordings and context on the current
    implementation lineage.

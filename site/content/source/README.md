@@ -2,7 +2,7 @@
 title: "Ardur"
 description: "Ardur is the runtime governance and evidence layer for AI agents."
 source_path: "README.md"
-source_sha256: "19b002589c9ab2be869e5c491efbc200d0c4e37b9ecfb9d87ce75566934cb48c"
+source_sha256: "54d10e881945d49ff0d1445860f081feb9afe4f77bdcd8b8d8f4774a20964a79"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["orientation", "runtime-boundary"]
@@ -31,7 +31,7 @@ and the public Hugo evidence site. Re-runnable proof media, full packaging,
 and production deployment material are still being tightened before they are
 presented as release-ready.
 
-[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Read the Phase 1 Evidence Bundle](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
+[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Phase 1 Demo Packet](/__ardur_internal__/source/docs/guides/phase1-demo-packet/) · [Read the Phase 1 Evidence Bundle](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
 
 ## Fastest MVP Path: Claude Code
 
@@ -48,6 +48,11 @@ It gives two bounded paths:
 That guide also separates **Works now**, **Not claimed**, and **Coming soon** so
 Ardur stays honest about package-manager release status, provider-hidden
 behavior, and subprocess/kernel/network side-effect gaps.
+
+After a run, use the
+[`Phase 1 Demo Packet`](/__ardur_internal__/source/docs/guides/phase1-demo-packet/) to assemble a bounded
+handoff: tested commit, `bundle.redacted.json`, optional live-Claude report, and
+the exact claims the artifacts do and do not support.
 
 > **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
 > invocation. Side effects below the tool boundary — subprocess trees,

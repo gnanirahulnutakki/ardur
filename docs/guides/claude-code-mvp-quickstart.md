@@ -65,6 +65,8 @@ Expected result for a clean source checkout:
 For field-by-field interpretation, including which public claims a no-key
 bundle can support, read
 [`docs/guides/read-phase1-evidence-bundle.md`](read-phase1-evidence-bundle.md).
+For a compact reviewer/demo handoff after the run, use
+[`docs/guides/phase1-demo-packet.md`](phase1-demo-packet.md).
 
 ## 3. Run a live Claude Code session
 
@@ -112,6 +114,7 @@ coverage, or package-manager release readiness.
 Related references:
 
 - [`plugins/claude-code/README.md`](../../plugins/claude-code/README.md)
+- [`docs/guides/phase1-demo-packet.md`](phase1-demo-packet.md)
 - [`docs/guides/read-phase1-evidence-bundle.md`](read-phase1-evidence-bundle.md)
 - [`docs/reference/cli.md`](../reference/cli.md)
 - [`docs/reference/ardur-md-profile.md`](../reference/ardur-md-profile.md)
