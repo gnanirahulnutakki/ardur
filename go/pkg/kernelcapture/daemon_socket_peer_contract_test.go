@@ -51,8 +51,8 @@ func TestAuthorizeDaemonProtocolPeerBindsObservedCredentialsToRequest(t *testing
 	if !containsText(handshake.ClaimBoundary, "no socket is opened, bound, listened on, or accepted") {
 		t.Fatalf("claim boundary missing no-socket guardrail: %#v", handshake.ClaimBoundary)
 	}
-	if !containsText(handshake.NotClaimed, "peer-credential syscall retrieval implementation") {
-		t.Fatalf("not-claimed list missing retrieval boundary: %#v", handshake.NotClaimed)
+	if !containsText(handshake.NotClaimed, "daemon accept-loop wiring around SO_PEERCRED observations") {
+		t.Fatalf("not-claimed list missing accept-loop boundary: %#v", handshake.NotClaimed)
 	}
 }
 

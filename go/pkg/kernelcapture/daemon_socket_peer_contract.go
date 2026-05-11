@@ -19,8 +19,9 @@ var ErrDaemonSocketPeerObservation = errors.New("kernelcapture: invalid daemon s
 // with a decoded protocol request before any future socket server handles it.
 //
 // This is a contract type only: it does not open, bind, listen on, accept, or
-// inspect a Unix socket. Future platform-specific code is responsible for
-// populating Credentials from an OS peer-credential API such as SO_PEERCRED.
+// inspect a Unix socket. Platform-specific code, such as the Linux
+// ObserveLinuxUnixPeerCredentials seam, is responsible for populating
+// Credentials from an OS peer-credential API such as SO_PEERCRED.
 type DaemonSocketPeerObservation struct {
 	Credentials      DaemonObservedPeerCredentials
 	CredentialSource string
@@ -74,7 +75,7 @@ func AuthorizeDaemonProtocolPeer(req DaemonProtocolRequest, observation DaemonSo
 		},
 		NotClaimed: []string{
 			"socket server/listener implementation",
-			"peer-credential syscall retrieval implementation",
+			"daemon accept-loop wiring around SO_PEERCRED observations",
 			"production daemon readiness",
 			"daemon install/start or privileged filesystem mutation",
 		},
