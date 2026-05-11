@@ -23,8 +23,9 @@ This package is the Ardur Linux proof harness for process-exec capture with pair
 - Includes a local-only daemon custody scaffold and read-only preflight
   inspector for the future root-owned config/state/socket/bpffs boundary
   without installing, starting, binding, or pinning anything.
-- Defines the local JSON-line launch-wrapper-to-daemon protocol contract as
-  deterministic types/tests only; no server, listener, or socket bind exists.
+- Defines the local JSON-line launch-wrapper-to-daemon protocol contract and
+  daemon-observed peer authorization as deterministic types/tests only; no
+  server, listener, socket bind, or peer-credential syscall path exists.
 
 ## Capture sources
 
@@ -60,8 +61,13 @@ This package is the Ardur Linux proof harness for process-exec capture with pair
    - Specifies newline-delimited deterministic JSON for `health`, `register_session`, `end_session`, and `session_status`.
    - Accepts unprivileged session/mission/trace identity plus observed root PID, PID namespace, cgroup id, event class, and bounded TTL.
    - Rejects unknown protocol versions, unknown event classes, missing session ids, unbounded TTLs, trailing non-JSON data, and client-supplied daemon-owned privileged path fields.
-   - Applies the privileged-field guard recursively and case-insensitively so future clients cannot hide daemon-owned filesystem authority inside metadata.
-   - Keeps daemon-owned config/socket/bpffs paths out of client messages.
+   - Applies the daemon-controlled field guard recursively and case-insensitively so future clients cannot hide daemon-owned filesystem authority or OS-observed peer identity inside metadata.
+   - Keeps daemon-owned config/socket/bpffs paths and observed peer credentials out of client messages.
+
+7. `AuthorizeObservedDaemonPeer` (contract only)
+   - Authorizes daemon-observed local socket peer credentials against an explicit UID/GID allowlist.
+   - Fails closed when the daemon has no allowlist, when PID observation is missing, or when the observed UID/GID does not match policy.
+   - Does not retrieve peer credentials, open sockets, inspect process trees, or accept client-supplied identity.
 
 ## Generate the eBPF object
 
@@ -109,7 +115,7 @@ This package does not install a daemon, persist maps, open a service, or manage 
 - runtime dir/socket: `/run/ardur/kernelcapture/control.sock`, socket `0600` or `0660`, root-owned
 - bpffs dir/map: `/sys/fs/bpf/ardur/process_lifecycle_events`, root-owned
 
-It rejects repository-controlled privileged paths when repository-root validation context is supplied, and it rejects any request to install or start a daemon in this scaffold slice. `InspectDaemonCustodyPreflight` adds the read-only on-disk inspection layer: symlink-aware realpath checks, owner/mode/type observations, and structured remediation text. The scaffold records the future daemon-boundary requirement that repo/mission config must not select privileged map paths; integration with mission config remains future work. For the future daemon path:
+It rejects repository-controlled privileged paths when repository-root validation context is supplied, and it rejects any request to install or start a daemon in this scaffold slice. `InspectDaemonCustodyPreflight` adds the read-only on-disk inspection layer: symlink-aware realpath checks, owner/mode/type observations, and structured remediation text. `AuthorizeObservedDaemonPeer` adds the fail-closed local-client authorization contract for the future socket server: peer identity must be observed by daemon-owned socket code and matched against an explicit UID/GID allowlist, never supplied by JSON clients. The scaffold records the future daemon-boundary requirement that repo/mission config must not select privileged map paths; integration with mission config remains future work. For the future daemon path:
 
 - `pinnedMapPath` must come from daemon-owned privileged config.
 - Repository / mission config must not control privileged map-path selection.
@@ -129,13 +135,14 @@ It rejects repository-controlled privileged paths when repository-root validatio
 
 Allowed claim after the gated smoke passes:
 
-Ardur has a local Linux eBPF process-lifecycle proof with optional daemon-populated cgroup allowlist filtering, plus a no-mutation daemon custody preflight inspector and local JSON-line protocol contract scaffold for the future launch-wrapper-to-daemon boundary.
+Ardur has a local Linux eBPF process-lifecycle proof with optional daemon-populated cgroup allowlist filtering, plus a no-mutation daemon custody preflight inspector, fail-closed local peer authorization contract, and local JSON-line protocol contract scaffold for the future launch-wrapper-to-daemon boundary.
 
 Not claimed yet:
 
 - production daemon readiness
 - daemon installation or startup
 - socket server/listener implementation
+- peer-credential syscall retrieval or SO_PEERCRED integration
 - daemon-created per-session cgroups
 - universal CLI capture
 - file/network/privilege side-effect capture

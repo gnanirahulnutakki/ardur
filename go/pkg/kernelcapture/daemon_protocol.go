@@ -199,7 +199,7 @@ func rejectPrivilegedDaemonProtocolFields(data []byte) error {
 		return fmt.Errorf("%w: decode raw request: %v", ErrDaemonProtocol, err)
 	}
 	if containsPrivilegedDaemonProtocolField(raw) {
-		return fmt.Errorf("%w: client-supplied privileged daemon path fields are forbidden", ErrDaemonProtocol)
+		return fmt.Errorf("%w: client-supplied daemon-controlled path or peer identity fields are forbidden", ErrDaemonProtocol)
 	}
 	return nil
 }
@@ -220,7 +220,8 @@ func containsPrivilegedDaemonProtocolField(value any) bool {
 	}
 	for key, nested := range obj {
 		switch strings.ToLower(key) {
-		case "config_path", "state_dir", "run_dir", "socket_path", "bpffs_dir", "ringbuf_map_path", "pinned_map_path", "map_path":
+		case "config_path", "state_dir", "run_dir", "socket_path", "bpffs_dir", "ringbuf_map_path", "pinned_map_path", "map_path",
+			"peer_uid", "peer_gid", "peer_pid", "peer_credentials", "so_peercred", "ucred":
 			return true
 		default:
 			if containsPrivilegedDaemonProtocolField(nested) {

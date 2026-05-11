@@ -139,6 +139,30 @@ func TestDaemonProtocolRejectsRawPrivilegedPathFields(t *testing.T) {
 			name: "mixed case map path",
 			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"register_session","register_session":{"session_id":"session-1","event_classes":["process_lifecycle"],"ttl_seconds":60,"BpFfS_DiR":"/sys/fs/bpf/ardur"}}` + "\n"),
 		},
+		{
+			name: "nested peer identity",
+			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"register_session","register_session":{"session_id":"session-1","event_classes":["process_lifecycle"],"ttl_seconds":60,"peer_credentials":{"uid":501,"gid":20,"pid":1234}}}` + "\n"),
+		},
+		{
+			name: "explicit peer uid",
+			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"register_session","register_session":{"session_id":"session-1","event_classes":["process_lifecycle"],"ttl_seconds":60,"peer_uid":501}}` + "\n"),
+		},
+		{
+			name: "explicit peer gid",
+			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"register_session","register_session":{"session_id":"session-1","event_classes":["process_lifecycle"],"ttl_seconds":60,"peer_gid":20}}` + "\n"),
+		},
+		{
+			name: "explicit peer pid",
+			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"register_session","register_session":{"session_id":"session-1","event_classes":["process_lifecycle"],"ttl_seconds":60,"peer_pid":1234}}` + "\n"),
+		},
+		{
+			name: "ucred wrapper",
+			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"health","health":{},"ucred":{"uid":501}}` + "\n"),
+		},
+		{
+			name: "mixed case so peercred",
+			raw:  []byte(`{"protocol_version":"kernelcapture.daemon.v1","method":"health","health":{},"So_PeerCred":{"uid":501}}` + "\n"),
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
