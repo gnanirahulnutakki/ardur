@@ -245,3 +245,24 @@ func TestAuthorizeDaemonProtocolPeerKeepsPeerIdentityOutOfClientJSON(t *testing.
 		t.Fatalf("error should explain peer identity boundary, got %v", err)
 	}
 }
+
+func TestAuthorizeDaemonProtocolPeerFromAcceptedUnixConnectionRejectsMalformedPayload(t *testing.T) {
+	t.Parallel()
+
+	plan, err := BuildDaemonCustodyPlan(DefaultDaemonCustodyConfig())
+	if err != nil {
+		t.Fatalf("BuildDaemonCustodyPlan returned error: %v", err)
+	}
+
+	accepted, client, cleanup := acceptedUnixConnPair(t)
+	defer cleanup()
+	writeUnixRequestAndClose(t, client, `{"protocol_version":"kernelcapture.daemon.v1","method":"register_session","register_session"`)
+
+	_, err = AuthorizeDaemonProtocolPeerFromAcceptedUnixConnection(accepted, DaemonPeerAuthorizationPolicy{AllowedUIDs: []uint32{1}}, plan)
+	if err == nil {
+		t.Fatalf("expected malformed payload rejection")
+	}
+	if !errors.Is(err, ErrDaemonProtocol) {
+		t.Fatalf("expected ErrDaemonProtocol, got %v", err)
+	}
+}

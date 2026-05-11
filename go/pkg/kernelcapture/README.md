@@ -70,13 +70,20 @@ This package is the Ardur Linux proof harness for process-exec capture with pair
    - Fails closed when the daemon has no allowlist, when PID observation is missing, or when the observed UID/GID does not match policy.
    - Does not retrieve peer credentials, open sockets, inspect process trees, or accept client-supplied identity.
 
-8. `AuthorizeDaemonProtocolPeer` (contract only)
+8. `AuthorizeDaemonProtocolPeerFromAcceptedUnixConnection` (contract bridge)
+   - Reads exactly one request from an already-accepted `*net.UnixConn` and decodes it via `DecodeDaemonProtocolRequest`.
+   - Observes peer identity from the same connection via `ObserveLinuxUnixPeerCredentials` (Linux SO_PEERCRED seam).
+   - Joins request and peer credentials through `AuthorizeDaemonProtocolPeer` for fail-closed authorization before any future handler runs.
+   - Fails closed for malformed payloads, credential-observation failures, unsupported custody context, fabricated custody plans, or unauthorized peers.
+   - Does not bind, listen, accept, install/start, or mutate privileged filesystem state.
+
+9. `AuthorizeDaemonProtocolPeer` (contract only)
    - Joins a validated daemon protocol request to daemon-observed peer credentials before future socket handling.
    - Requires the observation source to be explicit (`linux_so_peercred` today) and the observed socket path to match the validated dry-run daemon custody plan.
    - Fails closed for invalid protocol messages, missing/unsupported credential sources, socket-path mismatches, invalid custody plans, or unauthorized UID/GID policy.
    - Does not open, bind, listen on, accept, or inspect a socket; it does not perform the peer-credential syscall itself.
 
-9. `ObserveLinuxUnixPeerCredentials` (Linux seam)
+10. `ObserveLinuxUnixPeerCredentials` (Linux seam)
    - Reads SO_PEERCRED from an already-open `*net.UnixConn` and returns the daemon-owned `DaemonSocketPeerObservation` used by the handshake contract.
    - Requires the caller to supply the daemon-owned socket path and records `linux_so_peercred` as the explicit credential source.
    - Fails closed for a nil connection, missing socket path, SO_PEERCRED errors, or missing peer PID.

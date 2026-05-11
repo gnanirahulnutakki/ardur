@@ -1,8 +1,11 @@
 package kernelcapture
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"strings"
 )
 
@@ -80,6 +83,55 @@ func AuthorizeDaemonProtocolPeer(req DaemonProtocolRequest, observation DaemonSo
 			"daemon install/start or privileged filesystem mutation",
 		},
 	}, nil
+}
+
+// AuthorizeDaemonProtocolPeerFromAcceptedUnixConnection is the no-listen bridge
+// from an already-accepted Unix socket connection into the peer authorization
+// contract. It intentionally does not bind/listen/accept sockets, install/start
+// a daemon, or mutate filesystem state.
+//
+// This helper decodes one protocol request from the accepted connection,
+// observes peer credentials from the same connection, and then calls
+// AuthorizeDaemonProtocolPeer.
+func AuthorizeDaemonProtocolPeerFromAcceptedUnixConnection(conn *net.UnixConn, policy DaemonPeerAuthorizationPolicy, plan DaemonCustodyPlan) (DaemonProtocolPeerHandshake, error) {
+	req, err := readDaemonProtocolRequestFromAcceptedUnixConnection(conn)
+	if err != nil {
+		return DaemonProtocolPeerHandshake{}, err
+	}
+	observation, err := ObserveLinuxUnixPeerCredentials(conn, plan.SocketPath)
+	if err != nil {
+		return DaemonProtocolPeerHandshake{}, fmt.Errorf("%w: peer credential retrieval failed: %v", ErrDaemonSocketPeerObservation, err)
+	}
+	return AuthorizeDaemonProtocolPeer(req, observation, policy, plan)
+}
+
+func readDaemonProtocolRequestFromAcceptedUnixConnection(conn *net.UnixConn) (DaemonProtocolRequest, error) {
+	raw, err := readUnixSocketLine(conn)
+	if err != nil {
+		return DaemonProtocolRequest{}, err
+	}
+	return DecodeDaemonProtocolRequest(raw)
+}
+
+func readUnixSocketLine(conn *net.UnixConn) ([]byte, error) {
+	if conn == nil {
+		return nil, fmt.Errorf("%w: accepted unix connection is required", ErrDaemonProtocol)
+	}
+	reader := bufio.NewReader(conn)
+	data, err := reader.ReadString('\n')
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			if strings.TrimSpace(data) == "" {
+				return nil, fmt.Errorf("%w: protocol request is required", ErrDaemonProtocol)
+			}
+			return []byte(data), nil
+		}
+		return nil, fmt.Errorf("%w: read protocol request: %v", ErrDaemonProtocol, err)
+	}
+	if strings.TrimSpace(data) == "" {
+		return nil, fmt.Errorf("%w: protocol request is required", ErrDaemonProtocol)
+	}
+	return []byte(data), nil
 }
 
 func validateDaemonSocketPeerObservation(observation DaemonSocketPeerObservation, plan DaemonCustodyPlan) error {
