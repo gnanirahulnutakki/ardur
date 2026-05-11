@@ -51,8 +51,9 @@ Required no-key signals:
 - `redaction.raw_secret_values_copied` is `false`.
 - `claim_mapping.supports_claims` contains the claim you intend to make.
 
-`RWT-3` can be `PASS`, `SKIP_GATED`, or `SKIP_UNSUPPORTED`. A skip is acceptable
-for a no-key confidence check; it is not a live-Claude pass.
+`RWT-3` is `SKIP_GATED` or `SKIP_UNSUPPORTED` in no-key/autonomous mode; it can
+be `BLOCKED` when local Claude preflight fails. A skip is acceptable for a
+no-key confidence check; it is not a live-Claude pass.
 
 ## 3. Optional live Claude Code proof
 

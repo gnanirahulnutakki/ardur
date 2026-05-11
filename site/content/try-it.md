@@ -31,7 +31,11 @@ issuance and verification without the Claude Code plugin.
 ```bash
 cd python
 pip install -e .
-ardur issue --from-file ../examples/missions/minimal-mission.json
+ardur issue \
+  --agent-id alice \
+  --mission "summarize sales from sales/q1.csv into reports/" \
+  --allowed-tools read_file write_report \
+  --resource-scope 'sales/*' 'reports/*'
 ardur verify --token '<token-from-issue-output>'
 ```
 

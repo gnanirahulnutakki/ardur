@@ -2,7 +2,7 @@
 title: "Phase 1 Demo Packet"
 description: "Use this packet after the [Claude Code MVP quickstart](claude-code-mvp-quickstart.md)"
 source_path: "docs/guides/phase1-demo-packet.md"
-source_sha256: "05f4f0aa09dfdc027832da39be0dec33bde0305c5935bb862d6c04dc61332f1f"
+source_sha256: "95a06538de26eeae1b3d2e0aae61aff9dd070902db0b473963d4fadb5f44be64"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -68,8 +68,9 @@ Required no-key signals:
 - `redaction.raw_secret_values_copied` is `false`.
 - `claim_mapping.supports_claims` contains the claim you intend to make.
 
-`RWT-3` can be `PASS`, `SKIP_GATED`, or `SKIP_UNSUPPORTED`. A skip is acceptable
-for a no-key confidence check; it is not a live-Claude pass.
+`RWT-3` is `SKIP_GATED` or `SKIP_UNSUPPORTED` in no-key/autonomous mode; it can
+be `BLOCKED` when local Claude preflight fails. A skip is acceptable for a
+no-key confidence check; it is not a live-Claude pass.
 
 ## 3. Optional live Claude Code proof
 
