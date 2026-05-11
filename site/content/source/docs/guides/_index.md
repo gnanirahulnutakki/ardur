@@ -16,3 +16,4 @@ This section lists hosted documentation and mirrored artifacts generated from `d
 ## Hosted Docs
 
 - [`ardur-personal-hub.md`](/__ardur_internal__/source/docs/guides/ardur-personal-hub/)
+- [`claude-code-mvp-quickstart.md`](/__ardur_internal__/source/docs/guides/claude-code-mvp-quickstart/)

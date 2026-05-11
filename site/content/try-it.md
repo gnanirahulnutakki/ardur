@@ -9,8 +9,22 @@ frameworks: ["framework-agnostic", "claude-code"]
 evidence_levels: ["code-and-doc"]
 ---
 
-The fastest current path does not require an LLM provider. It exercises the
-core protocol surface with a checked-in mission file.
+The fastest current path has two tracks:
+
+1. **No-key confidence check:** run the fresh-user evidence harness. It exercises
+   source/local-wheel install, `ARDUR.md`, `ardur protect claude-code`,
+   `ardur doctor-claude-code`, simulated Claude Code hook allow/deny receipts,
+   and `ardur claude-code-report` without contacting a live LLM provider.
+2. **Live Claude Code demo:** if the `claude` binary is already installed and
+   authenticated, run one protected local Claude Code session and inspect the
+   signed receipt chain.
+
+Start with the one-screen source-backed walkthrough:
+
+- {{< repo-link "docs/guides/claude-code-mvp-quickstart.md" "Claude Code MVP quickstart" >}}
+
+The protocol-only path below remains useful when you just want to check mission
+issuance and verification without the Claude Code plugin.
 
 ```bash
 cd python

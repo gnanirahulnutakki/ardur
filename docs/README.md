@@ -3,11 +3,15 @@
 This repo is opening in phases.
 
 These docs describe the public product direction and the engineering boundaries
-that are already stable enough to say out loud. Runnable code, proofs, and a
-tighter quickstart are landing in follow-on phases.
+that are already stable enough to say out loud. Runnable code and proof paths
+are present for the current Claude Code MVP path; package-manager release
+readiness and broader host coverage remain in follow-on phases.
 
 ## Available now
 
+- [Claude Code MVP Quickstart](guides/claude-code-mvp-quickstart.md) — source
+  checkout setup, no-key fresh-user evidence harness, live-Claude demo path, and
+  claim boundary
 - [Security Model](security-model.md)
 - [Known Limitations](known-limitations.md)
 - [Protocol Roots](protocol-roots.md)

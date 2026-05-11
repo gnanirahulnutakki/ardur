@@ -2,7 +2,7 @@
 title: "Ardur Claude Code Plugin"
 description: "This plugin protects Claude Code at the local tool boundary. `PreToolUse` runs"
 source_path: "plugins/claude-code/README.md"
-source_sha256: "7608fe2969efbacadba7f83c6f6fe66c0e44d9b751698d0c124a7635802b1185"
+source_sha256: "ed8084415397e0e0e577667278ef59e5be6a2926a507dc7b5406d0dee255453f"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -24,6 +24,10 @@ before a Claude Code tool executes: the adapter loads the active Ardur profile,
 maps the tool input to declared telemetry, evaluates the Mission Passport, and
 emits a signed receipt. If Ardur denies the call, the hook returns Claude Code's
 current `hookSpecificOutput.permissionDecision = "deny"` response.
+
+For the one-screen source-checkout walkthrough, including the no-key evidence
+harness and live-Claude demo path, start with
+[`docs/guides/claude-code-mvp-quickstart.md`](/__ardur_internal__/source/docs/guides/claude-code-mvp-quickstart/).
 
 On permit, Ardur emits evidence only. It does not return
 `permissionDecision=allow`, so Claude Code's normal permission prompts and user

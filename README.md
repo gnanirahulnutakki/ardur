@@ -16,6 +16,22 @@ presented as release-ready.
 
 [Research](RESEARCH.md) · [Status](STATUS.md) · [Coverage Map](docs/coverage-map.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Evidence Site Source](site/README.md)
 
+## Fastest MVP Path: Claude Code
+
+Start with the source-checkout walkthrough in
+[`docs/guides/claude-code-mvp-quickstart.md`](docs/guides/claude-code-mvp-quickstart.md).
+It gives two bounded paths:
+
+- a **no-key confidence check** that runs the fresh-user evidence harness,
+  simulated Claude Code hook allow/deny receipts, and redacted bundle checks
+  without contacting an LLM provider; and
+- a **live Claude Code demo** for users who already have the `claude` binary
+  installed and authenticated.
+
+That guide also separates **Works now**, **Not claimed**, and **Coming soon** so
+Ardur stays honest about package-manager release status, provider-hidden
+behavior, and subprocess/kernel/network side-effect gaps.
+
 > **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
 > invocation. Side effects below the tool boundary — subprocess trees,
 > kernel events, network connections initiated by tool-spawned processes —

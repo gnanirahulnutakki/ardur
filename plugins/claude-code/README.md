@@ -8,6 +8,10 @@ maps the tool input to declared telemetry, evaluates the Mission Passport, and
 emits a signed receipt. If Ardur denies the call, the hook returns Claude Code's
 current `hookSpecificOutput.permissionDecision = "deny"` response.
 
+For the one-screen source-checkout walkthrough, including the no-key evidence
+harness and live-Claude demo path, start with
+[`docs/guides/claude-code-mvp-quickstart.md`](../../docs/guides/claude-code-mvp-quickstart.md).
+
 On permit, Ardur emits evidence only. It does not return
 `permissionDecision=allow`, so Claude Code's normal permission prompts and user
 approval flow remain in charge.

@@ -2,7 +2,7 @@
 title: "Docs"
 description: "This repo is opening in phases."
 source_path: "docs/README.md"
-source_sha256: "2d821058e3d7cb4968a2fe374d1bfd0974f7c3fed2485f77c6788541adec103e"
+source_sha256: "5dba5c5fea03d1a4aad61a5a109f1f0ea95d57353482224dc26847b2f8632cf2"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -20,11 +20,15 @@ This page is generated from the public repository source file. Edit the source f
 This repo is opening in phases.
 
 These docs describe the public product direction and the engineering boundaries
-that are already stable enough to say out loud. Runnable code, proofs, and a
-tighter quickstart are landing in follow-on phases.
+that are already stable enough to say out loud. Runnable code and proof paths
+are present for the current Claude Code MVP path; package-manager release
+readiness and broader host coverage remain in follow-on phases.
 
 ## Available now
 
+- [Claude Code MVP Quickstart](/__ardur_internal__/source/docs/guides/claude-code-mvp-quickstart/) — source
+  checkout setup, no-key fresh-user evidence harness, live-Claude demo path, and
+  claim boundary
 - [Security Model](/__ardur_internal__/source/docs/security-model/)
 - [Known Limitations](/__ardur_internal__/source/docs/known-limitations/)
 - [Protocol Roots](/__ardur_internal__/source/docs/protocol-roots/)

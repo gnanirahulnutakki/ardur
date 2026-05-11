@@ -2,7 +2,7 @@
 title: "Ardur"
 description: "Ardur is the runtime governance and evidence layer for AI agents."
 source_path: "README.md"
-source_sha256: "caa8fc42839ef9c5e58df23360851f2b47acc0bd86cb2e2de27334fb1020b543"
+source_sha256: "ff10291f978f7b275194c21f2991c21902ae3427a4eaa6a69f33a1f8b9f2a2ff"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["orientation", "runtime-boundary"]
@@ -32,6 +32,22 @@ and production deployment material are still being tightened before they are
 presented as release-ready.
 
 [Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
+
+## Fastest MVP Path: Claude Code
+
+Start with the source-checkout walkthrough in
+[`docs/guides/claude-code-mvp-quickstart.md`](/__ardur_internal__/source/docs/guides/claude-code-mvp-quickstart/).
+It gives two bounded paths:
+
+- a **no-key confidence check** that runs the fresh-user evidence harness,
+  simulated Claude Code hook allow/deny receipts, and redacted bundle checks
+  without contacting an LLM provider; and
+- a **live Claude Code demo** for users who already have the `claude` binary
+  installed and authenticated.
+
+That guide also separates **Works now**, **Not claimed**, and **Coming soon** so
+Ardur stays honest about package-manager release status, provider-hidden
+behavior, and subprocess/kernel/network side-effect gaps.
 
 > **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
 > invocation. Side effects below the tool boundary — subprocess trees,
