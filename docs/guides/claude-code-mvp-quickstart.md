@@ -111,4 +111,3 @@ Related references:
 - [`docs/reference/cli.md`](../reference/cli.md)
 - [`docs/reference/ardur-md-profile.md`](../reference/ardur-md-profile.md)
 - [`docs/coverage-map.md`](../coverage-map.md)
-- [`site/content/build/claude-code-demo.md`](../../site/content/build/claude-code-demo.md)

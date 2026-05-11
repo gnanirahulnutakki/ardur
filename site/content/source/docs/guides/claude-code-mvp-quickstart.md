@@ -2,7 +2,7 @@
 title: "Claude Code MVP Quickstart"
 description: "This is the shortest product-facing path through Ardur today from a source"
 source_path: "docs/guides/claude-code-mvp-quickstart.md"
-source_sha256: "845ed89dc4802abf1daded4934e9dd47b606080787b2e4cfdc5a455a5c55b69b"
+source_sha256: "873d3b3d33f16e8dc02741b48e183e8d71ef0638e3606ea084a0eeff4b66e448"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -128,4 +128,3 @@ Related references:
 - [`docs/reference/cli.md`](/__ardur_internal__/source/docs/reference/cli/)
 - [`docs/reference/ardur-md-profile.md`](/__ardur_internal__/source/docs/reference/ardur-md-profile/)
 - [`docs/coverage-map.md`](/__ardur_internal__/source/docs/coverage-map/)
-- [`site/content/build/claude-code-demo.md`](https://github.com/gnanirahulnutakki/ardur/blob/__ARDUR_SOURCE_REF__/site/content/build/claude-code-demo.md)
