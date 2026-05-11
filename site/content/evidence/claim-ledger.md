@@ -17,6 +17,8 @@ evidence_levels: ["code-and-doc", "archival-media", "limitation-backed", "spec",
 
 {{< claim "phase1-no-key-bundle" >}}
 
+{{< claim "phase2-daemon-kernel-boundary" >}}
+
 {{< claim "archival-media" >}}
 
 {{< claim "mcep-specs" >}}
