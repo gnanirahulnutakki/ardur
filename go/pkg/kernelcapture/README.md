@@ -24,9 +24,10 @@ This package is the Ardur Linux proof harness for process-exec capture with pair
   inspector for the future root-owned config/state/socket/bpffs boundary
   without installing, starting, binding, or pinning anything.
 - Defines the local JSON-line launch-wrapper-to-daemon protocol contract,
-  daemon-observed peer authorization, protocol/peer handshake contract, and a
-  Linux SO_PEERCRED retrieval seam for already-owned Unix connections; no
-  server, listener, socket bind, daemon install, or daemon start exists.
+  daemon-observed peer authorization, protocol/peer handshake contract, a Linux
+  SO_PEERCRED retrieval seam for already-owned Unix connections, and a dry-run
+  accept-loop plan; no server, listener, socket bind, daemon install, or daemon
+  start exists.
 
 ## Capture sources
 
@@ -77,13 +78,19 @@ This package is the Ardur Linux proof harness for process-exec capture with pair
    - Fails closed for malformed payloads, credential-observation failures, unsupported custody context, fabricated custody plans, or unauthorized peers.
    - Does not bind, listen, accept, install/start, or mutate privileged filesystem state.
 
-9. `AuthorizeDaemonProtocolPeer` (contract only)
+9. `BuildDaemonAcceptLoopPlan` (dry-run contract only)
+   - Validates the future accept-loop invariants before runtime implementation: valid daemon custody plan, explicit UID/GID allowlist, bounded request bytes, bounded read timeout, and bounded concurrency.
+   - Records the sequence a later daemon must follow: read-only custody preflight, bind only the validated local socket path, accept bounded local connections, observe OS peer credentials, decode one bounded JSON-line request, authorize request+peer, then dispatch a validated protocol method.
+   - Marks every step as not executed so the plan remains reviewable data, not daemon behavior.
+   - Does not open, bind, listen on, accept, install, start, expose a daemon, manage session state, or perform live enforcement.
+
+10. `AuthorizeDaemonProtocolPeer` (contract only)
    - Joins a validated daemon protocol request to daemon-observed peer credentials before future socket handling.
    - Requires the observation source to be explicit (`linux_so_peercred` today) and the observed socket path to match the validated dry-run daemon custody plan.
    - Fails closed for invalid protocol messages, missing/unsupported credential sources, socket-path mismatches, invalid custody plans, or unauthorized UID/GID policy.
    - Does not open, bind, listen on, accept, or inspect a socket; it does not perform the peer-credential syscall itself.
 
-10. `ObserveLinuxUnixPeerCredentials` (Linux seam)
+11. `ObserveLinuxUnixPeerCredentials` (Linux seam)
    - Reads SO_PEERCRED from an already-open `*net.UnixConn` and returns the daemon-owned `DaemonSocketPeerObservation` used by the handshake contract.
    - Requires the caller to supply the daemon-owned socket path and records `linux_so_peercred` as the explicit credential source.
    - Fails closed for a nil connection, missing socket path, SO_PEERCRED errors, or missing peer PID.
@@ -135,7 +142,7 @@ This package does not install a daemon, persist maps, open a service, or manage 
 - runtime dir/socket: `/run/ardur/kernelcapture/control.sock`, socket `0600` or `0660`, root-owned
 - bpffs dir/map: `/sys/fs/bpf/ardur/process_lifecycle_events`, root-owned
 
-It rejects repository-controlled privileged paths when repository-root validation context is supplied, and it rejects any request to install or start a daemon in this scaffold slice. `InspectDaemonCustodyPreflight` adds the read-only on-disk inspection layer: symlink-aware realpath checks, owner/mode/type observations, and structured remediation text. `AuthorizeObservedDaemonPeer` adds the fail-closed local-client authorization contract for the future socket server: peer identity must be observed by daemon-owned socket code and matched against an explicit UID/GID allowlist, never supplied by JSON clients. `AuthorizeDaemonProtocolPeer` adds the next no-mutation handshake contract: a decoded protocol request is not considered ready for handling until it is paired with daemon-observed peer credentials from an explicit OS source and the observed socket path matches the dry-run custody plan. `ObserveLinuxUnixPeerCredentials` is the Linux SO_PEERCRED retrieval seam for an already-open Unix connection; it still does not create a listener or accept loop. The scaffold records the future daemon-boundary requirement that repo/mission config must not select privileged map paths; integration with mission config remains future work. For the future daemon path:
+It rejects repository-controlled privileged paths when repository-root validation context is supplied, and it rejects any request to install or start a daemon in this scaffold slice. `InspectDaemonCustodyPreflight` adds the read-only on-disk inspection layer: symlink-aware realpath checks, owner/mode/type observations, and structured remediation text. `AuthorizeObservedDaemonPeer` adds the fail-closed local-client authorization contract for the future socket server: peer identity must be observed by daemon-owned socket code and matched against an explicit UID/GID allowlist, never supplied by JSON clients. `AuthorizeDaemonProtocolPeer` adds the next no-mutation handshake contract: a decoded protocol request is not considered ready for handling until it is paired with daemon-observed peer credentials from an explicit OS source and the observed socket path matches the dry-run custody plan. `ObserveLinuxUnixPeerCredentials` is the Linux SO_PEERCRED retrieval seam for an already-open Unix connection; it still does not create a listener or accept loop. `BuildDaemonAcceptLoopPlan` records the future accept-loop invariants as dry-run data: a valid custody plan, explicit peer allowlist, bounded request bytes, bounded read timeout, bounded concurrency, and not-yet-executed steps for preflight, bind, accept, peer observation, request decoding, authorization, and dispatch. The scaffold records the future daemon-boundary requirement that repo/mission config must not select privileged map paths; integration with mission config remains future work. For the future daemon path:
 
 - `pinnedMapPath` must come from daemon-owned privileged config.
 - Repository / mission config must not control privileged map-path selection.
@@ -155,7 +162,7 @@ It rejects repository-controlled privileged paths when repository-root validatio
 
 Allowed claim after the gated smoke passes:
 
-Ardur has a local Linux eBPF process-lifecycle proof with optional daemon-populated cgroup allowlist filtering, plus a no-mutation daemon custody preflight inspector, fail-closed local peer authorization/handshake contracts, a Linux SO_PEERCRED retrieval seam for already-owned Unix connections, and local JSON-line protocol contract scaffold for the future launch-wrapper-to-daemon boundary.
+Ardur has a local Linux eBPF process-lifecycle proof with optional daemon-populated cgroup allowlist filtering, plus a no-mutation daemon custody preflight inspector, fail-closed local peer authorization/handshake contracts, a Linux SO_PEERCRED retrieval seam for already-owned Unix connections, a dry-run accept-loop invariant plan, and local JSON-line protocol contract scaffold for the future launch-wrapper-to-daemon boundary.
 
 Not claimed yet:
 
