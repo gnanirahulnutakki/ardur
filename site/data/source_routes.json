@@ -179,6 +179,7 @@
     "python/README.md": "source/python/readme/",
     "reports/PHASE2_CGROUP_FILTER_VERIFICATION_2026-05-10.md": "source/reports/phase2_cgroup_filter_verification_2026-05-10/",
     "reports/PHASE2_DAEMON_CUSTODY_SCAFFOLD_2026-05-10.md": "source/reports/phase2_daemon_custody_scaffold_2026-05-10/",
+    "reports/PHASE2_DAEMON_PREFLIGHT_PROTOCOL_2026-05-10.md": "source/reports/phase2_daemon_preflight_protocol_2026-05-10/",
     "reports/PHASE2_EBPF_DRIFT_REVIEW_2026-05-10.md": "source/reports/phase2_ebpf_drift_review_2026-05-10/",
     "reports/PHASE2_EBPF_MVP_PLAN_2026-05-10.md": "source/reports/phase2_ebpf_mvp_plan_2026-05-10/",
     "reports/PHASE2_EBPF_MVP_VERIFICATION_2026-05-10.md": "source/reports/phase2_ebpf_mvp_verification_2026-05-10/",

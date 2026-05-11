@@ -360,17 +360,20 @@ func RunLinuxEBPFCgroupFilterPositiveSmoke(ctx context.Context, opts LinuxEBPFCg
 		return nil, fmt.Errorf("load process-exec eBPF objects: %w", err)
 	}
 	defer objs.Close()
-	if err := enableProcessExecCgroupFilter(&objs); err != nil {
-		return nil, err
-	}
 	testRunnerCgroupID, err := currentUnifiedCgroupID()
 	if err != nil {
+		return nil, err
+	}
+	if err := ValidateCgroupFilterSequence(CgroupFilterSequence{Enable: true, AllowlistCgroupIDs: []uint64{testRunnerCgroupID}}); err != nil {
 		return nil, err
 	}
 	if err := allowProcessExecCgroup(&objs, testRunnerCgroupID); err != nil {
 		return nil, err
 	}
 	defer disallowProcessExecCgroup(&objs, testRunnerCgroupID)
+	if err := enableProcessExecCgroupFilter(&objs); err != nil {
+		return nil, err
+	}
 	defer disableProcessExecCgroupFilter(&objs)
 
 	execTP, err := link.Tracepoint("sched", "sched_process_exec", objs.HandleSchedProcessExec, nil)
@@ -487,18 +490,29 @@ func RunLinuxEBPFCgroupFilterNegativeSmoke(ctx context.Context, opts LinuxEBPFCg
 		return nil, fmt.Errorf("load process-exec eBPF objects: %w", err)
 	}
 	defer objs.Close()
-	if err := enableProcessExecCgroupFilter(&objs); err != nil {
-		return nil, err
-	}
-	defer disableProcessExecCgroupFilter(&objs)
 
 	testRunnerCgroupID, err := currentUnifiedCgroupID()
 	if err != nil {
 		return nil, err
 	}
+	nonMatchingCgroupID := testRunnerCgroupID + 1
+	if nonMatchingCgroupID == 0 {
+		nonMatchingCgroupID = 1
+	}
+	if err := ValidateCgroupFilterSequence(CgroupFilterSequence{Enable: true, AllowlistCgroupIDs: []uint64{nonMatchingCgroupID}}); err != nil {
+		return nil, err
+	}
+	if err := allowProcessExecCgroup(&objs, nonMatchingCgroupID); err != nil {
+		return nil, err
+	}
+	defer disallowProcessExecCgroup(&objs, nonMatchingCgroupID)
 	if err := disallowProcessExecCgroup(&objs, testRunnerCgroupID); err != nil {
 		return nil, err
 	}
+	if err := enableProcessExecCgroupFilter(&objs); err != nil {
+		return nil, err
+	}
+	defer disableProcessExecCgroupFilter(&objs)
 
 	execTP, err := link.Tracepoint("sched", "sched_process_exec", objs.HandleSchedProcessExec, nil)
 	if err != nil {

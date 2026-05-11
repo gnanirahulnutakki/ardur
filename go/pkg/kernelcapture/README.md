@@ -20,9 +20,11 @@ This package is the Ardur Linux proof harness for process-exec capture with pair
   - reads scoped process exec+exit lifecycle samples from a ringbuf.
   - runs deterministic root and child commands.
   - projects the observed exec and exit events through the same correlator.
-- Includes a local-only daemon custody scaffold that validates the future
-  root-owned config/state/socket/bpffs boundary without installing or starting
-  a daemon.
+- Includes a local-only daemon custody scaffold and read-only preflight
+  inspector for the future root-owned config/state/socket/bpffs boundary
+  without installing, starting, binding, or pinning anything.
+- Defines the local JSON-line launch-wrapper-to-daemon protocol contract as
+  deterministic types/tests only; no server, listener, or socket bind exists.
 
 ## Capture sources
 
@@ -46,6 +48,20 @@ This package is the Ardur Linux proof harness for process-exec capture with pair
    - Validates root-owned daemon custody defaults for `/etc/ardur`, `/var/lib/ardur`, `/run/ardur`, and `/sys/fs/bpf/ardur`.
    - Rejects repository-controlled privileged paths when repository-root validation context is provided, plus daemon installation flags, daemon startup flags, permissive modes, and non-permission mode bits.
    - Returns a dry-run plan only. It does not create directories, bind sockets, pin maps, install service units, or start a privileged process.
+
+5. `InspectDaemonCustodyPreflight` (read-only preflight)
+   - Uses an injectable stat/realpath interface so tests do not depend on host `/etc`, `/var`, `/run`, or `/sys/fs/bpf`.
+   - Reports structured findings with check name, path category, expected and observed owner/mode, verdict, and remediation text.
+   - Distinguishes missing paths, symlinks, wrong type, wrong owner, wrong mode, non-permission mode bits, symlink-aware realpath escape, and repository-controlled privileged paths.
+   - Treats setuid, setgid, and sticky bits as fail-closed custody failures in this scaffold. That strictness is intentional: inherited special bits must be investigated before a future privileged daemon trusts the path.
+   - Does not repair paths, create directories, bind sockets, pin maps, install services, or start a daemon.
+
+6. `DaemonProtocolRequest` / `DecodeDaemonProtocolRequest` (contract only)
+   - Specifies newline-delimited deterministic JSON for `health`, `register_session`, `end_session`, and `session_status`.
+   - Accepts unprivileged session/mission/trace identity plus observed root PID, PID namespace, cgroup id, event class, and bounded TTL.
+   - Rejects unknown protocol versions, unknown event classes, missing session ids, unbounded TTLs, trailing non-JSON data, and client-supplied daemon-owned privileged path fields.
+   - Applies the privileged-field guard recursively and case-insensitively so future clients cannot hide daemon-owned filesystem authority inside metadata.
+   - Keeps daemon-owned config/socket/bpffs paths out of client messages.
 
 ## Generate the eBPF object
 
@@ -86,17 +102,19 @@ Rootless privileged containers can still fail if memlock cannot be raised or tra
 ## Privileged boundary
 
 This package does not install a daemon, persist maps, open a service, or manage system startup.
-`BuildDaemonCustodyPlan` now records the local-only future daemon boundary as validated data:
+`BuildDaemonCustodyPlan` records the local-only future daemon boundary as validated data:
 
 - config path: `/etc/ardur/kernelcapture-daemon.toml`, `0600`, root-owned
 - state dir: `/var/lib/ardur/kernelcapture`, `0700`, root-owned
 - runtime dir/socket: `/run/ardur/kernelcapture/control.sock`, socket `0600` or `0660`, root-owned
 - bpffs dir/map: `/sys/fs/bpf/ardur/process_lifecycle_events`, root-owned
 
-It rejects repository-controlled privileged paths when repository-root validation context is supplied, and it rejects any request to install or start a daemon in this scaffold slice. Path containment is lexical-only because this slice is dry-run/no-IO; future privileged preflight/install work must add symlink-aware realpath, ownership, and on-disk mode checks before touching config, state, socket, or bpffs paths. The scaffold records the future daemon-boundary requirement that repo/mission config must not select privileged map paths; integration with mission config remains future work. For the future daemon path:
+It rejects repository-controlled privileged paths when repository-root validation context is supplied, and it rejects any request to install or start a daemon in this scaffold slice. `InspectDaemonCustodyPreflight` adds the read-only on-disk inspection layer: symlink-aware realpath checks, owner/mode/type observations, and structured remediation text. The scaffold records the future daemon-boundary requirement that repo/mission config must not select privileged map paths; integration with mission config remains future work. For the future daemon path:
 
 - `pinnedMapPath` must come from daemon-owned privileged config.
 - Repository / mission config must not control privileged map-path selection.
+- Cgroup filtering must only be enabled after daemon-owned code has inserted at
+  least one non-zero cgroup id into the allowlist map.
 - Privileged daemon deployments should use:
   - root-owned daemon config
   - root-owned restrictive bpffs namespace/path
@@ -111,13 +129,14 @@ It rejects repository-controlled privileged paths when repository-root validatio
 
 Allowed claim after the gated smoke passes:
 
-Ardur has a local Linux eBPF process-exec MVP with paired process-exit evidence: in a privileged Linux container/VM it can load `sched_process_exec`/`sched_process_exit` tracepoint producers, read scoped ringbuf exec+exit metadata events, and project them into honest synthetic kernel-effect evidence.
+Ardur has a local Linux eBPF process-lifecycle proof with optional daemon-populated cgroup allowlist filtering, plus a no-mutation daemon custody preflight inspector and local JSON-line protocol contract scaffold for the future launch-wrapper-to-daemon boundary.
 
 Not claimed yet:
 
 - production daemon readiness
 - daemon installation or startup
-- kernel-enforced session/cgroup filtering
+- socket server/listener implementation
+- daemon-created per-session cgroups
 - universal CLI capture
 - file/network/privilege side-effect capture
 - macOS/Windows kernel capture
