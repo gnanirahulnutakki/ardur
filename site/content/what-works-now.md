@@ -16,7 +16,7 @@ Ardur is pre-release, but the public repo is code-bearing today.
 | Surface | Current state | Primary source |
 |---|---|---|
 | Runtime governance | Python and Go runtime imports, mission passport issuance, verification, receipt paths, governance checks | {{< repo-link "python/README.md" "Python" >}}, {{< repo-link "go/README.md" "Go" >}} |
-| CLI | `issue`, `verify`, `attest`, `start`, `hub`, `setup`, `status`, `doctor`, `protect claude-code`, `cc-hook`, `cc-report` | {{< repo-link "docs/reference/cli.md" "CLI reference" >}} |
+| CLI | Protocol and Personal commands including `issue`, `verify`, `attest`, `start`, `hub`, `setup`, `status`, `doctor`, `doctor-claude-code`, `run`, `profile init`, `protect claude-code`, `claude-code-hook`, and `claude-code-report` | {{< repo-link "docs/reference/cli.md" "CLI reference" >}} |
 | Ardur Personal | Local Hub service, browser extension, desktop observe adapter, native messaging host | {{< repo-link "docs/guides/ardur-personal-hub.md" "Personal Hub guide" >}} |
 | Claude Code | Plugin and hooks for `PreToolUse`, `PostToolUse`, `SubagentStart`, `SubagentStop`; source-checkout MVP quickstart with no-key harness and live-Claude path | {{< repo-link "docs/guides/claude-code-mvp-quickstart.md" "MVP quickstart" >}}, {{< repo-link "plugins/claude-code/README.md" "Plugin README" >}} |
 | Runnable examples | Mission JSON, LangChain, LangGraph, AutoGen, browser extension, desktop observe, native host | {{< repo-link "examples/README.md" "Examples index" >}} |
