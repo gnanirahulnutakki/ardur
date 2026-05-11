@@ -1,14 +1,14 @@
 # Phase 2 Daemon/Kernel Boundary Claim Ledger
 
 Date: 2026-05-11
-Branch baseline: `origin/dev` at `96d5d07525bae1d40eee452f2e8dd036d6745f0c`
+Branch baseline: `origin/dev` at `404f555934135dcef09e64f059f7ffcb38c5cc49`
 Scope: public-site claim ledger source for the current Phase 2 development boundary.
 
 ## Claim supported
 
 The current `dev` branch supports a bounded development claim:
 
-> Ardur has a local Linux eBPF process-lifecycle proof harness plus no-mutation daemon custody, preflight, peer-authorization, protocol/peer handshake, Linux `SO_PEERCRED` retrieval, and accepted-connection protocol seams for the future launch-wrapper-to-daemon boundary.
+> Ardur has a local Linux eBPF process-lifecycle proof harness plus no-mutation daemon custody, preflight, peer-authorization, protocol/peer handshake, Linux `SO_PEERCRED` retrieval, accepted-connection protocol, and dry-run accept-loop invariant seams for the future launch-wrapper-to-daemon boundary.
 
 This is an experimental development boundary, not release or production readiness.
 
@@ -21,6 +21,7 @@ This is an experimental development boundary, not release or production readines
 - `go/pkg/kernelcapture/daemon_peer_authorization.go` requires daemon-observed peer identity and explicit UID/GID policy.
 - `go/pkg/kernelcapture/daemon_peer_credentials_linux.go` implements the Linux `SO_PEERCRED` retrieval seam for already-open Unix connections.
 - `go/pkg/kernelcapture/daemon_socket_peer_contract.go` joins decoded protocol requests, daemon-observed peer credentials, and validated custody context for accepted Unix connections.
+- `go/pkg/kernelcapture/daemon_accept_loop_plan.go` validates a dry-run accept-loop plan with custody validation, explicit UID/GID allowlists, bounded request bytes, read timeout, bounded concurrency, and non-executed preflight/bind/accept/peer-observation/decode/authorization/dispatch steps.
 - `reports/PHASE2_EBPF_MVP_VERIFICATION_2026-05-10.md` records the Linux eBPF MVP verification context and environment limits.
 
 ## Not claimed
@@ -30,7 +31,7 @@ This evidence does **not** support claims of:
 - production daemon readiness
 - daemon installation or startup
 - production socket server/listener
-- daemon accept-loop live enforcement
+- runtime socket bind/listen/accept loop or daemon accept-loop live enforcement
 - daemon-created per-session cgroups
 - universal CLI capture across Codex, Gemini, Kimi, or future CLIs
 - file, network, or privilege side-effect capture below the current observed boundaries

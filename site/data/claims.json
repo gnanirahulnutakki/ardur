@@ -67,7 +67,7 @@
     {
       "id": "phase2-daemon-kernel-boundary",
       "title": "Phase 2 daemon/kernel capture is a bounded development proof",
-      "body": "The current dev branch includes a Linux eBPF process-lifecycle proof harness plus no-mutation daemon custody, preflight, peer-authorization, handshake, SO_PEERCRED retrieval, and accepted-connection protocol seams. This supports a local experimental boundary claim only: no production daemon install/start, socket server/listener, accept-loop live enforcement, universal CLI capture, file/network side-effect capture, or macOS/Windows kernel capture claim is made.",
+      "body": "The current dev branch includes a Linux eBPF process-lifecycle proof harness plus no-mutation daemon custody, preflight, peer-authorization, handshake, SO_PEERCRED retrieval, accepted-connection protocol, and dry-run accept-loop invariant seams. This supports a local experimental boundary claim only: no production daemon install/start, runtime socket bind/listen/accept loop, socket server/listener, accept-loop live enforcement, universal CLI capture, file/network side-effect capture, or macOS/Windows kernel capture claim is made.",
       "evidence_level": "code-and-doc",
       "maturity": "in-progress",
       "claim_type": "runtime-boundary",
@@ -83,7 +83,8 @@
         "go/pkg/kernelcapture/daemon_protocol.go",
         "go/pkg/kernelcapture/daemon_peer_authorization.go",
         "go/pkg/kernelcapture/daemon_peer_credentials_linux.go",
-        "go/pkg/kernelcapture/daemon_socket_peer_contract.go"
+        "go/pkg/kernelcapture/daemon_socket_peer_contract.go",
+        "go/pkg/kernelcapture/daemon_accept_loop_plan.go"
       ]
     },
     {
