@@ -29,8 +29,13 @@ workdone-so-far.md
 .env.*
 !.env.example
 
-# Python packaging side-effects from `pip install -e .`
+# Python packaging side-effects from `pip install -e .` / `pip wheel .`
 *.egg-info/
+python/build/
+
+# Local real-world-test evidence bundles are generated during QA/review.
+# Keep them out of the public tree; copy only redacted summaries into docs.
+reports/evidence/
 
 # Go build artifacts when binaries land in the repo root rather than $GOBIN.
 go/authority
