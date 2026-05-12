@@ -2,7 +2,7 @@
 title: "Read The Phase 1 Evidence Bundle"
 description: "The Phase 1 fresh-user harness writes a local, redacted evidence bundle that is"
 source_path: "docs/guides/read-phase1-evidence-bundle.md"
-source_sha256: "5165121c1a9142aa3966e06afa972f03c8e40706bf84b2225b3d7df7d1c73325"
+source_sha256: "371b554951d2d3f03256f13013b15ab3a85d8f48749c984e071989451db6229b"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -96,8 +96,9 @@ Share `bundle.redacted.json` only after checking:
 1. `status` is the status you intend to quote.
 2. `redaction.raw_secret_values_copied` is `false`.
 3. `redaction.secret_scan_hits` is `0`.
-4. Any retained temp path is intentional and not a private credential location.
-5. The claim you are making appears under `claim_mapping.supports_claims`, not
+4. Path fields use placeholders (for example `<REPO>`, `<RWT_TEMP>`, `<RWT_HOME>`, `<RWT_ARDUR_HOME>`, `<RWT_PROJECT>`, `<RWT_EVIDENCE>`, `<RWT_OUTPUT>`, `<PYTHON>`, `<ARDUR_BIN>`) rather than host absolute paths.
+5. Any retained temp path is intentional and not a private credential location.
+6. The claim you are making appears under `claim_mapping.supports_claims`, not
    under `claim_mapping.does_not_support_claims`.
 
 Related references:

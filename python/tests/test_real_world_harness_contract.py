@@ -260,3 +260,158 @@ def test_rwt_phase1_harness_version_info_handles_missing_ardur_binary(tmp_path):
 
     assert versions["python"].startswith("Python ")
     assert versions["ardur"] == "missing"
+
+
+def test_rwt_phase1_bundle_redacts_local_absolute_paths(monkeypatch, tmp_path):
+    harness = _load_harness()
+    fake_repo = tmp_path / "repo"
+    fake_repo.mkdir()
+    (fake_repo / ".git").write_text("gitdir: ../.git/worktrees/fake\n", encoding="utf-8")
+    output_dir = tmp_path / "output"
+    out_dir = output_dir / "out"
+    fixtures = output_dir / "fixtures"
+    output_dir.mkdir(parents=True)
+    out_dir.mkdir(parents=True)
+    fixtures.mkdir(parents=True)
+    temp_root = tmp_path / "temp-root"
+    home = temp_root / "home"
+    ardur_home = temp_root / "ardur-home"
+    project = temp_root / "project"
+    evidence = temp_root / "evidence"
+    for path in [temp_root, home, ardur_home, project, evidence]:
+        path.mkdir(parents=True, exist_ok=True)
+
+    ctx = SimpleNamespace(
+        repo=fake_repo,
+        output_dir=output_dir,
+        out_dir=out_dir,
+        fixtures=fixtures,
+        started_at="2026-05-12T00:00:00+00:00",
+        operator_profile="planner",
+        allow_dirty=False,
+        temp_root=temp_root,
+        home=home,
+        ardur_home=ardur_home,
+        project=project,
+        evidence=evidence,
+        python_bin="/Users/test-user/.local/bin/python3.13",
+        ardur_bin=temp_root / "venv" / "bin" / "ardur",
+        cleanup_temp_root_removed=False,
+        cleanup_retained_path=None,
+        gate_results=[
+            harness.GateResult("RWT-1", ["fresh-user", "integration", "matrix"], harness.STATUS_PASS, "ok"),
+            harness.GateResult("RWT-2", ["fixture", "integration"], harness.STATUS_PASS, "ok"),
+            harness.GateResult("RWT-3", ["real-host", "fresh-user", "integration"], harness.STATUS_SKIP_GATED, "ok"),
+        ],
+        commands=[
+            harness.CommandRecord(
+                id="example",
+                cwd=str(project),
+                argv_redacted=[
+                    "/Users/test-user/.local/bin/python3.13",
+                    str(temp_root / "venv" / "bin" / "ardur"),
+                    str(fake_repo / "plugins" / "claude-code"),
+                    str(ardur_home),
+                ],
+                exit_code=0,
+                stdout_redacted_path="out/example.stdout.txt",
+                stderr_redacted_path="out/example.stderr.txt",
+                elapsed_ms=1,
+            )
+        ],
+    )
+
+    monkeypatch.setattr(harness, "short_git", lambda _repo, *_args: "abc123def456")
+    monkeypatch.setattr(harness, "git_text", lambda _repo, *_args: "")
+    monkeypatch.setattr(harness, "collect_artifacts", lambda _ctx: {"reports": []})
+    monkeypatch.setattr(harness, "collect_receipts", lambda _ctx: {"verify_status": "pass", "receipt_count": 0})
+    monkeypatch.setattr(
+        harness,
+        "host_info",
+        lambda: {"os": "Darwin", "arch": "arm64", "kernel": "test", "container": "unknown", "wsl": "false"},
+    )
+    monkeypatch.setattr(
+        harness,
+        "version_info",
+        lambda _ctx: {"python": "Python 3.13.0", "ardur": "0.0.0", "git": "git version test"},
+    )
+
+    bundle = harness.bundle_for(
+        ctx,
+        repo_info={
+            "worktree": str(fake_repo),
+            "head": "abc123def456",
+            "origin_dev": "abc123def456",
+            "expected_origin_dev": "abc123def456",
+            "origin_dev_ancestor_of_head": True,
+            "clean_before": True,
+            "dirty_paths_before": [],
+        },
+        repo_blocker=None,
+    )
+    serialized = json.dumps(bundle, sort_keys=True)
+
+    assert "<REPO>" in serialized
+    assert "<RWT_HOME>" in serialized
+    assert "<RWT_ARDUR_HOME>" in serialized
+    assert "<RWT_PROJECT>" in serialized
+    assert "<RWT_EVIDENCE>" in serialized
+    assert "<RWT_OUTPUT>" in serialized
+    assert "<PYTHON>" in serialized
+    assert "<ARDUR_BIN>" in serialized
+    assert str(fake_repo) not in serialized
+    assert str(temp_root) not in serialized
+    assert "/Users/" not in serialized
+
+
+def test_rwt_phase1_write_bundle_fails_when_post_write_path_leaks_detected(monkeypatch, tmp_path):
+    harness = _load_harness()
+    output_dir = tmp_path / "output"
+    output_dir.mkdir(parents=True)
+    temp_root = tmp_path / "temp-root"
+    temp_root.mkdir(parents=True)
+    ctx = SimpleNamespace(
+        output_dir=output_dir,
+        repo=tmp_path / "repo",
+        temp_root=temp_root,
+        home=temp_root / "home",
+        ardur_home=temp_root / "ardur-home",
+        project=temp_root / "project",
+        evidence=temp_root / "evidence",
+        python_bin="/Users/test-user/.local/bin/python3.13",
+        ardur_bin=temp_root / "venv" / "bin" / "ardur",
+    )
+
+    monkeypatch.setattr(
+        harness,
+        "bundle_for",
+        lambda _ctx, _repo_info, _repo_blocker: {
+            "status": harness.STATUS_PASS,
+            "redaction": {"secret_scan_hits": 0, "notes": []},
+            "repo": {"worktree": "/Users/test-user/private/repo"},
+        },
+    )
+
+    bundle_path = harness.write_bundle(ctx, repo_info={}, repo_blocker=None)
+    persisted_text = bundle_path.read_text(encoding="utf-8")
+    bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+
+    assert bundle["status"] == harness.STATUS_FAIL
+    assert any("path leak" in note.lower() for note in bundle["redaction"]["notes"])
+    assert any("absolute_path_marker:/Users" in note for note in bundle["redaction"]["notes"])
+    forbidden_values = [
+        "/Users/",
+        "/home/",
+        "/private/var/folders/",
+        "/var/folders/",
+        "/Users/test-user/private/repo",
+        str(temp_root),
+        str(output_dir),
+        ctx.python_bin,
+        str(ctx.ardur_bin),
+    ]
+    for forbidden in forbidden_values:
+        assert forbidden not in persisted_text
+    notes_text = json.dumps(bundle["redaction"]["notes"], sort_keys=True)
+    for forbidden in forbidden_values:
+        assert forbidden not in notes_text

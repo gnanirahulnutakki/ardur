@@ -66,6 +66,33 @@ REDACTION_PATTERN_NAMES = [
     "url_token_query",
 ]
 
+PATH_PLACEHOLDER_REPO = "<REPO>"
+PATH_PLACEHOLDER_RWT_TEMP = "<RWT_TEMP>"
+PATH_PLACEHOLDER_RWT_HOME = "<RWT_HOME>"
+PATH_PLACEHOLDER_RWT_ARDUR_HOME = "<RWT_ARDUR_HOME>"
+PATH_PLACEHOLDER_RWT_PROJECT = "<RWT_PROJECT>"
+PATH_PLACEHOLDER_RWT_EVIDENCE = "<RWT_EVIDENCE>"
+PATH_PLACEHOLDER_RWT_OUTPUT = "<RWT_OUTPUT>"
+PATH_PLACEHOLDER_PYTHON = "<PYTHON>"
+PATH_PLACEHOLDER_ARDUR_BIN = "<ARDUR_BIN>"
+
+ABSOLUTE_PATH_LEAK_MARKERS = (
+    "/Users/",
+    "/home/",
+    "/private/var/folders/",
+    "/var/folders/",
+)
+
+GENERIC_ABSOLUTE_PATH_REDACTIONS = (
+    (
+        re.compile(r"(?<![A-Za-z0-9:])/private/var/folders(?:/[^\s\"'`,;:\]\}\)]*)*"),
+        "<ABSOLUTE_PATH:/private/var/folders>",
+    ),
+    (re.compile(r"(?<![A-Za-z0-9:])/var/folders(?:/[^\s\"'`,;:\]\}\)]*)*"), "<ABSOLUTE_PATH:/var/folders>"),
+    (re.compile(r"(?<![A-Za-z0-9:])/Users(?:/[^\s\"'`,;:\]\}\)]*)*"), "<ABSOLUTE_PATH:/Users>"),
+    (re.compile(r"(?<![A-Za-z0-9:])/home(?:/[^\s\"'`,;:\]\}\)]*)*"), "<ABSOLUTE_PATH:/home>"),
+)
+
 
 @dataclass
 class CommandRecord:
@@ -239,6 +266,202 @@ def relpath(path: Path, root: Path) -> str:
         return str(path.relative_to(root))
     except ValueError:
         return str(path)
+
+
+def _path_aliases(value: str | Path | None) -> list[str]:
+    if value is None:
+        return []
+    raw = str(value)
+    if not raw:
+        return []
+    variants: set[str] = {raw}
+    try:
+        resolved = str(Path(raw).expanduser().resolve(strict=False))
+        variants.add(resolved)
+    except Exception:  # noqa: BLE001
+        pass
+    for candidate in list(variants):
+        if candidate.startswith("/private/"):
+            variants.add(candidate.removeprefix("/private"))
+    return sorted((item for item in variants if item), key=len, reverse=True)
+
+
+def _path_placeholder_pairs(ctx: HarnessContext | Any) -> list[tuple[str, str]]:
+    ordered = [
+        (getattr(ctx, "ardur_bin", None), PATH_PLACEHOLDER_ARDUR_BIN),
+        (getattr(ctx, "python_bin", None), PATH_PLACEHOLDER_PYTHON),
+        (getattr(ctx, "output_dir", None), PATH_PLACEHOLDER_RWT_OUTPUT),
+        (getattr(ctx, "ardur_home", None), PATH_PLACEHOLDER_RWT_ARDUR_HOME),
+        (getattr(ctx, "home", None), PATH_PLACEHOLDER_RWT_HOME),
+        (getattr(ctx, "project", None), PATH_PLACEHOLDER_RWT_PROJECT),
+        (getattr(ctx, "evidence", None), PATH_PLACEHOLDER_RWT_EVIDENCE),
+        (getattr(ctx, "temp_root", None), PATH_PLACEHOLDER_RWT_TEMP),
+        (getattr(ctx, "repo", None), PATH_PLACEHOLDER_REPO),
+    ]
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for raw, placeholder in ordered:
+        for alias in _path_aliases(raw):
+            if alias in seen:
+                continue
+            seen.add(alias)
+            pairs.append((alias, placeholder))
+    pairs.sort(key=lambda item: len(item[0]), reverse=True)
+    return pairs
+
+
+def _replace_path_roots(text: str, pairs: Sequence[tuple[str, str]]) -> str:
+    redacted = text
+    for source, placeholder in pairs:
+        redacted = redacted.replace(source, placeholder)
+    return redacted
+
+
+def redact_path_roots(value: Any, pairs: Sequence[tuple[str, str]]) -> Any:
+    if isinstance(value, str):
+        return _replace_path_roots(value, pairs)
+    if isinstance(value, list):
+        return [redact_path_roots(item, pairs) for item in value]
+    if isinstance(value, tuple):
+        return tuple(redact_path_roots(item, pairs) for item in value)
+    if isinstance(value, dict):
+        return {key: redact_path_roots(item, pairs) for key, item in value.items()}
+    return value
+
+
+def _path_leak_markers(ctx: HarnessContext | Any) -> list[str]:
+    markers: set[str] = set(ABSOLUTE_PATH_LEAK_MARKERS)
+    for attr in ["repo", "temp_root", "home", "ardur_home", "project", "evidence", "output_dir", "python_bin", "ardur_bin"]:
+        for alias in _path_aliases(getattr(ctx, attr, None)):
+            if alias.startswith("/"):
+                markers.add(alias)
+    return sorted(markers, key=len, reverse=True)
+
+
+def path_leak_scan_hits(text: str, ctx: HarnessContext | Any) -> list[str]:
+    hits = sorted({marker for marker in _path_leak_markers(ctx) if marker in text})
+    return hits
+
+
+def _ensure_redaction_payload(bundle: dict[str, Any]) -> dict[str, Any]:
+    redaction = bundle.setdefault("redaction", {})
+    notes = redaction.get("notes")
+    if not isinstance(notes, list):
+        redaction["notes"] = []
+    redaction.setdefault("secret_scan_hits", 0)
+    return redaction
+
+
+def _append_redaction_note(bundle: dict[str, Any], note: str) -> None:
+    redaction_payload = _ensure_redaction_payload(bundle)
+    if note not in redaction_payload["notes"]:
+        redaction_payload["notes"].append(note)
+
+
+def _secret_hit_categories(hits: Sequence[str]) -> list[str]:
+    return sorted({f"secret_pattern:{hit}" for hit in hits})
+
+
+def _path_hit_categories(hits: Sequence[str], ctx: HarnessContext | Any) -> list[str]:
+    categories: set[str] = set()
+    aliases: dict[str, str] = {}
+    for alias, placeholder in _path_placeholder_pairs(ctx):
+        aliases[alias] = placeholder
+    for hit in hits:
+        placeholder = aliases.get(hit)
+        if placeholder:
+            categories.add(f"ctx_path_marker:{placeholder}")
+        elif hit.startswith("/private/var/folders"):
+            categories.add("absolute_path_marker:/private/var/folders")
+        elif hit.startswith("/var/folders"):
+            categories.add("absolute_path_marker:/var/folders")
+        elif hit.startswith("/Users"):
+            categories.add("absolute_path_marker:/Users")
+        elif hit.startswith("/home"):
+            categories.add("absolute_path_marker:/home")
+        else:
+            categories.add("absolute_path_marker:unknown")
+    return sorted(categories)
+
+
+def _redact_generic_absolute_paths(text: str) -> str:
+    redacted = text
+    for pattern, placeholder in GENERIC_ABSOLUTE_PATH_REDACTIONS:
+        redacted = pattern.sub(placeholder, redacted)
+    return redacted
+
+
+def sanitize_shareable_value(value: Any, ctx: HarnessContext | Any) -> Any:
+    pairs = _path_placeholder_pairs(ctx)
+    if isinstance(value, str):
+        return _redact_generic_absolute_paths(redact_text(_replace_path_roots(value, pairs)))
+    if isinstance(value, list):
+        return [sanitize_shareable_value(item, ctx) for item in value]
+    if isinstance(value, tuple):
+        return tuple(sanitize_shareable_value(item, ctx) for item in value)
+    if isinstance(value, dict):
+        return {key: sanitize_shareable_value(item, ctx) for key, item in value.items()}
+    return value
+
+
+def _safe_failure_bundle(ctx: HarnessContext | Any, notes: Sequence[str], secret_scan_hits_count: int = 0) -> dict[str, Any]:
+    safe_notes = sorted({_redact_generic_absolute_paths(redact_text(str(note))) for note in notes})
+    bundle = {
+        "schema_version": SCHEMA_VERSION,
+        "rwt_id": "RWT-1+RWT-2+RWT-3-preflight",
+        "status": STATUS_FAIL,
+        "public_actions": "none",
+        "privileged_actions": "none",
+        "redaction": {
+            "raw_secret_values_copied": False,
+            "patterns_applied": REDACTION_PATTERN_NAMES,
+            "secret_scan_hits": secret_scan_hits_count,
+            "notes": safe_notes,
+        },
+    }
+    return sanitize_shareable_value(bundle, ctx)
+
+
+def finalize_shareable_bundle(bundle: dict[str, Any], ctx: HarnessContext | Any, stage: str) -> dict[str, Any]:
+    """Return a shareable bundle that contains only redacted paths/secrets.
+
+    If the normal structured payload still trips a leak scan after sanitization,
+    fall back to a minimal failure bundle that preserves categorical diagnostics
+    without persisting the raw path/secret values that triggered the scan.
+    """
+
+    bundle = sanitize_shareable_value(bundle, ctx)
+    text = json.dumps(bundle, indent=2, sort_keys=True)
+    secret_hits = secret_scan_hits(text)
+    path_hits = path_leak_scan_hits(text, ctx)
+    if not secret_hits and not path_hits:
+        return bundle
+
+    bundle["status"] = STATUS_FAIL
+    if secret_hits:
+        redaction_payload = _ensure_redaction_payload(bundle)
+        try:
+            redaction_payload["secret_scan_hits"] = max(int(redaction_payload.get("secret_scan_hits") or 0), len(secret_hits))
+        except (TypeError, ValueError):
+            redaction_payload["secret_scan_hits"] = len(secret_hits)
+        _append_redaction_note(bundle, f"{stage} secret scan categories: {_secret_hit_categories(secret_hits)}")
+    if path_hits:
+        _append_redaction_note(bundle, f"{stage} path leak scan categories: {_path_hit_categories(path_hits, ctx)}")
+
+    bundle = sanitize_shareable_value(bundle, ctx)
+    text = json.dumps(bundle, indent=2, sort_keys=True)
+    final_secret_hits = secret_scan_hits(text)
+    final_path_hits = path_leak_scan_hits(text, ctx)
+    if not final_secret_hits and not final_path_hits:
+        return bundle
+
+    redaction_payload = _ensure_redaction_payload(bundle)
+    notes = list(redaction_payload.get("notes") or [])
+    if final_secret_hits:
+        notes.append(f"{stage} safe serialization fallback after secret scan categories: {_secret_hit_categories(final_secret_hits)}")
+    if final_path_hits:
+        notes.append(f"{stage} safe serialization fallback after path leak categories: {_path_hit_categories(final_path_hits, ctx)}")
+    return _safe_failure_bundle(ctx, notes, max(len(secret_hits), len(final_secret_hits)))
 
 
 def run_capture(
@@ -897,12 +1120,9 @@ def bundle_for(ctx: HarnessContext, repo_info: dict[str, Any], repo_blocker: str
         },
         "residual_risk": sorted(set(residual)),
     }
-    text = json.dumps(bundle, indent=2, sort_keys=True)
-    hits = secret_scan_hits(text)
-    bundle["redaction"]["secret_scan_hits"] = len(hits)
-    if hits:
-        bundle["status"] = STATUS_FAIL
-        bundle["redaction"]["notes"].append(f"Secret scan matched redacted bundle patterns: {hits}")
+    bundle = finalize_shareable_bundle(bundle, ctx, "Initial bundle")
+    redaction_payload = _ensure_redaction_payload(bundle)
+    redaction_payload["secret_scan_hits"] = len(secret_scan_hits(json.dumps(bundle, indent=2, sort_keys=True)))
     return bundle
 
 
@@ -910,11 +1130,26 @@ def write_bundle(ctx: HarnessContext, repo_info: dict[str, Any], repo_blocker: s
     bundle = bundle_for(ctx, repo_info, repo_blocker)
     path = ctx.output_dir / "bundle.redacted.json"
     path.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    hits = secret_scan_hits(path.read_text(encoding="utf-8"))
-    if hits:
+
+    post_write_text = path.read_text(encoding="utf-8")
+    rewrite_needed = False
+
+    secret_hits = secret_scan_hits(post_write_text)
+    if secret_hits:
         bundle["status"] = STATUS_FAIL
-        bundle["redaction"]["secret_scan_hits"] = len(hits)
-        bundle["redaction"]["notes"].append(f"Post-write secret scan hits: {hits}")
+        redaction_payload = _ensure_redaction_payload(bundle)
+        redaction_payload["secret_scan_hits"] = len(secret_hits)
+        _append_redaction_note(bundle, f"Post-write secret scan categories: {_secret_hit_categories(secret_hits)}")
+        rewrite_needed = True
+
+    path_hits = path_leak_scan_hits(post_write_text, ctx)
+    if path_hits:
+        bundle["status"] = STATUS_FAIL
+        _append_redaction_note(bundle, f"Post-write path leak scan categories: {_path_hit_categories(path_hits, ctx)}")
+        rewrite_needed = True
+
+    if rewrite_needed:
+        bundle = finalize_shareable_bundle(bundle, ctx, "Post-write bundle")
         path.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
 
@@ -974,11 +1209,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         cleanup(ctx)
         try:
             bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
-            bundle["cleanup"] = {
+            cleanup_payload = {
                 "temp_root_removed": ctx.cleanup_temp_root_removed,
                 "retained_path": ctx.cleanup_retained_path,
                 "redacted_bundle_dir": str(ctx.output_dir),
             }
+            bundle["cleanup"] = redact_path_roots(cleanup_payload, _path_placeholder_pairs(ctx))
+            bundle = finalize_shareable_bundle(bundle, ctx, "Post-cleanup bundle")
             bundle_path.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
             print(f"warning: failed to patch cleanup metadata in bundle: {redact_text(str(exc))}", file=sys.stderr)

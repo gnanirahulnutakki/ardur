@@ -79,8 +79,9 @@ Share `bundle.redacted.json` only after checking:
 1. `status` is the status you intend to quote.
 2. `redaction.raw_secret_values_copied` is `false`.
 3. `redaction.secret_scan_hits` is `0`.
-4. Any retained temp path is intentional and not a private credential location.
-5. The claim you are making appears under `claim_mapping.supports_claims`, not
+4. Path fields use placeholders (for example `<REPO>`, `<RWT_TEMP>`, `<RWT_HOME>`, `<RWT_ARDUR_HOME>`, `<RWT_PROJECT>`, `<RWT_EVIDENCE>`, `<RWT_OUTPUT>`, `<PYTHON>`, `<ARDUR_BIN>`) rather than host absolute paths.
+5. Any retained temp path is intentional and not a private credential location.
+6. The claim you are making appears under `claim_mapping.supports_claims`, not
    under `claim_mapping.does_not_support_claims`.
 
 Related references:
