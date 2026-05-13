@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"time"
 )
 
 const (
@@ -14,6 +15,18 @@ const (
 	// credential source currently accepted by the daemon protocol contract. A
 	// future socket server must derive it from the kernel, not from client JSON.
 	DaemonPeerCredentialSourceLinuxSOPeerCred = "linux_so_peercred"
+
+	// maxDaemonProtocolLineSize caps the number of bytes the daemon will read
+	// from a Unix socket before rejecting the request. Unix-domain datagrams
+	// are bounded by the kernel, but a malicious or malfunctioning client on a
+	// stream-oriented socket could send gigabytes without a newline.
+	maxDaemonProtocolLineSize = 64 * 1024
+
+	// daemonUnixSocketReadDeadline is the per-read deadline applied before each
+	// bufio read on an accepted Unix socket connection. A client that opens a
+	// connection and never sends data (or drips bytes slowly) must not block a
+	// daemon goroutine indefinitely.
+	daemonUnixSocketReadDeadline = 10 * time.Second
 )
 
 var ErrDaemonSocketPeerObservation = errors.New("kernelcapture: invalid daemon socket peer observation")
@@ -106,6 +119,9 @@ func AuthorizeDaemonProtocolPeerFromAcceptedUnixConnection(conn *net.UnixConn, p
 }
 
 func readDaemonProtocolRequestFromAcceptedUnixConnection(conn *net.UnixConn) (DaemonProtocolRequest, error) {
+	if err := conn.SetReadDeadline(time.Now().Add(daemonUnixSocketReadDeadline)); err != nil {
+		return DaemonProtocolRequest{}, fmt.Errorf("%w: set read deadline: %v", ErrDaemonProtocol, err)
+	}
 	raw, err := readUnixSocketLine(conn)
 	if err != nil {
 		return DaemonProtocolRequest{}, err
@@ -117,7 +133,8 @@ func readUnixSocketLine(conn *net.UnixConn) ([]byte, error) {
 	if conn == nil {
 		return nil, fmt.Errorf("%w: accepted unix connection is required", ErrDaemonProtocol)
 	}
-	reader := bufio.NewReader(conn)
+	limited := io.LimitReader(conn, maxDaemonProtocolLineSize)
+	reader := bufio.NewReader(limited)
 	data, err := reader.ReadString('\n')
 	if err != nil {
 		if errors.Is(err, io.EOF) {

@@ -14,6 +14,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -243,9 +244,12 @@ def _pre_tool_use_deny_output(reason: str) -> dict[str, Any]:
     }
 
 
+_SAFE_TRACE_ID_RE = re.compile(r"^[a-zA-Z0-9._-]{1,64}$")
+
+
 def _trace_id_from_claims(claims: dict[str, Any]) -> str:
     override = os.environ.get("ARDUR_TRACE_ID", "").strip()
-    if override:
+    if override and _SAFE_TRACE_ID_RE.match(override):
         return override
     return str(claims.get("jti", "trace-unknown"))
 
