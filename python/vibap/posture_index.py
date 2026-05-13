@@ -19,6 +19,7 @@ import jwt
 from cryptography.hazmat.primitives import serialization
 
 from .receipt import ReceiptChainError, verify_chain
+from .shareable_redaction import redact_local_path_text
 
 SCHEMA_VERSION = "ardur.posture_index.v0"
 POSITIONING = "derived_local_evidence"
@@ -30,12 +31,9 @@ _SECRET_KEY_RE = re.compile(
 _JWT_LIKE_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
 _BEARER_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b", re.IGNORECASE)
 _API_KEY_VALUE_RE = re.compile(r"\b(?:sk|pk|ghp|github_pat|xox[baprs])-?[A-Za-z0-9_\-]{12,}\b")
-# Conservative local absolute-path matcher. URL paths are intentionally excluded
-# by checking for scheme delimiters before substitution. file:// URLs are handled
-# separately because their path component is local and shareable output must not
-# preserve it.
-_ABSOLUTE_PATH_RE = re.compile(r"(?<![A-Za-z0-9_:.~-])/(?:[^\s\]})>'\",;`]+/)*[^\s\]})>'\",;`]+")
-_FILE_URI_RE = re.compile(r"\bfile://[^\s\]})>'\",;`]+", re.IGNORECASE)
+# Conservative local absolute-path redaction is centralized in
+# vibap.shareable_redaction so posture scans and shareable bundles apply the same
+# root/path/file-URI rules.
 _SHA256_RE = re.compile(r"^(?:sha256:|sha-256:)?[a-fA-F0-9]{64}$")
 
 _UNKNOWN_BOUNDARY_BY_TOOL = {
@@ -76,21 +74,13 @@ class _Redactor:
         text = _JWT_LIKE_RE.sub("[REDACTED]", text)
         text = _BEARER_RE.sub("Bearer [REDACTED]", text)
         text = _API_KEY_VALUE_RE.sub("[REDACTED]", text)
-        text = _FILE_URI_RE.sub(lambda match: self.path_token(match.group(0)), text)
-        for root in self._roots:
-            text = text.replace(root, self.path_token(root))
-        return _ABSOLUTE_PATH_RE.sub(lambda match: self._redact_absolute_match(text, match), text)
-
-    def _redact_absolute_match(self, full_text: str, match: re.Match[str]) -> str:
-        start = match.start()
-        # Do not redact URL path portions such as https://host/path.
-        if start >= 2 and full_text[start - 2 : start] == ":/":
-            return match.group(0)
-        value = match.group(0)
-        # Keep simple protocol-ish strings and coverage gap identifiers intact.
-        if value.startswith("//"):
-            return value
-        return self.path_token(value)
+        root_pairs = [(root, self.path_token(root)) for root in self._roots]
+        return redact_local_path_text(
+            text,
+            root_pairs=root_pairs,
+            absolute_replacement=self.path_token,
+            file_uri_replacement=self.path_token,
+        )
 
     def value(self, value: Any, *, key: str | None = None) -> Any:
         if key and _SECRET_KEY_RE.search(key):
