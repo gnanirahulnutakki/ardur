@@ -2,7 +2,7 @@
 title: "ardur` CLI Reference"
 description: "The `ardur` console entry point ships with the Python package. After"
 source_path: "docs/reference/cli.md"
-source_sha256: "7507a3203552e47a5ae70ef1821040a06be58e98e79e571d6531c22a2c88d75d"
+source_sha256: "66a7b2eeccb97114681943997cceda042231595d091156fed5390b06801a32ec"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -27,8 +27,8 @@ The CLI splits into two groups:
 - **Personal path** — `hub`, `setup`, `status`, `doctor`, `doctor-claude-code`,
   `uninstall`, `run`, `desktop-observe`, `personal-native-host`,
   `personal-native-manifest`, `profile init`, `protect claude-code`,
-  `claude-code-hook`, `claude-code-report`. Used by the local Ardur Personal
-  product shape.
+  `claude-code-hook`, `claude-code-report`, `posture scan`, `posture report`.
+  Used by the local Ardur Personal product shape.
 
 Source: [`python/vibap/cli.py`](https://github.com/gnanirahulnutakki/ardur/blob/__ARDUR_SOURCE_REF__/python/vibap/cli.py).
 
@@ -244,6 +244,41 @@ ardur claude-code-report [--home DIR] [--chain-dir DIR] [--keys-dir DIR]
 
 `--verify-expiry` also enforces short receipt expiry windows during chain
 verification (off by default so reports work on archived chains).
+
+### `ardur posture scan`
+
+Derive a local posture-index document from receipt chains, an optional
+`ARDUR.md` profile, and an optional redacted no-key evidence bundle. The scan is
+read-only: it does not write receipts, rotate keys, mutate profiles, or create
+missing signing material. It reports only what local Ardur artifacts can support.
+
+```text
+ardur posture scan --receipts DIR_OR_JSONL
+                    [--keys-dir DIR] [--profile ARDUR.md]
+                    [--evidence-bundle bundle.redacted.json]
+                    [--verify-expiry]
+                    [--format json|markdown]
+```
+
+The JSON output uses `positioning=derived_local_evidence`. This is an honest
+boundary label: the posture index summarizes signed local tool-call evidence,
+chain status, policy verdict counts, unknown boundaries such as Bash subprocess
+effects, profile digests, and redacted bundle metadata. It is not live
+enterprise-wide discovery, provider-hidden visibility, kernel/process capture,
+or proof of effects outside the captured tool-call boundary.
+
+Credential-like values are emitted as `[REDACTED]`; local absolute paths are
+replaced with stable `<PATH:...>` placeholders so reports can be shared without
+leaking private workstation paths.
+
+### `ardur posture report`
+
+Render a posture JSON document from `ardur posture scan --format json` as a
+concise Markdown report, or re-emit it as formatted JSON.
+
+```text
+ardur posture report --input posture.json [--format markdown|json]
+```
 
 ## Where to look next
 

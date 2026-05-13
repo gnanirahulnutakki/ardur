@@ -34,6 +34,7 @@ from .personal_hub import (
 )
 from .claude_code_report import build_claude_code_report
 from .claude_code_hook import main as claude_code_hook_main
+from .posture_index import build_posture_index, format_posture_report
 from .claude_code_daemon import install_native_pre_tool_use_command, resolve_native_pre_tool_use_command_path
 from .proxy import GovernanceProxy, serve_proxy
 
@@ -154,6 +155,30 @@ def cmd_claude_code_report(args: argparse.Namespace) -> int:
     )
     print(f"Per-child attribution: {report['coverage']['per_child_attribution']}")
     print(f"Attribution: {report['coverage']['attribution']}")
+    return 0
+
+
+def cmd_posture_scan(args: argparse.Namespace) -> int:
+    posture = build_posture_index(
+        receipts=args.receipts,
+        keys_dir=args.keys_dir,
+        profile=args.profile,
+        evidence_bundle=args.evidence_bundle,
+        verify_expiry=args.verify_expiry,
+    )
+    if args.format == "json":
+        _print_json(posture)
+        return 0
+    print(format_posture_report(posture))
+    return 0
+
+
+def cmd_posture_report(args: argparse.Namespace) -> int:
+    posture = json.loads(args.input.read_text(encoding="utf-8"))
+    if args.format == "json":
+        _print_json(posture)
+        return 0
+    print(format_posture_report(posture))
     return 0
 
 
@@ -539,6 +564,45 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cc_report.add_argument("--json", action="store_true", help="print machine-readable report")
     cc_report.set_defaults(func=cmd_claude_code_report)
+
+    posture = subparsers.add_parser(
+        "posture",
+        help="derive a local evidence posture index from Ardur artifacts",
+    )
+    posture_subparsers = posture.add_subparsers(dest="posture_command", required=True)
+    posture_scan = posture_subparsers.add_parser(
+        "scan",
+        help="scan receipt/profile/evidence artifacts into a posture JSON document",
+    )
+    posture_scan.add_argument("--receipts", type=Path, required=True, help="receipt chain directory or receipts.jsonl file")
+    posture_scan.add_argument("--keys-dir", type=Path, help="directory containing passport_public.pem for read-only verification")
+    posture_scan.add_argument("--profile", type=Path, help="optional ARDUR.md profile to digest")
+    posture_scan.add_argument("--evidence-bundle", type=Path, help="optional redacted no-key evidence bundle to summarize")
+    posture_scan.add_argument(
+        "--verify-expiry",
+        action="store_true",
+        help="also enforce short receipt expiry windows while verifying",
+    )
+    posture_scan.add_argument(
+        "--format",
+        choices=["json", "markdown"],
+        default="json",
+        help="output format (default: json)",
+    )
+    posture_scan.set_defaults(func=cmd_posture_scan)
+
+    posture_report = posture_subparsers.add_parser(
+        "report",
+        help="render a posture JSON document as a concise report",
+    )
+    posture_report.add_argument("--input", type=Path, required=True, help="posture JSON produced by ardur posture scan")
+    posture_report.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="output format (default: markdown)",
+    )
+    posture_report.set_defaults(func=cmd_posture_report)
 
     hub = subparsers.add_parser("hub", help="start the local Ardur Personal Hub")
     hub.add_argument("--host", default=DEFAULT_HUB_HOST, help="bind address")

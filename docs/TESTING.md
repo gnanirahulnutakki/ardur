@@ -87,13 +87,14 @@ make reproduce
 
 ## Ardur Personal And Claude Code RC
 
-When touching the Hub, browser adapter, Claude Code hook, or `ARDUR.md`
-profile setup, run:
+When touching the Hub, browser adapter, Claude Code hook, posture index, or
+`ARDUR.md` profile setup, run:
 
 ```bash
 PYTHONPATH=python python -m pytest -q \
   python/tests/test_claude_code_hook.py \
   python/tests/test_claude_code_telemetry.py \
+  python/tests/test_posture_index.py \
   python/tests/test_ardur_personal_hub.py \
   python/tests/test_ardur_profile.py
 PYTHONPATH=python python plugins/claude-code/scripts/smoke.py
@@ -107,7 +108,9 @@ node examples/ardur-personal-extension/scripts/auth-header-smoke.mjs
 The Hub test confirms browser observations produce standard Ardur Execution
 Receipts through `GovernanceProxy`, CLI policy can block a controllable command,
 the export path includes Session Reviews, and authenticated Hub endpoints reject
-untrusted browser-origin requests.
+untrusted browser-origin requests. The posture-index tests cover valid and broken
+receipt chains, missing telemetry, unknown tool boundaries, CLI JSON/Markdown
+rendering, and redaction of credential-like values plus local path placeholders.
 
 ## Coverage Targets
 
