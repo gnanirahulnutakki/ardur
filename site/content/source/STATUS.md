@@ -2,7 +2,7 @@
 title: "Status"
 description: "Today, Ardur captures every Claude Code tool-call invocation — file reads"
 source_path: "STATUS.md"
-source_sha256: "7a4dd5b8be43c46c9123c7b7d2e7a1a796e538bc10e350434813ea0db61bce14"
+source_sha256: "1bc07e33be1138ac1a5ac63c0f5639353c6918779015629bbe989235e5dd6ad3"
 weight: 100
 maturity: ["in-progress", "public-now"]
 claim_types: ["status"]
@@ -52,7 +52,7 @@ caveat list, and [`ROADMAP.md`](/__ardur_internal__/source/roadmap/) for the pha
 - the Claude Code plugin is present under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks plus a smoke script
 - curated Go runtime, governance, and operator files are present under `go/` (the AAT package remains a fail-closed skeleton by design and is documented as such in `go/README.md`)
 - runnable framework examples are present under `examples/`: LangChain, LangGraph, and AutoGen quickstarts; the Ardur Personal browser extension; the Ardur Personal desktop-observe adapter; the Ardur Personal native-messaging host; and the Claude Code plugin pointer. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories are deferred adapter specs
-- dedicated Python (3.10 + 3.13) and Go CI workflows run on every push and PR (`.github/workflows/tests.yml`), alongside CodeQL, link-check, secret-scan, format validation, and the Hugo site build
+- dedicated Python (3.10 + 3.13) and Go CI workflows run on every push and PR (`.github/workflows/tests.yml`), including the offline examples-smoke regression in `python/tests/test_examples_smoke.py`, alongside CodeQL, link-check, secret-scan, format validation, and the Hugo site build
 - the Hugo public evidence-site source tree is present under `site/`, with start-here / build / evidence sections that link each public claim back to the source file backing it
 - bootstrap and local-validation scripts ship under `scripts/` (`conductor-bootstrap.sh`, `setup-dev.sh`, `check-local.sh`)
 - agent-specific public guides live under `docs/agent-instructions/` (Conductor, Codex, Claude, plus a shared contract)

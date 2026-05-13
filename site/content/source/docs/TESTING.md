@@ -2,7 +2,7 @@
 title: "Testing"
 description: "The public tree includes curated Python and Go runtime code under `python/`"
 source_path: "docs/TESTING.md"
-source_sha256: "fa96928105b557fb498660597b3c685bf93cb19bd667c49a7771a85e9d4f7905"
+source_sha256: "47f5c1da25c1e76c241fc9927d75feff7e8948291448c189390e56bff05a578e"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -65,7 +65,10 @@ This workflow exists because a misplaced comma in a JSON schema or a stray inden
 
 - **Python job**: installs `python/` with dev extras and runs
   `python -m pytest tests/ -q --tb=short` from the `python/` directory on
-  Python 3.10 and Python 3.13.
+  Python 3.10 and Python 3.13. Because this runs the full `python/tests/`
+  tree, it includes `python/tests/test_examples_smoke.py` for the offline,
+  no-key examples smoke. That test covers checked-in mission fixtures and the
+  examples claim ledger; it does **not** prove live-provider framework demos.
 - **Go job**: runs `go test -count=1 ./...` and `go vet ./...` from `go/`.
 
 ### What's Not Enforced By CI Today

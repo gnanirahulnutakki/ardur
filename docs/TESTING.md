@@ -48,7 +48,10 @@ This workflow exists because a misplaced comma in a JSON schema or a stray inden
 
 - **Python job**: installs `python/` with dev extras and runs
   `python -m pytest tests/ -q --tb=short` from the `python/` directory on
-  Python 3.10 and Python 3.13.
+  Python 3.10 and Python 3.13. Because this runs the full `python/tests/`
+  tree, it includes `python/tests/test_examples_smoke.py` for the offline,
+  no-key examples smoke. That test covers checked-in mission fixtures and the
+  examples claim ledger; it does **not** prove live-provider framework demos.
 - **Go job**: runs `go test -count=1 ./...` and `go vet ./...` from `go/`.
 
 ### What's Not Enforced By CI Today

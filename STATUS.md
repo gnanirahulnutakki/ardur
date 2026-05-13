@@ -35,7 +35,7 @@ caveat list, and [`ROADMAP.md`](ROADMAP.md) for the phase plan.
 - the Claude Code plugin is present under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks plus a smoke script
 - curated Go runtime, governance, and operator files are present under `go/` (the AAT package remains a fail-closed skeleton by design and is documented as such in `go/README.md`)
 - runnable framework examples are present under `examples/`: LangChain, LangGraph, and AutoGen quickstarts; the Ardur Personal browser extension; the Ardur Personal desktop-observe adapter; the Ardur Personal native-messaging host; and the Claude Code plugin pointer. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories are deferred adapter specs
-- dedicated Python (3.10 + 3.13) and Go CI workflows run on every push and PR (`.github/workflows/tests.yml`), alongside CodeQL, link-check, secret-scan, format validation, and the Hugo site build
+- dedicated Python (3.10 + 3.13) and Go CI workflows run on every push and PR (`.github/workflows/tests.yml`), including the offline examples-smoke regression in `python/tests/test_examples_smoke.py`, alongside CodeQL, link-check, secret-scan, format validation, and the Hugo site build
 - the Hugo public evidence-site source tree is present under `site/`, with start-here / build / evidence sections that link each public claim back to the source file backing it
 - bootstrap and local-validation scripts ship under `scripts/` (`conductor-bootstrap.sh`, `setup-dev.sh`, `check-local.sh`)
 - agent-specific public guides live under `docs/agent-instructions/` (Conductor, Codex, Claude, plus a shared contract)
