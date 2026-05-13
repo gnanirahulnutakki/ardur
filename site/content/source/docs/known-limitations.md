@@ -2,7 +2,7 @@
 title: "Known Limitations"
 description: "This page distinguishes honest product boundaries from implementation bugs."
 source_path: "docs/known-limitations.md"
-source_sha256: "fb3ab312025577f7e24617c41a153db1752d6609c38ac9ba4cf2f2d6aa4bb827"
+source_sha256: "0f46c29c1ea8f37f03f6e96f756c4a0670c6940dc47a8401620a71cff019cc49"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["limitation"]
@@ -38,7 +38,9 @@ This page distinguishes honest product boundaries from implementation bugs.
 ## Evidence limits
 
 If a delegated tool or gateway can hide all relevant side effects and emits no
-evidence, Ardur must classify the result as `unknown` rather than safe.
+evidence, Ardur must classify the result as `insufficient_evidence` (resulting
+in an `unknown` verdict at the session/verifier level) rather than safe. See
+[`coverage-map.md`](/__ardur_internal__/source/docs/coverage-map/) for the receipt-level evidence taxonomy.
 
 ## Product limits
 
@@ -54,7 +56,9 @@ Those controls still matter around Ardur.
 
 The reference Python proxy in `python/vibap/` implements the
 **Delegation-Core** profile of `verifier-contract-v0.1`, not the
-**MIC-State** or **MIC-Evidence** profiles. The following spec `MUST`
+**MIC-State** or **MIC-Evidence** profiles. When closing these gaps,
+update both this document and [`security-model.md`](/__ardur_internal__/source/docs/security-model/)
+in the same PR to prevent drift. The following spec `MUST`
 clauses are design-only in the reference implementation today:
 
 - `observed_manifest_digest == MD.tool_manifest_digest` (Section 6.3 #6)

@@ -2,7 +2,7 @@
 title: "Security Model"
 description: "Ardur security is based on least privilege, explicit declaration, runtime"
 source_path: "docs/security-model.md"
-source_sha256: "18bfdbf6baa29a9b4af9ee8956a584fa9d8b366fb592be64ff5ecc7f404d76ea"
+source_sha256: "4b66789c1e0826d4774f479caf6202e002224fbe04edfb59ff29f10269f75f7d"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["security-model"]
@@ -23,11 +23,12 @@ enforcement, and verifiable evidence.
 > **Conformance scope (2026-04-28 narrowing):** This page describes the
 > *design intent* of the protocol. The reference proxy in `python/vibap/`
 > implements the **Delegation-Core** profile of `verifier-contract-v0.1`,
-> not yet the **MIC-State** or **MIC-Evidence** profiles. See
-> `docs/specs/verifier-contract-v0.1.md` Section 13 ("Reference
-> Implementation Conformance Notes") for the precise gap. Deployments
-> needing the stronger profiles MUST add layers beyond the reference
-> proxy or wait for the hardening rounds that close 13.2.
+> not yet the **MIC-State** or **MIC-Evidence** profiles. When closing
+> these gaps, update both this document and [`known-limitations.md`](/__ardur_internal__/source/docs/known-limitations/)
+> in the same PR. See `docs/specs/verifier-contract-v0.1.md` Section 13
+> ("Reference Implementation Conformance Notes") for the precise gap.
+> Deployments needing the stronger profiles MUST add layers beyond the
+> reference proxy or wait for the hardening rounds that close 13.2.
 
 ## Core security gates (enforced by the reference proxy)
 
