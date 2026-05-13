@@ -6,11 +6,12 @@ enforcement, and verifiable evidence.
 > **Conformance scope (2026-04-28 narrowing):** This page describes the
 > *design intent* of the protocol. The reference proxy in `python/vibap/`
 > implements the **Delegation-Core** profile of `verifier-contract-v0.1`,
-> not yet the **MIC-State** or **MIC-Evidence** profiles. See
-> `docs/specs/verifier-contract-v0.1.md` Section 13 ("Reference
-> Implementation Conformance Notes") for the precise gap. Deployments
-> needing the stronger profiles MUST add layers beyond the reference
-> proxy or wait for the hardening rounds that close 13.2.
+> not yet the **MIC-State** or **MIC-Evidence** profiles. When closing
+> these gaps, update both this document and [`known-limitations.md`](known-limitations.md)
+> in the same PR. See `docs/specs/verifier-contract-v0.1.md` Section 13
+> ("Reference Implementation Conformance Notes") for the precise gap.
+> Deployments needing the stronger profiles MUST add layers beyond the
+> reference proxy or wait for the hardening rounds that close 13.2.
 
 ## Core security gates (enforced by the reference proxy)
 

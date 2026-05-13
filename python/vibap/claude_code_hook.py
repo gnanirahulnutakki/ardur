@@ -872,7 +872,10 @@ def _subagent_lifecycle_metadata(
                 ),
                 "lifecycle": lifecycle_payload,
                 "inherited_policy": _policy_inheritance_summary(claims),
-                "child_receipt_summary": dict(child_receipt_summary or {}),
+                "child_receipt_summary": {
+                    **dict(child_receipt_summary or {}),
+                    "integrity": "unverified",
+                },
                 "attribution": {
                     "mode": "exact" if agent_id else "trace_only",
                     "source": "Subagent lifecycle hook agent_id" if agent_id else "missing lifecycle agent_id",

@@ -319,6 +319,14 @@ def _write_bytes(path: Path, data: bytes, mode: int) -> None:
         os.chmod(path, mode)
     except OSError:
         pass
+    actual_mode = path.stat().st_mode & 0o777
+    if actual_mode != mode:
+        import sys
+        print(
+            f"WARNING: {path} permissions are {actual_mode:o}, expected {mode:o}; "
+            f"private key may be readable by other users on this filesystem",
+            file=sys.stderr,
+        )
 
 
 def generate_keypair(
