@@ -2,7 +2,7 @@
 title: "Protocol overhead — what to measure and what we'll publish"
 description: "A reviewer asked the right question: **\"How much does Ardur inflate the protocol in payload size, latency, and audit volume? Published numbers would help.\"** The answer is \"we have"
 source_path: "docs/comparisons/protocol-overhead.md"
-source_sha256: "7c9928b13d8e817fca4d0ef881c0507eae22139debc7e1a7b7eaba4833edcaa6"
+source_sha256: "0484b8535b7814bbd3d3bed1c78f25fd78833aac9c5524edef19eb9e7bdd3a33"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["comparison"]
@@ -109,4 +109,4 @@ When Phase 7 publishes, both documents update with the same artifact paths. A re
 
 ## Standing question for the reader
 
-If you have a deployment shape that doesn't fit the three projected shapes above (single-agent dev, production multi-agent, high-throughput automation), tell us. The benchmark methodology can take additional shapes. [GitHub Discussions](https://github.com/gnanirahulnutakki/ardur/discussions) Q&A is the right place for this; we read it.
+If you have a deployment shape that doesn't fit the three projected shapes above (single-agent dev, production multi-agent, high-throughput automation), tell us. The benchmark methodology can take additional shapes. [GitHub Discussions](https://github.com/ArdurAI/ardur/discussions) Q&A is the right place for this; we read it.

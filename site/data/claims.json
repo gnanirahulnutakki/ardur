@@ -13,7 +13,8 @@
         "README.md",
         "docs/security-model.md",
         "python/vibap/proxy.py",
-        "go/pkg/governance/engine.go"
+        "go/pkg/aat/derive.go",
+        "go/pkg/aat/chain_verify.go"
       ]
     },
     {
@@ -28,7 +29,7 @@
       "source_paths": [
         "docs/decisions/ADR-017-biscuit-attenuation-narrowing-semantics.md",
         "python/tests/test_delegation.py",
-        "go/pkg/governance/chain_audit_test.go"
+        "go/pkg/aat/verify_chain_test.go"
       ]
     },
     {

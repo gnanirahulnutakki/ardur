@@ -71,6 +71,8 @@ def _check_tool_scope(
 ) -> list[str]:
     del arguments, target, session_state
     allowed = passport_dict.get("allowed_tools", [])
+    if "*" in allowed:
+        return []
     if tool_name not in allowed:
         return [f"tool '{tool_name}' is not in allowed_tools"]
     return []

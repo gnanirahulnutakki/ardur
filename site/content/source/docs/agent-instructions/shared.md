@@ -2,7 +2,7 @@
 title: "Shared Agent Contract"
 description: "These rules apply to every agent runtime: Conductor, Codex, Claude, and any"
 source_path: "docs/agent-instructions/shared.md"
-source_sha256: "72a0ccd9ea6526671747fdcd1946078e98d2d293709943b94fc951ecb942bd68"
+source_sha256: "b762bfd247cf49a7ab336719bf96db2d6261e042d62ecbd5a3834e7b89c58b33"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]

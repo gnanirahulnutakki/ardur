@@ -142,7 +142,7 @@ specific company.
 - `STATUS.md` owns maturity and readiness.
 - ADRs own architectural decisions and tradeoffs.
 - `docs/TESTING.md` owns validation expectations.
-- `docs/conductor-bootstrap.md` owns agent/session startup.
+- `scripts/` directory owns agent/session startup and local validation tooling.
 - Public docs must not depend on private paths, private artifacts, or local
   machine state.
 - If a document is aspirational, label it as design, roadmap, or intent.

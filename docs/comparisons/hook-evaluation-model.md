@@ -74,10 +74,10 @@ If you're wiring up a framework adapter or building a custom agent against Ardur
 - **When you can't**: the verifier returns `insufficient_evidence` and fail-closed unless you opt out at deployment time. The opt-out is visible in every Receipt; reviewers can audit it.
 - **For inherently non-deterministic calls** (LLM queries, iterator/streaming results): split the evaluation. Pre-action approves the call's existence; post-action attestation evaluates the result against mission post-conditions.
 
-The framework example stubs under `examples/*-quickstart/` will demonstrate each of these three paths once the per-framework adapter code lands publicly.
+The runnable framework quickstarts under `examples/*-quickstart/` (LangChain, LangGraph, AutoGen) demonstrate each of these three paths against a working governance proxy. The OpenAI Agents SDK and Google ADK directories remain deferred adapter specs and will demonstrate the same paths once their code lift lands.
 
 ## Open question
 
 We don't claim this hook model handles every case perfectly. The boundary case we're least sure about is **streaming tool calls** — agent calls where the result arrives as a stream of partial outputs over time, and the mission has post-conditions that span the stream. The current design says you emit one post-action attestation when the stream closes. But missions that say "fail the call early if PII appears in the first 10 KB" need the verifier to evaluate continuously. We've prototyped this with `evaluate_streaming` callbacks but haven't shipped them publicly. Phase 7 publishes the streaming benchmark suite alongside the main matrix and the gap closes there.
 
-This is a real reviewer question, not a marketing question. If you have a streaming use case that breaks our model, that's exactly the kind of feedback the [GitHub Discussions](https://github.com/gnanirahulnutakki/ardur/discussions) Q&A category exists for. The reviewer who raised the original concern is doing us a favour by surfacing it; the answer is "we have one, here it is, let's stress-test it."
+This is a real reviewer question, not a marketing question. If you have a streaming use case that breaks our model, that's exactly the kind of feedback the [GitHub Discussions](https://github.com/ArdurAI/ardur/discussions) Q&A category exists for. The reviewer who raised the original concern is doing us a favour by surfacing it; the answer is "we have one, here it is, let's stress-test it."

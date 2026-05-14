@@ -1,0 +1,12 @@
+# Gitleaks configuration for local and CI secret scanning.
+#
+# The full local check runs tests before gitleaks. Tests can create local runtime
+# key material under ignored state directories; those files must never be tracked,
+# but they should not make the repository-level secret scan permanently fail.
+
+[allowlist]
+description = "Ignore local runtime state directories that are already excluded from git"
+paths = [
+  '''(^|/)\.ardur/''',
+  '''(^|/)\.vibap/''',
+]

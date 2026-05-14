@@ -46,7 +46,21 @@ renamed Ardur runtime and this caveat will be removed.
 
 ## Suggested Next Media Drops
 
-- a rendered public-safe walkthrough for the live governance flow
-- a Claude Code hook walkthrough
-- an OpenAI Agents SDK example
-- a Google ADK example
+These are recordings to make against shipped public surfaces — the underlying
+examples or plugins already exist in the repo; what's missing is a re-runnable
+proof recording.
+
+- a rendered public-safe walkthrough for the live governance flow against the
+  imported `python/vibap/` runtime and stable verifier commands
+- a Claude Code hook walkthrough using `plugins/claude-code/` and
+  `ardur protect claude-code` (the plugin and CLI ship today; the recording
+  does not)
+- a LangChain quickstart walkthrough using `examples/langchain-quickstart/`
+- a LangGraph quickstart walkthrough using `examples/langgraph-quickstart/`
+- an AutoGen quickstart walkthrough using `examples/autogen-quickstart/`
+- an Ardur Personal Hub setup walkthrough covering `ardur setup`, `ardur hub`,
+  and the browser extension at `examples/ardur-personal-extension/`
+
+A recording for the OpenAI Agents SDK and Google ADK adapters lands once
+those `examples/` directories graduate from deferred adapter specs to runnable
+code.

@@ -2,7 +2,7 @@
 title: "Verifier Contract v0.1"
 description: "This document defines the **stateful tri-state verifier contract** for the"
 source_path: "docs/specs/verifier-contract-v0.1.md"
-source_sha256: "8f5116d3eb020d7bdc64a4e5837d812f0467cfe53e381a777837ce3b95e2b80a"
+source_sha256: "0fcc5ccd3ad6b6a600101550e636c99c666c89f44bddc69c06e3ee572fdea525"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["protocol-spec"]
@@ -21,8 +21,12 @@ This page is generated from the public repository source file. Edit the source f
 > research repo's `docs/spec/` layout. In the public ardur tree, migrated specs
 > live under `docs/specs/`. Any `docs/spec/...` path reference in the body of
 > this document refers to the original private layout; the public-tree mapping
-> is in [`docs/specs/README.md`](/__ardur_internal__/source/docs/specs/readme/). Some companion specs (Mission
-> Declaration, Execution Receipt) have not yet been imported.
+> is in [`docs/specs/README.md`](/__ardur_internal__/source/docs/specs/readme/). The Mission Declaration and
+> Execution Receipt companion specs are now public — see
+> [`mission-declaration-v0.1.md`](/__ardur_internal__/source/docs/specs/mission-declaration-v0.1/),
+> [`execution-receipt-v0.1.md`](/__ardur_internal__/source/docs/specs/execution-receipt-v0.1/), and
+> [`execution-receipt-eat-profile-v0.1.md`](/__ardur_internal__/source/docs/specs/execution-receipt-eat-profile-v0.1/).
+> Conformance test vectors (`docs/specs/conformance/`) remain to be imported.
 
 ## 1. Scope
 

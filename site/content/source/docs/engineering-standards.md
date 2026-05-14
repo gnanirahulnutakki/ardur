@@ -2,7 +2,7 @@
 title: "Engineering Standards"
 description: "These rules define the working standard for Ardur. They are inspired by public"
 source_path: "docs/engineering-standards.md"
-source_sha256: "bcd78e53a82bdbb7cf53c4e2546aa9c5ba8c61b3d88425ccf77f40f58e367ca4"
+source_sha256: "b22014bc0fa6f339988d965595b3fa7c9a09b0dd9ca768f65b1cd773cc3f00c4"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -159,7 +159,7 @@ specific company.
 - `STATUS.md` owns maturity and readiness.
 - ADRs own architectural decisions and tradeoffs.
 - `docs/TESTING.md` owns validation expectations.
-- `docs/conductor-bootstrap.md` owns agent/session startup.
+- `scripts/` directory owns agent/session startup and local validation tooling.
 - Public docs must not depend on private paths, private artifacts, or local
   machine state.
 - If a document is aspirational, label it as design, roadmap, or intent.

@@ -4,15 +4,72 @@ Ardur is the runtime governance and evidence layer for AI agents.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-pre--release-blue)](STATUS.md)
-[![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/gnanirahulnutakki/ardur/discussions)
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/ArdurAI/ardur/discussions)
 
 This public repo is opening in phases. It now contains the product intent,
-research-informed positioning, public specs, curated Python and Go runtime
-imports, mission examples, and framework example stubs. Broader proof surfaces,
-packaging, and production deployment material are still being tightened before
-they are presented as release-ready.
+research-informed positioning, public specs, the Python governance runtime,
+Go packages for eBPF kernel capture and Kubernetes control-plane components, mission examples, runnable framework adapters (LangChain, LangGraph,
+AutoGen), the Ardur Personal Hub service, the Claude Code plugin and hook,
+and the public Hugo evidence site. Re-runnable proof media, full packaging,
+and production deployment material are still being tightened before they are
+presented as release-ready.
 
-[Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Evidence Site Source](site/README.md)
+[Research](RESEARCH.md) · [Status](STATUS.md) · [Coverage Map](docs/coverage-map.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Evidence Site Source](site/README.md)
+
+## Verified with real models
+
+Ardur was tested by asking cloud and local models to build an entire web application — every single tool call flowed through the governance proxy first.
+
+| Model | Tool Calls | Files Built | Denials | Overhead |
+|-------|------------|-------------|---------|----------|
+| **Cloud Model (1T)** | 35 | 18 of 20 | **0** | ~4ms/call |
+| **Local Model (8B)** | 4 | 4 of 20 | **0** | ~4ms/call |
+
+**39 tool calls across 2 models. Zero unauthorized actions. Zero false denials.**
+
+[Full test results →](python/tests/test-results/) · [Proof & evidence site →](site/)
+
+## Evaluator Quickstart
+
+One command to a working governance demo:
+
+```bash
+git clone https://github.com/ArdurAI/ardur.git && cd ardur
+make demo
+```
+
+Then run the automated verification harness:
+
+```bash
+./scripts/verify-mvp.sh
+```
+
+Full walkthrough with architecture diagrams, session lifecycle, receipt chain
+explanation, and known gaps: [`docs/mvp-evaluator-guide.md`](docs/mvp-evaluator-guide.md).
+
+## Fastest MVP Path: Claude Code
+
+Start with the source-checkout walkthrough in
+[`docs/guides/claude-code-mvp-quickstart.md`](docs/guides/claude-code-mvp-quickstart.md).
+It gives two bounded paths:
+
+- a **no-key confidence check** that runs the fresh-user evidence harness,
+  simulated Claude Code hook allow/deny receipts, and redacted bundle checks
+  without contacting an LLM provider; and
+- a **live Claude Code demo** for users who already have the `claude` binary
+  installed and authenticated.
+
+That guide also separates **Works now**, **Not claimed**, and **Coming soon** so
+Ardur stays honest about package-manager release status, provider-hidden
+behavior, and subprocess/kernel/network side-effect gaps.
+
+> **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
+> invocation. Side effects below the tool boundary — subprocess trees,
+> kernel events, network connections initiated by tool-spawned processes —
+> are not yet captured; the roadmap closes that gap in v0.2 (filesystem
+> snapshots), v0.5 (Linux eBPF), and v1.0 (macOS Endpoint Security
+> Framework). See [`docs/coverage-map.md`](docs/coverage-map.md) for the
+> precise per-tool audit.
 
 ## Why Ardur
 
@@ -43,8 +100,15 @@ This repo currently includes:
 - a short research-informed positioning summary
 - current status and what is still being resolved
 - public v0.1 specs for mission declarations, execution receipts, verifier contracts, conformance profiles, and related protocol surfaces
-- curated Python and Go runtime imports under `python/` and `go/`
-- JSON-only mission examples plus framework example stubs under `examples/`
+- Python governance runtime under `python/`; Go eBPF/K8s packages and a complete AAT credential-attenuation engine under `go/`
+- the Ardur Personal Hub service and CLI under `python/vibap/` (`ardur hub`, `ardur setup`, `ardur status`, `ardur protect claude-code`, `ardur profile init`, `ardur doctor-claude-code`)
+- the Claude Code plugin under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks emitting signed receipts
+- runnable framework adapters under `examples/`: LangChain, LangGraph, AutoGen, browser extension, desktop-observe, and native-host. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories remain deferred adapter specs
+- dedicated Python (3.10 + 3.13) and Go CI under `.github/workflows/tests.yml`, plus CodeQL, link-check, secret-scan, format validation, and the Hugo build
+- the Hugo public evidence site source under `site/`, with each public claim linkable to its backing source file
+- bootstrap and verification scripts under `scripts/` (`conductor-bootstrap.sh`, `setup-dev.sh`, `check-local.sh`)
+- agent-specific public guides under [`docs/agent-instructions/`](docs/agent-instructions/) (Conductor, Codex, Claude)
+- new technical reference pages under [`docs/reference/`](docs/reference/) — CLI, Personal Hub HTTP API, and the `ARDUR.md` profile format
 - selected archival terminal recordings (the rerunnable proof path lands with the next public drop — see [MEDIA.md](MEDIA.md))
 - a journey-log [article series](docs/articles/README.md) — Article 06 (Public Import Discipline) and Article 05 (Proof Media That Actually Means Something) are the first-wave shippers
 - a public audit trail at [`docs/audit/`](docs/audit/) mirroring the GitHub Code Scanning dismissal record so triage decisions are auditable from the repo tree without GitHub credentials
@@ -53,10 +117,11 @@ This repo currently includes:
 
 The next repo drops will add:
 
-- dedicated Python and Go CI workflows once the imported runtime surfaces finish their public verification pass
-- first runnable framework examples beyond JSON mission files
-- public verifier and proof commands with stable artifact paths
-- a tighter quickstart and framework story
+- runnable OpenAI Agents SDK and Google ADK adapter lifts to replace the current deferred-spec README directories
+- Codex hooks and Claude Desktop MCP packaging as separate next-cycle integrations
+- re-runnable proof media — recordings made against the public runtime with stable verifier commands and artifact paths, replacing the current archival walkthrough casts
+- a tagged release with a regenerated Homebrew formula carrying Python resource stanzas, so non-technical users can install Ardur Personal without a source checkout
+- broader deployment material (cluster, identity, receipt storage) past the current SPIRE design surface
 
 ## Integrations
 
@@ -64,13 +129,13 @@ Ardur sits between an AI agent and the tools it calls — so the integration sto
 
 | Layer                | In repo now | Still pending public validation |
 |----------------------|-------------|---------------------------------|
-| **Agent framework**  | JSON mission examples; framework stubs (README-only) for Claude Code, OpenAI Agents SDK, Google ADK, LangChain, LangGraph, AutoGen | runnable framework adapters |
+| **Agent framework**  | JSON mission examples; Claude Code plugin; runnable LangChain, LangGraph, AutoGen, browser, desktop-observe, and native-host examples; deferred README-only OpenAI Agents SDK and Google ADK directories | more runnable framework adapters |
 | **Model provider**   | provider-agnostic tool boundary in the runtime design | local Ollama quickstarts and live-provider examples |
-| **Policy engine**    | native checks, forbid-rules, Cedar-facing surfaces | OPA and broader Biscuit datalog examples |
+| **Policy engine**    | native checks, forbid-rules, Cedar bridge, AAT constraint engine (13 types) | OPA and broader Biscuit datalog examples |
 | **Identity**         | SPIFFE / SPIRE-oriented code and docs | full cluster deployment walkthrough |
 | **Receipts sink**    | local JSON / stdout-oriented receipt surfaces | OTel emitters and durable storage examples |
 
-If you'd use an integration that isn't listed, file an [integration request](https://github.com/gnanirahulnutakki/ardur/issues/new?template=integration_request.yml) — it's the strongest signal we have for prioritisation.
+If you'd use an integration that isn't listed, file an [integration request](https://github.com/ArdurAI/ardur/issues/new?template=integration_request.yml) — it's the strongest signal we have for prioritisation.
 
 ## Naming Note
 

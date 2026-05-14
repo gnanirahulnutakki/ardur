@@ -84,4 +84,3 @@ ignored paths:
 
 Run `./scripts/check-local.sh --quick` before publishing to verify none of
 those paths are tracked.
-

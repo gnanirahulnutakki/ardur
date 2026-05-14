@@ -40,12 +40,17 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "PyYAML>=6.0",
     "cedarpy>=4.0",
     "z3-solver>=4.16",
     "biscuit-python==0.4.0",
     "spiffe>=0.2,<0.3",
     "mcp>=1.23.0",
     "python-multipart>=0.0.26",
+    "ruff>=0.11.0",
+]
+cedar = [
+    "cedarpy>=4.0",
 ]
 
 [project.scripts]
@@ -55,11 +60,11 @@ ardur = "vibap.cli:main"
 ardur-proxy = "vibap.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/gnanirahulnutakki/ardur"
-Documentation = "https://github.com/gnanirahulnutakki/ardur/tree/main/docs"
-Repository = "https://github.com/gnanirahulnutakki/ardur"
-Issues = "https://github.com/gnanirahulnutakki/ardur/issues"
-Discussions = "https://github.com/gnanirahulnutakki/ardur/discussions"
+Homepage = "https://github.com/ArdurAI/ardur"
+Documentation = "https://github.com/ArdurAI/ardur/tree/main/docs"
+Repository = "https://github.com/ArdurAI/ardur"
+Issues = "https://github.com/ArdurAI/ardur/issues"
+Discussions = "https://github.com/ArdurAI/ardur/discussions"
 
 [tool.setuptools.packages.find]
 include = ["vibap*"]

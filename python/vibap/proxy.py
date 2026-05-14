@@ -18,6 +18,7 @@ import posixpath
 import re
 import secrets
 import signal
+
 import sys
 import threading
 import time
@@ -34,6 +35,11 @@ from typing import Any, Mapping, Optional, Sequence
 import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+
+from .log_rotation import RotatingJSONLLog
+from .metrics import metrics as ardur_metrics
+from .rate_limiter import RateLimiter
+from .tls import create_ssl_context, resolve_tls_paths
 
 # Session IDs are UUIDs — reject anything else to prevent path traversal
 _SESSION_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
@@ -1665,6 +1671,7 @@ class GovernanceProxy:
         receipts_log_path: str | Path | None = None,
         policy_store: Any | None = None,
         lineage_budget_ledger: LineageBudgetLedger | None = None,
+        biscuit_issuer_public_key: Any | None = None,
     ) -> None:
         # policy_store: optional PolicyStore (see vibap.policy_store).
         # When provided, the proxy resolves additional_policies from
@@ -1682,8 +1689,13 @@ class GovernanceProxy:
             self.receipts_log_path = self.log_path.with_name("receipts_log.jsonl")
         else:
             self.receipts_log_path = DEFAULT_RECEIPTS_LOG_PATH
+        self._governance_log = RotatingJSONLLog(self.log_path)
+        self._receipts_log = RotatingJSONLLog(self.receipts_log_path)
         self.state_dir = Path(state_dir).expanduser() if state_dir is not None else DEFAULT_STATE_DIR
         self.state_dir.mkdir(parents=True, exist_ok=True)
+        if self.policy_store is None:
+            from vibap.backed_policy_store import FileBackedPolicyStore
+            self.policy_store = FileBackedPolicyStore(self.state_dir)
         self.sessions_dir = self.state_dir / "sessions"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1694,6 +1706,7 @@ class GovernanceProxy:
         self.lineage_budget_ledger = lineage_budget_ledger or FileLineageBudgetLedger(
             self.state_dir
         )
+        self._biscuit_issuer_public_key = biscuit_issuer_public_key
         self.receipt_private_key = private_key or load_private_key(keys_dir=keys_dir)
         self.receipt_public_key = self.receipt_private_key.public_key()
         self._session_receipt_integrity_key = hashlib.sha256(
@@ -1713,6 +1726,8 @@ class GovernanceProxy:
         # Proxy-level lock protects sessions dict + _log writes.
         # Per-session mutations still use GovernanceSession._lock for finer granularity.
         self._sessions_lock = threading.Lock()
+        self._kill_switch_active = False
+        self._kill_switch_lock = threading.Lock()
         # Cryptographer R2 #2: KB-JWT nonce replay store. Prevents the same
         # KB-JWT from being presented multiple times within the freshness window.
         # OrderedDict for LRU eviction; max 4096 entries.
@@ -2291,6 +2306,33 @@ class GovernanceProxy:
             revoked = self._load_revoked_locked()
             revoked.setdefault(jti, int(time.time()))
             self._persist_revoked_locked(revoked)
+
+    @property
+    def kill_switch_active(self) -> bool:
+        with self._kill_switch_lock:
+            return self._kill_switch_active
+
+    def activate_kill_switch(self) -> None:
+        with self._kill_switch_lock:
+            self._kill_switch_active = True
+        ardur_metrics.kill_switch_active.set(1)
+        self._log_event("kill_switch_activate", {"timestamp": int(time.time())})
+
+    def deactivate_kill_switch(self) -> None:
+        with self._kill_switch_lock:
+            self._kill_switch_active = False
+        ardur_metrics.kill_switch_active.set(0)
+        self._log_event("kill_switch_deactivate", {"timestamp": int(time.time())})
+
+    def _log_event(self, event_type: str, detail: dict, correlation_id: str | None = None) -> None:
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+            "event_type": event_type,
+            "severity": "INFO",
+            "correlation_id": correlation_id or "",
+            "detail": detail,
+        }
+        self._governance_log.write(entry)
 
     def start_session(
         self,
@@ -4472,17 +4514,10 @@ class GovernanceProxy:
         self._persist_json_file(self._session_path(session.jti), payload)
 
     def _log(self, entry: dict[str, Any]) -> None:
-        # Under _log_lock to prevent interleaved JSONL lines on concurrent writes.
-        line = json.dumps(entry) + "\n"
-        with self._log_lock:
-            with self.log_path.open("a", encoding="utf-8") as handle:
-                handle.write(line)
+        self._governance_log.write(entry)
 
     def _log_receipt(self, entry: dict[str, Any]) -> None:
-        line = json.dumps(entry) + "\n"
-        with self._receipts_log_lock:
-            with self.receipts_log_path.open("a", encoding="utf-8") as handle:
-                handle.write(line)
+        self._receipts_log.write(entry)
 
 
 PUBLIC_PATHS = frozenset({"/health", "/healthz", "/.well-known/jwks.json"})
@@ -4537,6 +4572,9 @@ def serve_proxy(
     initial_session_id: str | None = None,
     require_auth: bool = True,
     api_token: str | None = None,
+    tls_cert: str | Path | None = None,
+    tls_key: str | Path | None = None,
+    no_tls: bool = False,
 ) -> None:
     # Resolve auth token: env var overrides explicit arg per product requirement
     # ("token from env var should override the generated one"). If neither is set,
@@ -4616,11 +4654,41 @@ def serve_proxy(
         with active_session_lock:
             active_session_ref["id"] = session_id
 
+    rate_limiter = RateLimiter()
+
     class Handler(BaseHTTPRequestHandler):
         server_version = f"VIBAPProxy/{API_VERSION}"
 
+        def _check_rate_limit(self) -> bool:
+            """Return True if the request is within rate limits, emit 429 otherwise."""
+            client_ip = self.client_address[0] if self.client_address else "unknown"
+            if not rate_limiter.allow(client_ip):
+                self._send_json(429, {"error": "rate limit exceeded"}, headers={"Retry-After": "1"})
+                return False
+            return True
+
         def log_message(self, format: str, *args: object) -> None:  # noqa: A003
-            return
+            duration_ms = 0
+            if hasattr(self, "_request_start_time"):
+                duration_ms = (time.time() - self._request_start_time) * 1000  # type: ignore[has-attr]
+            remote = self.client_address[0] if self.client_address else "-"
+            entry = {
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+                "remote_addr": remote,
+                "method": self.command,
+                "path": self._sanitize_path_for_log(),
+                "status": self.responses.get(self.command, (None,))[0] if hasattr(self, "responses") else None,
+                "response_size": 0,
+                "duration_ms": round(duration_ms, 3),
+                "correlation_id": getattr(self, "_correlation_id", "-"),
+                "session_id": getattr(self, "_active_session", "-"),
+            }
+            print(json.dumps(entry), file=sys.stderr, flush=True)
+
+        def _sanitize_path_for_log(self) -> str:
+            path = self.path.split("?", 1)[0] if hasattr(self, "path") else "?"
+            # Redact session-ids / tokens from query strings
+            return path[:256]
 
         def _read_json(self) -> dict[str, Any]:
             length = int(self.headers.get("Content-Length", "0"))
@@ -4686,6 +4754,17 @@ def serve_proxy(
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            # Security headers
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Content-Security-Policy", "default-src 'none'")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Cache-Control", "no-store")
+            if tls_active:
+                self.send_header("Strict-Transport-Security", "max-age=31536000")
+            corr_id = getattr(self, "_correlation_id", None)
+            if corr_id:
+                self.send_header("X-Correlation-ID", corr_id)
             if status == 401:
                 self.send_header(
                     "WWW-Authenticate",
@@ -4695,6 +4774,13 @@ def serve_proxy(
                 self.send_header(header_name, header_value)
             self.end_headers()
             self.wfile.write(body)
+            # Metrics
+            method = getattr(self, "command", "?")
+            path = self._request_path()
+            ardur_metrics.requests_total.inc(method=method, path=path, status=str(status))
+            if hasattr(self, "_request_start_time"):
+                dur = time.time() - self._request_start_time
+                ardur_metrics.request_duration_seconds.observe(dur)
 
         def _check_auth(self) -> bool:
             """Return True if the request is authorized (or auth is disabled / path is public).
@@ -4732,6 +4818,8 @@ def serve_proxy(
             return True
 
         def do_GET(self) -> None:  # noqa: N802
+            self._request_start_time = time.time()
+            self._correlation_id = self.headers.get("X-Correlation-ID", str(uuid.uuid4()))
             path = self._request_path()
             # Public endpoints respond without auth.
             if path in {"/health", "/healthz"}:
@@ -4747,7 +4835,15 @@ def serve_proxy(
             if path == "/.well-known/jwks.json":
                 self._send_json(200, {"keys": [_public_key_to_jwk(proxy.public_key)]})
                 return
+            if not self._check_rate_limit():
+                return
             if not self._check_auth():
+                return
+            if path == "/metrics":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(ardur_metrics.render().encode("utf-8"))
                 return
             if path != "/":
                 self._send_json(404, {"error": "not found"})
@@ -4762,11 +4858,29 @@ def serve_proxy(
             )
 
         def do_POST(self) -> None:  # noqa: N802
+            self._request_start_time = time.time()
+            self._correlation_id = self.headers.get("X-Correlation-ID", str(uuid.uuid4()))
+            if not self._check_rate_limit():
+                return
             if not self._check_auth():
                 return
             try:
                 payload = self._read_json()
                 path = self._request_path()
+
+                if path == "/admin/kill-switch":
+                    if payload.get("deactivate", False):
+                        proxy.deactivate_kill_switch()
+                        self._send_json(200, {"kill_switch": "deactivated"})
+                    else:
+                        proxy.activate_kill_switch()
+                        self._send_json(200, {"kill_switch": "activated"})
+                    return
+
+                # Kill-switch guard: deny state-changing endpoints when active
+                if proxy.kill_switch_active and path in {"/session/start", "/sessions", "/evaluate", "/delegate", "/issue"}:
+                    self._send_json(503, {"error": "kill_switch_active"})
+                    return
 
                 if path == "/issue":
                     mission_payload = payload.get("mission", payload)
@@ -4853,6 +4967,58 @@ def serve_proxy(
                         )
                     elif token_type in {"passport", "mcep", "vibap"}:
                         session = proxy.start_session(token)
+                    elif token_type == "biscuit":
+                        if proxy._biscuit_issuer_public_key is None:
+                            self._send_json(
+                                501,
+                                {"error": "Biscuit issuer public key not configured"},
+                            )
+                            return
+                        from .biscuit_passport import decode_biscuit_b64
+
+                        biscuit_bytes = decode_biscuit_b64(token)
+                        peer_jwt_svid = payload.get("peer_jwt_svid")
+                        if peer_jwt_svid is not None:
+                            if not isinstance(peer_jwt_svid, str):
+                                raise ValueError("peer_jwt_svid must be a string")
+                            # Peer trust bundle must be provided as a JWKS dict
+                            # in the payload. In Docker, the SPIRE agent
+                            # provides this via the Workload API.
+                            peer_trust_jwks = payload.get("peer_trust_jwks")
+                            if not isinstance(peer_trust_jwks, dict):
+                                raise ValueError(
+                                    "peer_trust_jwks is required when "
+                                    "peer_jwt_svid is supplied"
+                                )
+                            from vibap.spiffe_identity import TrustBundle
+
+                            peer_trust_domain = str(
+                                payload.get("peer_trust_domain", "ardur.dev")
+                            )
+                            peer_trust_bundle = TrustBundle(
+                                trust_domain=peer_trust_domain,
+                                jwks=peer_trust_jwks,
+                                federated_bundles={},
+                            )
+                            svid_audience = payload.get("svid_audience")
+                            kwargs: dict[str, Any] = {
+                                "peer_jwt_svid": peer_jwt_svid,
+                                "peer_trust_bundle": peer_trust_bundle,
+                            }
+                            if svid_audience is not None:
+                                if not isinstance(svid_audience, str):
+                                    raise ValueError("svid_audience must be a string")
+                                kwargs["svid_audience"] = svid_audience
+                            session = proxy.start_session_from_biscuit(
+                                biscuit_bytes,
+                                proxy._biscuit_issuer_public_key,
+                                **kwargs,
+                            )
+                        else:
+                            session = proxy.start_session_from_biscuit(
+                                biscuit_bytes,
+                                proxy._biscuit_issuer_public_key,
+                            )
                     else:
                         raise ValueError(f"unsupported token_type: {token_type}")
                     set_active_session_id(session.jti)
@@ -5028,13 +5194,26 @@ def serve_proxy(
 
     httpd = ThreadingHTTPServer((host, port), Handler)
 
+    tls_active = False
+    if not no_tls:
+        tls_result = resolve_tls_paths(tls_cert, tls_key, hostname=host)
+        if tls_result:
+            cert_path, key_path, cert_fingerprint = tls_result
+            ssl_ctx = create_ssl_context(cert_path, key_path)
+            httpd.socket = ssl_ctx.wrap_socket(httpd.socket, server_side=True)
+            tls_active = True
+            print(f"[tls] cert fingerprint: {cert_fingerprint}", file=sys.stderr)
+    if no_tls:
+        print("[tls] WARNING: TLS disabled — plain HTTP only", file=sys.stderr)
+
     def _shutdown_handler(signum: int, _frame: Any) -> None:
         print(f"\nReceived signal {signum}, shutting down VIBAP proxy.")
         threading.Thread(target=httpd.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, _shutdown_handler)
 
-    print(f"VIBAP proxy listening on http://{host}:{port}")
+    scheme = "https" if tls_active else "http"
+    print(f"VIBAP proxy listening on {scheme}://{host}:{port}")
     print(
         "Endpoints: GET /health, /healthz; POST /issue, /verify, /session/start, /session/end, "
         "/sessions, /evaluate, /result, /end, /attest, /delegate"
@@ -5087,6 +5266,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--initial-session")
     parser.add_argument("--no-require-auth", action="store_true")
     parser.add_argument("--revoke", metavar="JTI")
+    parser.add_argument("--tls-cert", help="TLS certificate PEM file")
+    parser.add_argument("--tls-key", help="TLS private key PEM file")
+    parser.add_argument("--no-tls", action="store_true", help="disable TLS (plain HTTP only)")
     args = parser.parse_args(argv)
 
     private_key, public_key = generate_keypair(keys_dir=args.keys_dir)
@@ -5110,6 +5292,9 @@ def main(argv: list[str] | None = None) -> int:
         initial_session_id=args.initial_session,
         require_auth=not args.no_require_auth,
         api_token=args.api_token,
+        tls_cert=args.tls_cert,
+        tls_key=args.tls_key,
+        no_tls=args.no_tls,
     )
     return 0
 

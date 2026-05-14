@@ -2,7 +2,7 @@
 title: "Docs"
 description: "This repo is opening in phases."
 source_path: "docs/README.md"
-source_sha256: "9b878fa0c081d4b6f54bedbf6a580b16bbd2c4616c8f6ac0a267352a2beae154"
+source_sha256: "da3ebadd6698845e8ca62a1dd2738e010270d997b1c2f6c3391e59d31e124559"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -20,26 +20,33 @@ This page is generated from the public repository source file. Edit the source f
 This repo is opening in phases.
 
 These docs describe the public product direction and the engineering boundaries
-that are already stable enough to say out loud. Runnable code, proofs, and a
-tighter quickstart are landing in follow-on phases.
+that are already stable enough to say out loud. Runnable code and proof paths
+are present for the current Claude Code MVP path; package-manager release
+readiness and broader host coverage remain in follow-on phases.
 
 ## Available now
 
+- [Claude Code MVP Quickstart](/__ardur_internal__/source/docs/guides/claude-code-mvp-quickstart/) — source
+  checkout setup, no-key fresh-user evidence harness, live-Claude demo path, and
+  claim boundary
 - [Security Model](/__ardur_internal__/source/docs/security-model/)
 - [Known Limitations](/__ardur_internal__/source/docs/known-limitations/)
 - [Protocol Roots](/__ardur_internal__/source/docs/protocol-roots/)
 - [Public Import Plan](/__ardur_internal__/source/docs/public-import-plan/)
 - [Testing](/__ardur_internal__/source/docs/testing/)
-- [Conductor Bootstrap](/__ardur_internal__/source/docs/conductor-bootstrap/)
+- [Ardur Personal Hub](/__ardur_internal__/source/docs/guides/ardur-personal-hub/)
 - [Agent Instructions](/__ardur_internal__/source/docs/agent-instructions/readme/)
 - [Engineering Standards](/__ardur_internal__/source/docs/engineering-standards/)
 - [Architecture Decision Records](/__ardur_internal__/source/docs/decisions/readme/)
 - [MCEP Specifications (v0.1)](/__ardur_internal__/source/docs/specs/readme/)
 - [Comparisons and engineering responses](/__ardur_internal__/source/docs/comparisons/readme/)
+- [Technical Reference](/__ardur_internal__/source/docs/reference/readme/) — CLI, Personal Hub HTTP API, and `ARDUR.md` profile format
+- [Articles](/__ardur_internal__/source/docs/articles/readme/)
+- [CodeQL dismissal audit trail](/__ardur_internal__/source/docs/audit/)
 
 ## Start here
 
 1. Read the root [README](/__ardur_internal__/source/readme/).
 2. Check [STATUS](/__ardur_internal__/source/status/) for what is public now versus still in flight.
-3. Use [MEDIA](/__ardur_internal__/source/media/) for example recordings and context on the current
+3. Use [MEDIA](/__ardur_internal__/source/media-notes/) for example recordings and context on the current
    implementation lineage.
