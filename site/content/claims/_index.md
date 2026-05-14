@@ -5,7 +5,7 @@ weight: 60
 maturity: ["public-now", "in-progress"]
 claim_types: ["runtime-boundary", "delegation", "evidence-semantics", "proof-media", "protocol-spec", "deployment"]
 surfaces: ["docs", "python", "go", "scripts", "media", "deploy", "specs"]
-frameworks: ["framework-agnostic", "claude-code", "framework-live", "foundation", "kubernetes", "spire"]
+frameworks: ["framework-agnostic", "claude-code", "gemini-cli", "framework-live", "foundation", "kubernetes", "spire"]
 evidence_levels: ["code-and-doc", "limitation-backed", "archival-media", "spec", "doc-and-manifest"]
 ---
 
