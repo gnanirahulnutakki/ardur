@@ -1,3 +1,5 @@
+collect_ignore = ["run_cloud_model_test.py", "run_all_models.py"]
+
 """Shared pytest fixtures for the VIBAP test suite.
 
 Keys are generated once per session to avoid paying the ES256 keygen cost on

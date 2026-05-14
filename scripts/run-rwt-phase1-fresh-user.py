@@ -532,7 +532,7 @@ def run_rwt1(ctx: HarnessContext) -> GateResult:
             raise AssertionError("protect did not write active Mission Passport under temp Ardur home")
         if Path(protect.get("plugin_dir", "")).resolve() != (ctx.repo / "plugins" / "claude-code").resolve():
             raise AssertionError("protect output did not reference the expected plugin dir")
-        assertions.append("protect claude-code wrote active Mission Passport under temp Ardur home")
+        assertions.append("protect agent wrote active Mission Passport under temp Ardur home")
         doctor = run_capture(
             ctx,
             "rwt1-doctor-claude-code",
