@@ -15,6 +15,7 @@ This section lists hosted documentation and mirrored artifacts generated from `r
 
 ## Hosted Docs
 
+- [`LINEAGE_BUDGET_DELEGATION_PLAN_REVIEW_2026-05-13.md`](/__ardur_internal__/source/reports/lineage_budget_delegation_plan_review_2026-05-13/)
 - [`PHASE2_CGROUP_FILTER_VERIFICATION_2026-05-10.md`](/__ardur_internal__/source/reports/phase2_cgroup_filter_verification_2026-05-10/)
 - [`PHASE2_DAEMON_CUSTODY_SCAFFOLD_2026-05-10.md`](/__ardur_internal__/source/reports/phase2_daemon_custody_scaffold_2026-05-10/)
 - [`PHASE2_DAEMON_KERNEL_BOUNDARY_CLAIM_LEDGER_2026-05-11.md`](/__ardur_internal__/source/reports/phase2_daemon_kernel_boundary_claim_ledger_2026-05-11/)

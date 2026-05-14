@@ -3,7 +3,7 @@
     {
       "id": "mission-boundary",
       "title": "Mission boundaries are the product center",
-      "body": "Ardur binds agent sessions to declared missions and makes runtime decisions over tools, resources, budgets, and delegation. The public claim is the conservative runtime-governance boundary, not a universal sandbox.",
+      "body": "Ardur binds agent sessions to declared missions and makes runtime decisions over tools, resources, flat runtime budgets, and delegation reservations. Mission-declared lineage_budgets are a v0.1 protocol goal, not a current runtime claim: non-empty lineage_budgets fail closed at compile/issue time until compiler/verifier support lands.",
       "evidence_level": "code-and-doc",
       "maturity": "public-now",
       "claim_type": "runtime-boundary",
@@ -13,13 +13,19 @@
         "README.md",
         "docs/security-model.md",
         "python/vibap/proxy.py",
+        "python/vibap/lineage_budget.py",
+        "python/vibap/mission_compile.py",
+        "python/vibap/passport.py",
+        "python/tests/test_lineage_budget.py",
+        "python/tests/test_mission_compile.py",
+        "python/tests/test_http.py",
         "go/pkg/governance/engine.go"
       ]
     },
     {
       "id": "delegation-narrowing",
       "title": "Delegation narrows instead of widening authority",
-      "body": "Child sessions are intended to receive strictly narrower authority than their parents. The public evidence includes the ADR, Python tests, and Go chain-audit tests rather than broad marketing language.",
+      "body": "Child sessions are intended to receive strictly narrower authority than their parents. The public evidence includes the ADR, Python tests, Go chain-audit tests, and the file-backed delegation reservation ledger; mission-declared lineage_budgets remain deferred and fail closed rather than implying unsupported enforcement.",
       "evidence_level": "code-and-doc",
       "maturity": "public-now",
       "claim_type": "delegation",
@@ -28,6 +34,9 @@
       "source_paths": [
         "docs/decisions/ADR-017-biscuit-attenuation-narrowing-semantics.md",
         "python/tests/test_delegation.py",
+        "python/tests/test_lineage_budget.py",
+        "python/tests/test_mission_compile.py",
+        "python/tests/test_http.py",
         "go/pkg/governance/chain_audit_test.go"
       ]
     },

@@ -30,6 +30,13 @@ ardur start [--host HOST] [--port PORT] [--mission FILE]
 
 Defaults: bind `127.0.0.1:8080`. Auth required by default.
 
+State directory security: `--state-dir` is local secret state. Persisted
+sessions and passport state can contain bearer credentials, including parent
+`passport_token` values and delegated child replay tokens. The proxy creates or
+hardens the state and `sessions/` directories to `0700` and writes JSON state
+files as `0600`; do not point this option at a shared or world-readable
+location.
+
 ### `ardur issue`
 
 Issue an ES256-signed Mission Passport JWT.

@@ -1655,6 +1655,103 @@ class GovernanceSession:
 
 
 class GovernanceProxy:
+    @staticmethod
+    def _ensure_private_state_directory(path: Path, *, label: str) -> None:
+        try:
+            path.mkdir(parents=True, mode=0o700, exist_ok=True)
+            path.chmod(0o700)
+            mode = path.stat().st_mode & 0o777
+        except OSError as exc:
+            raise PermissionError(
+                f"{label} must be private local secret state (0700)"
+            ) from exc
+        if not path.is_dir():
+            raise PermissionError(f"{label} must be a private directory")
+        if mode & 0o077:
+            raise PermissionError(
+                f"{label} must be private local secret state (0700); observed {mode:o}"
+            )
+
+    @staticmethod
+    def _normalized_delegation_string_list(
+        values: Sequence[str] | None,
+    ) -> list[str] | None:
+        if values is None:
+            return None
+        return sorted({str(value) for value in values})
+
+    @classmethod
+    def _delegation_request_metadata(
+        cls,
+        *,
+        parent_jti: str,
+        child_agent_id: str,
+        child_allowed_tools: Sequence[str],
+        child_mission: str,
+        child_ttl_s: int | None,
+        child_max_tool_calls: int | None,
+        child_resource_scope: Sequence[str] | None,
+    ) -> dict[str, Any]:
+        return {
+            "version": 1,
+            "parent_jti": str(parent_jti),
+            "child_agent_id": str(child_agent_id),
+            "child_mission": str(child_mission),
+            "child_allowed_tools": cls._normalized_delegation_string_list(child_allowed_tools),
+            "child_resource_scope": cls._normalized_delegation_string_list(child_resource_scope),
+            "child_ttl_s": int(child_ttl_s) if child_ttl_s is not None else None,
+            "child_max_tool_calls": int(child_max_tool_calls)
+            if child_max_tool_calls is not None
+            else None,
+        }
+
+    @staticmethod
+    def _delegation_request_fingerprint(metadata: Mapping[str, Any]) -> str:
+        material = json.dumps(
+            metadata,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(material).hexdigest()
+
+    @classmethod
+    def _delegation_claims_match_record(
+        cls,
+        claims: Mapping[str, Any],
+        *,
+        child_record: Mapping[str, Any],
+        existing_amount: int,
+    ) -> bool:
+        try:
+            claim_budget = int(claims.get("max_tool_calls", -1))
+        except (TypeError, ValueError):
+            return False
+        if claim_budget != existing_amount:
+            return False
+        if str(claims.get("jti")) != str(child_record.get("child_jti")):
+            return False
+        if str(claims.get("sub")) != str(child_record.get("child_agent_id")):
+            return False
+        if str(claims.get("mission")) != str(child_record.get("child_mission")):
+            return False
+        stored_tools = cls._normalized_delegation_string_list(
+            child_record.get("child_allowed_tools", [])
+        )
+        claim_tools = cls._normalized_delegation_string_list(
+            claims.get("allowed_tools", [])
+        )
+        if claim_tools != stored_tools:
+            return False
+        stored_scope = cls._normalized_delegation_string_list(
+            child_record.get("child_resource_scope", [])
+        )
+        claim_scope = cls._normalized_delegation_string_list(
+            claims.get("resource_scope", [])
+        )
+        if claim_scope != stored_scope:
+            return False
+        return True
+
     def __init__(
         self,
         log_path: str | Path | None = None,
@@ -1683,9 +1780,9 @@ class GovernanceProxy:
         else:
             self.receipts_log_path = DEFAULT_RECEIPTS_LOG_PATH
         self.state_dir = Path(state_dir).expanduser() if state_dir is not None else DEFAULT_STATE_DIR
-        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self._ensure_private_state_directory(self.state_dir, label="state_dir")
         self.sessions_dir = self.state_dir / "sessions"
-        self.sessions_dir.mkdir(parents=True, exist_ok=True)
+        self._ensure_private_state_directory(self.sessions_dir, label="sessions_dir")
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.receipts_log_path.parent.mkdir(parents=True, exist_ok=True)
         self.replay_cache_path = self.state_dir / "replay_cache.json"
@@ -4000,6 +4097,19 @@ class GovernanceProxy:
         )
         parent_jti = str(parent_claims["jti"])
         request_id = delegation_request_id or uuid.uuid4().hex
+        # Treat replay identity as safety-relevant request intent, not only
+        # child_jti/budget. TTL participates so a narrower retry cannot
+        # silently receive an older longer-lived bearer credential.
+        request_metadata = self._delegation_request_metadata(
+            parent_jti=parent_jti,
+            child_agent_id=child_agent_id,
+            child_allowed_tools=child_allowed_tools,
+            child_mission=child_mission,
+            child_ttl_s=child_ttl_s,
+            child_max_tool_calls=child_max_tool_calls,
+            child_resource_scope=child_resource_scope,
+        )
+        request_fingerprint = self._delegation_request_fingerprint(request_metadata)
         receipt_entry: dict[str, Any] | None = None
         child_budget = 0
         parent_calls_remaining = 0
@@ -4027,6 +4137,48 @@ class GovernanceProxy:
                             "delegation_request_id already used for a different reservation"
                         )
                     existing_amount = int(existing_reservation.get("amount", 0))
+                    for child in parent_session.delegated_children:
+                        if child.get("delegation_request_id") != request_id:
+                            continue
+                        if child.get("delegation_request_fingerprint") != request_fingerprint:
+                            raise LineageBudgetConflictError(
+                                "delegation_request_id already used for a different reservation"
+                            )
+                        if child.get("delegation_request") != request_metadata:
+                            raise LineageBudgetConflictError(
+                                "delegation_request_id already used for a different reservation"
+                            )
+                        replay_token = child.get("child_token")
+                        if not isinstance(replay_token, str) or not replay_token:
+                            raise LineageBudgetConflictError(
+                                "delegation_request_id already used; "
+                                "original child credential is unavailable"
+                            )
+                        replay_claims = self.verify_passport_token(
+                            replay_token,
+                            parent_token=derivation_parent_token,
+                        )
+                        if not self._delegation_claims_match_record(
+                            replay_claims,
+                            child_record=child,
+                            existing_amount=existing_amount,
+                        ) or str(replay_claims.get("jti")) != str(
+                            existing_reservation.get("child_jti")
+                        ):
+                            raise LineageBudgetConflictError(
+                                "delegation_request_id already used for a different reservation"
+                            )
+                        replay_remaining = child.get("parent_calls_remaining_at_delegation")
+                        if replay_remaining is None:
+                            replay_remaining = max(
+                                0,
+                                ceiling - used - max(0, reserved - existing_amount),
+                            )
+                        return replay_token, replay_claims, int(replay_remaining)
+                    raise LineageBudgetConflictError(
+                        "delegation_request_id already used; "
+                        "original child credential is unavailable"
+                    )
                 parent_calls_remaining = max(0, ceiling - used - reserved)
                 derivation_remaining = (
                     existing_amount
@@ -4086,11 +4238,15 @@ class GovernanceProxy:
                 parent_session.delegated_budget_reserved = reservation.reserved_total
                 child_record = {
                     "delegation_request_id": request_id,
+                    "delegation_request": request_metadata,
+                    "delegation_request_fingerprint": request_fingerprint,
                     "parent_jti": parent_jti,
+                    "child_token": child_token,
                     "child_jti": child_jti,
                     "child_agent_id": child_agent_id,
                     "child_mission": child_mission,
                     "child_allowed_tools": list(child_claims.get("allowed_tools", [])),
+                    "child_resource_scope": list(child_claims.get("resource_scope", [])),
                     "child_tool_scope_mode": child_claims.get(
                         "tool_scope_mode",
                         "allowlist",
@@ -4098,6 +4254,7 @@ class GovernanceProxy:
                     "child_forbidden_tools": list(child_claims.get("forbidden_tools", [])),
                     "child_max_tool_calls": child_budget,
                     "delegated_budget_reserved": reservation.amount,
+                    "parent_calls_remaining_at_delegation": reservation.remaining_before,
                     "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
                 parent_session.delegated_children = [
@@ -4452,10 +4609,21 @@ class GovernanceProxy:
 
     def _persist_json_file(self, path: Path, payload: dict[str, Any]) -> None:
         tmp = path.with_name(f"{path.stem}.{uuid.uuid4().hex}.tmp")
+        fd: int | None = None
         try:
-            tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                fd = None
+                handle.write(json.dumps(payload, indent=2))
+            tmp.chmod(0o600)
             os.replace(tmp, path)
+            path.chmod(0o600)
         except Exception:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
             try:
                 tmp.unlink()
             except OSError:

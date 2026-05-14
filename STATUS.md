@@ -40,6 +40,7 @@ caveat list, and [`ROADMAP.md`](ROADMAP.md) for the phase plan.
 - bootstrap and local-validation scripts ship under `scripts/` (`conductor-bootstrap.sh`, `setup-dev.sh`, `check-local.sh`)
 - agent-specific public guides live under `docs/agent-instructions/` (Conductor, Codex, Claude, plus a shared contract)
 - new technical reference pages live under `docs/reference/` (CLI, Personal Hub HTTP API, `ARDUR.md` profile format)
+- runtime delegation uses the file-backed `FileLineageBudgetLedger` for sibling child-budget reservations; mission-declared `lineage_budgets` from the v0.1 spec are not enforced yet and now fail closed at compile/issue time instead of being silently accepted
 - selected archival walkthrough recordings are public starter media; the Claude
   Code MVP path also has a re-runnable no-key evidence harness and
   `bundle.redacted.json` reader guide. Re-runnable proof media remains in
@@ -56,6 +57,7 @@ caveat list, and [`ROADMAP.md`](ROADMAP.md) for the phase plan.
   current no-key JSON evidence harness
 - a tagged release with a regenerated Homebrew formula carrying Python resource stanzas, so non-technical users can install Ardur Personal without a source checkout
 - conformance test vectors (`docs/specs/conformance/`) — the v0.1 specs reference them by private layout; they are not yet imported into the public tree
+- mission-declared `lineage_budgets` compiler/verifier support — the v0.1 specs define the intended protocol semantics, but the current runtime only supports delegation reservation accounting through `FileLineageBudgetLedger` and rejects non-empty mission-level `lineage_budgets`
 - broader deployment material beyond the SPIRE design surface
 
 ## What We Still Need To Resolve

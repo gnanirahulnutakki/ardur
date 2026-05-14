@@ -2,7 +2,7 @@
 title: "ardur` CLI Reference"
 description: "The `ardur` console entry point ships with the Python package. After"
 source_path: "docs/reference/cli.md"
-source_sha256: "66a7b2eeccb97114681943997cceda042231595d091156fed5390b06801a32ec"
+source_sha256: "bb3db0e0a15dff883ca4e76a565c723e49e1653086e3abf0f2f2dbad802e0e21"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -46,6 +46,13 @@ ardur start [--host HOST] [--port PORT] [--mission FILE]
 ```
 
 Defaults: bind `127.0.0.1:8080`. Auth required by default.
+
+State directory security: `--state-dir` is local secret state. Persisted
+sessions and passport state can contain bearer credentials, including parent
+`passport_token` values and delegated child replay tokens. The proxy creates or
+hardens the state and `sessions/` directories to `0700` and writes JSON state
+files as `0600`; do not point this option at a shared or world-readable
+location.
 
 ### `ardur issue`
 
