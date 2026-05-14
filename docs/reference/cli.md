@@ -10,7 +10,8 @@ The CLI splits into two groups:
 - **Personal path** — `hub`, `setup`, `status`, `doctor`, `doctor-claude-code`,
   `uninstall`, `run`, `desktop-observe`, `personal-native-host`,
   `personal-native-manifest`, `profile init`, `protect claude-code`,
-  `claude-code-hook`, `claude-code-report`, `posture scan`, `posture report`.
+  `claude-code-hook`, `claude-code-report`, `gemini-cli-hook`,
+  `gemini-cli-fixture`, `gemini-cli-report`, `posture scan`, `posture report`.
   Used by the local Ardur Personal product shape.
 
 Source: [`python/vibap/cli.py`](../../python/vibap/cli.py).
@@ -234,6 +235,49 @@ ardur claude-code-report [--home DIR] [--chain-dir DIR] [--keys-dir DIR]
 
 `--verify-expiry` also enforces short receipt expiry windows during chain
 verification (off by default so reports work on archived chains).
+
+### `ardur gemini-cli-fixture`
+
+Write a local-only Gemini CLI settings/context fixture and print a redacted
+shareable context document with digests for the generated files.
+
+```text
+ardur gemini-cli-fixture [--home DIR] [--project-dir DIR]
+                         [--chain-dir DIR] [--keys-dir DIR]
+```
+
+The fixture writes `settings.json`, `extensions/ardur-local/gemini-extension.json`,
+and `GEMINI.md` under the selected local directories. It is a proof harness for
+visible Gemini CLI hook/tool-boundary events; it is not a live-provider or
+server-side enforcement claim.
+
+### `ardur gemini-cli-hook`
+
+Run the local-only Gemini CLI pre-tool-call hook adapter. The hook reads one
+JSON object from stdin, evaluates the active Mission Passport from
+`ARDUR_MISSION_PASSPORT`, appends a signed receipt under
+`ARDUR_GEMINI_HOOK_DIR` (or the default Ardur home), and prints a JSON result.
+
+```text
+ardur gemini-cli-hook [pre|--phase pre] [--keys-dir DIR]
+```
+
+`status=allow` means Ardur recorded evidence and left Gemini/user permission
+flow authoritative. `status=deny` and `status=unknown` return a blocking result
+for wrappers that fail closed. Unknown results are used for unmapped Gemini tool
+schemas or other coverage gaps instead of silently treating insufficient
+evidence as safe success.
+
+### `ardur gemini-cli-report`
+
+Verify Gemini CLI hook receipt chains and emit a redacted local observability
+report with allow/deny/unknown counts, chain verification status, coverage gaps,
+and the explicit non-claims for provider-hidden reasoning/server-side tool calls.
+
+```text
+ardur gemini-cli-report [--home DIR] [--chain-dir DIR] [--keys-dir DIR]
+                        [--verify-expiry] [--json]
+```
 
 ### `ardur posture scan`
 

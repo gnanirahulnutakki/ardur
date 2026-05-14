@@ -34,6 +34,12 @@ from .personal_hub import (
 )
 from .claude_code_report import build_claude_code_report
 from .claude_code_hook import main as claude_code_hook_main
+from .gemini_cli_hook import (
+    build_local_fixture as build_gemini_local_fixture,
+    build_shareable_context as build_gemini_shareable_context,
+    build_shareable_report as build_gemini_shareable_report,
+    main as gemini_cli_hook_main,
+)
 from .posture_index import build_posture_index, format_posture_report
 from .claude_code_daemon import install_native_pre_tool_use_command, resolve_native_pre_tool_use_command_path
 from .proxy import GovernanceProxy, serve_proxy
@@ -155,6 +161,42 @@ def cmd_claude_code_report(args: argparse.Namespace) -> int:
     )
     print(f"Per-child attribution: {report['coverage']['per_child_attribution']}")
     print(f"Attribution: {report['coverage']['attribution']}")
+    return 0
+
+
+def cmd_gemini_cli_hook(args: argparse.Namespace) -> int:
+    phase = args.phase or args.phase_pos or "pre"
+    argv = ["--phase", phase]
+    if args.keys_dir:
+        argv.extend(["--keys-dir", str(args.keys_dir)])
+    return gemini_cli_hook_main(argv)
+
+
+def cmd_gemini_cli_fixture(args: argparse.Namespace) -> int:
+    fixture = build_gemini_local_fixture(
+        home=args.home,
+        project_dir=args.project_dir,
+        chain_dir=args.chain_dir,
+        keys_dir=args.keys_dir,
+    )
+    _print_json(build_gemini_shareable_context(fixture))
+    return 0
+
+
+def cmd_gemini_cli_report(args: argparse.Namespace) -> int:
+    report = build_gemini_shareable_report(
+        home=args.home,
+        chain_dir=args.chain_dir,
+        keys_dir=args.keys_dir,
+        verify_expiry=args.verify_expiry,
+    )
+    if args.json:
+        _print_json(report)
+        return 0
+    print(f"Ardur Gemini CLI receipt report: {report['receipt_count']} receipts across {report['chain_count']} chains")
+    print(f"Chains: {report['chain_dir']}")
+    print(f"Verdicts: {report['policy_verdict_counts']}")
+    print(f"Coverage gaps: {report['coverage_gaps']}")
     return 0
 
 
@@ -564,6 +606,44 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cc_report.add_argument("--json", action="store_true", help="print machine-readable report")
     cc_report.set_defaults(func=cmd_claude_code_report)
+
+    gemini_hook = subparsers.add_parser(
+        "gemini-cli-hook",
+        help="run the local-only Gemini CLI hook adapter",
+    )
+    gemini_hook.add_argument("phase_pos", nargs="?", choices=["pre"], help="hook lifecycle phase")
+    gemini_hook.add_argument("--phase", choices=["pre"], help="hook lifecycle phase")
+    gemini_hook.add_argument("--keys-dir", type=Path, help="signing keys directory")
+    gemini_hook.set_defaults(func=cmd_gemini_cli_hook)
+
+    gemini_fixture = subparsers.add_parser(
+        "gemini-cli-fixture",
+        help="write a local Gemini CLI settings/context fixture and print redacted context",
+    )
+    gemini_fixture.add_argument(
+        "--home",
+        type=Path,
+        help="explicit Gemini home/settings directory to populate; defaults to isolated Ardur local fixture state",
+    )
+    gemini_fixture.add_argument("--project-dir", type=Path, help="project directory that receives GEMINI.md")
+    gemini_fixture.add_argument("--chain-dir", type=Path, help="Ardur Gemini receipt chain directory")
+    gemini_fixture.add_argument("--keys-dir", type=Path, help="signing keys directory")
+    gemini_fixture.set_defaults(func=cmd_gemini_cli_fixture)
+
+    gemini_report = subparsers.add_parser(
+        "gemini-cli-report",
+        help="verify Gemini CLI hook receipt chains and summarize local-only observability",
+    )
+    gemini_report.add_argument("--home", type=Path, help="Gemini/Ardur home used for redaction context")
+    gemini_report.add_argument("--chain-dir", type=Path, help="explicit Gemini CLI receipt chain directory")
+    gemini_report.add_argument("--keys-dir", type=Path, help="signing public-key directory")
+    gemini_report.add_argument(
+        "--verify-expiry",
+        action="store_true",
+        help="also enforce short receipt expiry windows while verifying",
+    )
+    gemini_report.add_argument("--json", action="store_true", help="print machine-readable report")
+    gemini_report.set_defaults(func=cmd_gemini_cli_report)
 
     posture = subparsers.add_parser(
         "posture",

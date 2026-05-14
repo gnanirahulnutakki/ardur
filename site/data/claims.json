@@ -74,6 +74,22 @@
       ]
     },
     {
+      "id": "gemini-cli-local-proof",
+      "title": "Gemini CLI support is a local-only hook fixture, not a live-provider enforcement claim",
+      "body": "The Gemini CLI adapter writes a local settings/context fixture, records visible pre-tool-call hook payloads as signed Ardur receipts, preserves allow/deny/unknown evidence semantics, and emits redacted shareable reports. This supports a local tool-boundary proof path only: it does not claim provider-hidden reasoning visibility, server-side tool-call capture, sandbox isolation, or live Gemini enforcement.",
+      "evidence_level": "code-and-test",
+      "maturity": "in-progress",
+      "claim_type": "evidence-semantics",
+      "surface": ["docs", "python"],
+      "framework": ["gemini-cli", "framework-agnostic"],
+      "source_paths": [
+        "docs/reference/cli.md",
+        "python/vibap/gemini_cli_hook.py",
+        "python/vibap/cli.py",
+        "python/tests/test_gemini_cli_hook.py"
+      ]
+    },
+    {
       "id": "phase2-daemon-kernel-boundary",
       "title": "Phase 2 daemon/kernel capture is a bounded development proof",
       "body": "The current dev branch includes a Linux eBPF process-lifecycle proof harness plus no-mutation daemon custody, preflight, peer-authorization, protocol/peer handshake, SO_PEERCRED retrieval, accepted-connection protocol, dry-run accept-loop invariant seams, and a no-privilege/no-execution launch-wrapper session-proof seam for deterministic argv/cwd digest evidence. This supports a local experimental boundary claim only: no production daemon install/start, socket listener/server/accept-loop/live enforcement, live SO_PEERCRED enforcement claim, eBPF load/attach, daemon-owned cgroups, universal CLI capture, file/network side-effect capture, cross-platform kernel capture, or production readiness claim.",
