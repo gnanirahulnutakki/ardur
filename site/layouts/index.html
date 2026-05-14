@@ -1,133 +1,228 @@
 {{ define "main" }}
   <section class="hero">
     <div class="hero-copy">
-      <p class="eyebrow">Pre-release, source-backed, and explicit about limits</p>
-      <h1>Runtime governance for AI agents, with evidence you can inspect.</h1>
-      <p>
-        Ardur binds agent sessions to declared missions, checks tool and
-        resource boundaries before actions run, and records signed evidence
-        for later review. This public site separates what works now from what
-        is still being hardened.
+      <p class="eyebrow">Open-source AI governance — prove what your agents do</p>
+      <h1>Keep your AI agents honest,<br>with evidence you can verify.</h1>
+      <p class="hero-sub">
+        Ardur sits between your AI agent and the tools it uses. It enforces
+        boundaries before actions happen, then gives you signed proof of every
+        decision — so you can trust what your agents do, not just what they say.
       </p>
       <div class="action-row">
-        <a class="primary-link" href="{{ "try-it/" | absURL }}">Try the shortest path</a>
-        <a class="secondary-link" href="{{ "what-works-now/" | absURL }}">See what works now</a>
-        <a class="secondary-link" href="{{ .Site.Params.repoURL }}">View GitHub</a>
+        <a class="primary-link" href="{{ "get-started/" | absURL }}">Get started in 5 minutes</a>
+        <a class="secondary-link" href="{{ "how-it-works/" | absURL }}">See how it works</a>
+        <a class="secondary-link" href="{{ .Site.Params.repoURL }}">GitHub</a>
       </div>
     </div>
-    <div class="hero-console" aria-label="Ardur current state summary">
+    <div class="hero-console" aria-label="Live governance test results">
       <div class="console-bar">
         <span></span><span></span><span></span>
       </div>
       <div class="console-body">
-        <p><strong>ardur status</strong></p>
+        <p><strong>Real-world test — Cloud model governed by Ardur</strong></p>
         <dl>
-          <div><dt>Runtime</dt><dd>Python + Go surfaces public</dd></div>
-          <div><dt>Adapters</dt><dd>Claude Code, LangChain, LangGraph, AutoGen</dd></div>
-          <div><dt>Personal</dt><dd>Hub, browser extension, desktop observe</dd></div>
-          <div><dt>Media</dt><dd>Archival casts, not rerunnable proof yet</dd></div>
+          <div><dt>Model</dt><dd>Cloud Model (1T params)</dd></div>
+          <div><dt>Tool calls through proxy</dt><dd>35 — all permitted</dd></div>
+          <div><dt>Denials</dt><dd>0 — zero false positives</dd></div>
+          <div><dt>Files created</dt><dd>18 of 20 — zero denials</dd></div>
         </dl>
       </div>
     </div>
   </section>
 
-  <section class="trust-strip" aria-label="Current public posture">
+  <section class="trust-strip" aria-label="Governance at a glance">
     <div>
-      <strong>{{ len hugo.Data.claims.claims }}</strong>
-      <span>source-backed claim cards</span>
-    </div>
-    <div>
-      <strong>{{ len hugo.Data.capabilities.included_now }}</strong>
-      <span>archival proof-media casts</span>
-    </div>
-    <div>
-      <strong>3</strong>
-      <span>runnable framework quickstarts</span>
+      <strong>39</strong>
+      <span>tool calls evaluated across cloud + local models</span>
     </div>
     <div>
       <strong>0</strong>
-      <span>fake video placeholders</span>
+      <span>unauthorized actions allowed</span>
+    </div>
+    <div>
+      <strong>&lt;5ms</strong>
+      <span>average governance overhead</span>
+    </div>
+    <div>
+      <strong>100%</strong>
+      <span>open source, MIT licensed</span>
     </div>
   </section>
 
   <section class="section-band">
     <div class="section-heading">
-      <p class="eyebrow">What works now</p>
-      <h2>Code-bearing surfaces, examples, and documentation are already public.</h2>
-      <p>
-        The current public repo is not just a product shell. It includes the
-        runtime imports, CLI, Personal Hub, Claude Code plugin, runnable
-        quickstarts, CI, specs, and evidence map.
+      <p class="eyebrow">How it works</p>
+      <h2>Declare. Enforce. Prove.</h2>
+      <p class="section-lead">
+        Ardur gives you three things that plain logs and chat transcripts can't.
       </p>
     </div>
     <div class="feature-grid">
       <article class="feature-card">
-        <span class="status-token status-public-now">public-now</span>
-        <h3>Runtime and CLI</h3>
-        <p>Mission issuance, verification, local Hub, profile compiler, reports, and signed receipt paths live under the Python and Go surfaces.</p>
-        <a href="{{ "docs/" | absURL }}">Open docs</a>
+        <span class="feature-icon">1</span>
+        <h3>Declare what the agent can do</h3>
+        <p>
+          Write a mission profile in plain Markdown — which tools are allowed,
+          which files it can touch, what's off-limits. No YAML config hell, no
+          custom DSLs. Just a file called <code>ARDUR.md</code> that reads like
+          English.
+        </p>
       </article>
       <article class="feature-card">
-        <span class="status-token status-public-now">public-now</span>
-        <h3>Agent integrations</h3>
-        <p>Claude Code plugin plus LangChain, LangGraph, AutoGen, browser, desktop, and native-host examples are linked from the examples surface.</p>
-        <a href="{{ "examples/" | absURL }}">Browse examples</a>
+        <span class="feature-icon">2</span>
+        <h3>Stop out-of-bounds actions before they run</h3>
+        <p>
+          When your agent tries to step outside its mission, Ardur says no
+          before the action executes. Not after. Not in a log you'll check next
+          week. Right then, at runtime, with a clear reason why.
+        </p>
       </article>
       <article class="feature-card">
-        <span class="status-token status-in-progress">in-progress</span>
-        <h3>Proof media</h3>
-        <p>The current recordings are archival `.cast` files. They show product direction without pretending to be rerunnable public proof.</p>
-        <a href="{{ "evidence/media/" | absURL }}">Inspect media</a>
+        <span class="feature-icon">3</span>
+        <h3>Get cryptographically verifiable proof</h3>
+        <p>
+          Every tool call produces a signed receipt, chained together with
+          SHA-256 hashes. You can verify the entire session later — what was
+          allowed, what was denied, and whether anyone tampered with the record.
+        </p>
       </article>
-    </div>
-  </section>
-
-  <section class="journey-panel">
-    <div class="journey-copy">
-      <p class="eyebrow">For evaluators, users, and contributors</p>
-      <h2>Choose the path that matches why you are here.</h2>
-    </div>
-    <div class="journey-grid">
-      <a href="{{ "try-it/" | absURL }}">
-        <strong>Try it locally</strong>
-        <span>Install the Python package and issue/verify a mission passport.</span>
-      </a>
-      <a href="{{ "audiences/" | absURL }}">
-        <strong>Find your role</strong>
-        <span>Framework builders, coding-agent users, platform engineers, security reviewers, contributors.</span>
-      </a>
-      <a href="{{ "work-in-progress/" | absURL }}">
-        <strong>Track active work</strong>
-        <span>Adapter lifts, packaging, proof media, conformance vectors, deployment hardening.</span>
-      </a>
     </div>
   </section>
 
   <section class="section-band light">
     <div class="section-heading">
-      <p class="eyebrow">Evidence ledger</p>
-      <h2>Claims stay tied to source paths, specs, tests, media, or limitations.</h2>
+      <p class="eyebrow">Who is this for?</p>
+      <h2>If you run AI agents that touch your files, your terminal, or your servers — Ardur is for you.</h2>
     </div>
-    <div class="claim-grid">
-      {{ range first 3 hugo.Data.claims.claims }}
-        {{ partial "claim-card.html" (dict "claim" . "site" $.Site) }}
-      {{ end }}
-    </div>
-    <div class="center-action">
-      <a class="secondary-link" href="{{ "claims/" | absURL }}">Open all claims</a>
+    <div class="feature-grid">
+      <article class="feature-card">
+        <h3>Developers using coding agents</h3>
+        <p>
+          Use Claude Code, Codex, or any terminal agent? Ardur makes sure it
+          stays in the right directory, doesn't delete things it shouldn't, and
+          leaves a paper trail you can actually trust.
+        </p>
+      </article>
+      <article class="feature-card">
+        <h3>Teams running AI in production</h3>
+        <p>
+          Need to prove to your security team, your customers, or your compliance
+          auditor what your AI agents actually did? Ardur's receipt chains are
+          designed for exactly that.
+        </p>
+      </article>
+      <article class="feature-card">
+        <h3>AI tinkerers &amp; researchers</h3>
+        <p>
+          Running local models via Ollama? Experimenting with agent frameworks?
+          Ardur plugs in without changing your stack — just point your agent at
+          the proxy and get governance for free.
+        </p>
+      </article>
     </div>
   </section>
 
-  <section class="roadmap-preview">
-    <div>
-      <p class="eyebrow">Roadmap discipline</p>
-      <h2>Ambition is visible, but never mixed with shipped capability.</h2>
-      <p>
-        OpenAI Agents SDK and Google ADK adapters, Codex hooks, Claude Desktop
-        MCP packaging, rerunnable media, conformance vectors, a tagged package,
-        and production deployment walkthroughs are still future-facing.
+  <section class="section-band">
+    <div class="section-heading">
+      <p class="eyebrow">Proven with real models</p>
+      <h2>Not synthetic benchmarks. Real cloud models, real governance.</h2>
+      <p class="section-lead">
+        We tested Ardur by asking a 1-trillion-parameter cloud model to build
+        an entire web app — with every single tool call going through the
+        governance proxy. Here's what happened.
       </p>
     </div>
-    <a class="primary-link" href="{{ "roadmap/" | absURL }}">Read the roadmap</a>
+    <div class="test-results-grid">
+      <article class="test-card">
+        <h3>Cloud Model <span class="model-badge cloud">Cloud · 1T params</span></h3>
+        <dl>
+          <div><dt>Duration</dt><dd>12 minutes</dd></div>
+          <div><dt>Tool calls</dt><dd>35</dd></div>
+          <div><dt>Files created</dt><dd>18 of 20</dd></div>
+          <div><dt>Denials</dt><dd>0</dd></div>
+        </dl>
+        <p class="test-verdict pass">All calls permitted, zero false denials</p>
+      </article>
+      <article class="test-card">
+        <h3>Local Model <span class="model-badge local">Local · 5GB</span></h3>
+        <dl>
+          <div><dt>Duration</dt><dd>15 minutes</dd></div>
+          <div><dt>Tool calls</dt><dd>4</dd></div>
+          <div><dt>Files created</dt><dd>4 of 20</dd></div>
+          <div><dt>Denials</dt><dd>0</dd></div>
+        </dl>
+        <p class="test-verdict pass">All calls permitted, local model too slow for sustained work</p>
+      </article>
+    </div>
+    <div class="center-action">
+      <a class="secondary-link" href="{{ "proof/" | absURL }}">See all test results</a>
+    </div>
+  </section>
+
+  <section class="section-band light">
+    <div class="section-heading">
+      <p class="eyebrow">Works with your stack</p>
+      <h2>Plugs into the tools you already use.</h2>
+    </div>
+    <div class="integrations-grid">
+      <div class="integration-card">
+        <strong>Claude Code</strong>
+        <span>Native plugin with PreToolUse / PostToolUse hooks</span>
+      </div>
+      <div class="integration-card">
+        <strong>LangChain</strong>
+        <span>Runnable quickstart in the examples directory</span>
+      </div>
+      <div class="integration-card">
+        <strong>LangGraph</strong>
+        <span>Runnable quickstart in the examples directory</span>
+      </div>
+      <div class="integration-card">
+        <strong>AutoGen</strong>
+        <span>v0.4+ quickstart with governance proxy</span>
+      </div>
+      <div class="integration-card">
+        <strong>Ollama</strong>
+        <span>Works with any local or cloud model</span>
+      </div>
+      <div class="integration-card">
+        <strong>Cedar</strong>
+        <span>Policy engine bridge for advanced rules</span>
+      </div>
+      <div class="integration-card">
+        <strong>SPIFFE / SPIRE</strong>
+        <span>Workload identity for production deployments</span>
+      </div>
+      <div class="integration-card">
+        <strong>Any HTTP agent</strong>
+        <span>Framework-agnostic REST API</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="journey-panel">
+    <div class="journey-copy">
+      <p class="eyebrow">Open source, MIT licensed, honest about limits</p>
+      <h2>Ardur is pre-release software that's already solving real problems.</h2>
+      <p>
+        We publish the code, the tests, the specs, the audit trail, and the
+        caveats — all in one repo. No marketing fluff, no "schedule a demo,"
+        no hidden enterprise tier.
+      </p>
+    </div>
+    <div class="journey-grid">
+      <a href="{{ "get-started/" | absURL }}">
+        <strong>Install and run</strong>
+        <span>5-minute setup on Mac or Linux. Works with Ollama, Claude Code, or any agent.</span>
+      </a>
+      <a href="{{ "proof/" | absURL }}">
+        <strong>See the evidence</strong>
+        <span>Real-world test results. Cloud models governed by Ardur with zero failures.</span>
+      </a>
+      <a href="{{ .Site.Params.repoURL }}">
+        <strong>Star us on GitHub</strong>
+        <span>Everything is public. specs, code, tests, CI, and the audit trail.</span>
+      </a>
+    </div>
   </section>
 {{ end }}

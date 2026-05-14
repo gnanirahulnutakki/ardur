@@ -17,10 +17,10 @@ This section lists hosted documentation and mirrored artifacts generated from `d
 
 - [`README.md`](/__ardur_internal__/source/docs/readme/)
 - [`TESTING.md`](/__ardur_internal__/source/docs/testing/)
-- [`conductor-bootstrap.md`](/__ardur_internal__/source/docs/conductor-bootstrap/)
 - [`coverage-map.md`](/__ardur_internal__/source/docs/coverage-map/)
 - [`engineering-standards.md`](/__ardur_internal__/source/docs/engineering-standards/)
 - [`known-limitations.md`](/__ardur_internal__/source/docs/known-limitations/)
+- [`mvp-evaluator-guide.md`](/__ardur_internal__/source/docs/mvp-evaluator-guide/)
 - [`protocol-roots.md`](/__ardur_internal__/source/docs/protocol-roots/)
 - [`public-import-plan.md`](/__ardur_internal__/source/docs/public-import-plan/)
 - [`security-model.md`](/__ardur_internal__/source/docs/security-model/)

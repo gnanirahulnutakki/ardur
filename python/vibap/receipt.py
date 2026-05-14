@@ -549,7 +549,7 @@ def build_receipt(
     # Canonicalize via the same helper used for receipt_id/step_id so that
     # non-ASCII argument values hash consistently across the receipt schema.
     # Default json.dumps escapes non-ASCII (ensure_ascii=True) while
-    # _canonical_json does not — this bug was flagged in Phase 3 gemini HIGH #2.
+    # _canonical_json does not — flagged in Phase 3 audit HIGH #2.
     arguments_hash = hashlib.sha256(
         _canonical_json(
             dict(getattr(event, "arguments", {}) or {})

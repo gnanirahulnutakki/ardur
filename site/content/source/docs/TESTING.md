@@ -2,7 +2,7 @@
 title: "Testing"
 description: "The public tree includes curated Python and Go runtime code under `python/`"
 source_path: "docs/TESTING.md"
-source_sha256: "36b9c38b7cdabb55996b5d4f4b749bbb44e9449d52bdb528f2168911813ed044"
+source_sha256: "01e8f0c3cc2e4f631f20d0b4241848cb0cbe833c5c1e57d078ba36414c2beca2"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -101,6 +101,31 @@ make reproduce
 - **`test_mission_binding.py`**: one xfail (`test_tampered_md_returns_chain_invalid`) due to module-level `urllib.request.urlopen` state leak — runs green in isolation. CI invokes it as a separate `pytest` call.
 - **`test_biscuit_passport.py`**: requires `biscuit-python==0.4.0`. ABI breaks on 0.5+ and on Python 3.14.
 - **Live LLM tests**: tests under the semantic-judge / behavioral-fingerprint lanes need API access. Default test runs use test doubles; live runs require explicit env vars (`ARDUR_SEMANTIC_JUDGE=anthropic` + `ANTHROPIC_API_KEY`).
+
+## Go AAT Test Suite
+
+The `go/pkg/aat` package has 49 tests covering the full AAT specification:
+
+```bash
+cd go && go test ./pkg/aat/... -v
+```
+
+Covers: all 13 constraint Check/Subsumes functions, IssueRoot validation,
+DeriveChild depth/TTL/capability enforcement, BuildPoPJWT/VerifyPoPJWT
+round-trips, full §7 chain verification scenarios, and Registry operations.
+
+## Cloud Model Governance Tests
+
+Real-world integration tests proving governance proxy enforcement with live
+LLMs. Results are in `python/tests/test-results/`.
+
+```bash
+ARDUR_OLLAMA_API_KEY="<key>" python tests/run_cloud_model_test.py <model_name>
+```
+
+These are **not** CI-gated tests (they require live API access) but serve as
+integration proof that the proxy evaluates every tool call correctly with
+production models.
 
 ## Ardur Personal And Claude Code RC
 

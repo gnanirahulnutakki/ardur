@@ -55,6 +55,19 @@ Duration: 1d
 
 ## Block
 - Run shell commands
+
+## Forbid Rules
+# Uncomment to activate — syntax:  rule_id: forbid_when <predicate> <value>
+# - block_sensitive: forbid_when target_matches ^/etc/
+# - block_credentials: forbid_when arg_contains password, api_key
+
+## Cedar Policy
+# Uncomment to activate — write Cedar policy language below
+# permit(
+#   principal == User::"agent",
+#   action == Action::"read_file",
+#   resource is Resource
+# ) when { resource.path like "/data/*" };
 """,
 }
 
@@ -81,6 +94,8 @@ class ArdurProfile:
     forbidden_tools: list[str] = field(default_factory=list)
     max_tool_calls: int | None = None
     max_duration_s: int | None = None
+    forbid_rules: list[dict[str, Any]] = field(default_factory=list)
+    cedar_policy: str | None = None
 
 
 def load_ardur_profile(path: str | Path) -> ArdurProfile:
@@ -91,7 +106,9 @@ def load_ardur_profile(path: str | Path) -> ArdurProfile:
         "block": [],
         "allowed_tools": [],
         "forbidden_tools": [],
+        "forbid_rules": [],
     }
+    cedar_lines: list[str] = []
     section = ""
 
     for raw_line in source.read_text(encoding="utf-8").splitlines():
@@ -116,6 +133,8 @@ def load_ardur_profile(path: str | Path) -> ArdurProfile:
                 continue
         item = _list_item(line)
         if item is None:
+            if section in {"cedar policy", "advanced cedar policy"}:
+                cedar_lines.append(raw_line)
             continue
         if section in {"allow", "allowed", "what ai can do", "what the ai can do"}:
             lists["allow"].append(item)
@@ -125,6 +144,11 @@ def load_ardur_profile(path: str | Path) -> ArdurProfile:
             lists["allowed_tools"].append(item)
         elif section in {"forbidden tools", "blocked tools", "advanced forbidden tools"}:
             lists["forbidden_tools"].append(item)
+        elif section in {"forbid rules", "compliance rules", "block rules"}:
+            lists["forbid_rules"].append(item)
+
+    parsed_forbid_rules = _parse_forbid_rule_items(lists["forbid_rules"])
+    cedar_policy = "\n".join(cedar_lines) if cedar_lines else None
 
     return ArdurProfile(
         mode=_string_or_none(values.get("mode")),
@@ -134,6 +158,8 @@ def load_ardur_profile(path: str | Path) -> ArdurProfile:
         forbidden_tools=_dedupe(_expand_tool_items(lists["block"]) + lists["forbidden_tools"]),
         max_tool_calls=_int_or_none(values.get("max_tool_calls")),
         max_duration_s=_int_or_none(values.get("max_duration_s")),
+        forbid_rules=parsed_forbid_rules,
+        cedar_policy=cedar_policy,
     )
 
 
@@ -151,6 +177,52 @@ def write_profile_template(
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(PROFILE_TEMPLATES[template], encoding="utf-8")
     return target
+
+
+def _parse_forbid_rule_items(items: list[str]) -> list[dict[str, Any]]:
+    """Parse profile forbid-rule lines into backend-compatible rule dicts.
+
+    Each line looks like:  ``rule_id: forbid_when key1 val1, key2 val2``
+    Keys in the ``forbid_when`` block map directly to ForbidRulesBackend
+    predicate keys (tool_name, target_matches, arg_contains, principal,
+    action_class, tool_name_in).
+    """
+    rules: list[dict[str, Any]] = []
+    for item in items:
+        if ":" not in item:
+            continue
+        rule_id, rest = item.split(":", 1)
+        rule_id = rule_id.strip()
+        rest = rest.strip()
+        if not rest.startswith("forbid_when "):
+            continue
+        predicates_str = rest[len("forbid_when "):]
+        forbid_when: dict[str, Any] = {}
+        current_key = ""
+        current_val_parts: list[str] = []
+        for token in predicates_str.split():
+            if token in (
+                "tool_name", "tool_name_in", "arg_contains", "target_matches",
+                "principal", "action_class",
+            ):
+                if current_key and current_val_parts:
+                    _set_predicate(forbid_when, current_key, " ".join(current_val_parts))
+                current_key = token
+                current_val_parts = []
+            else:
+                current_val_parts.append(token)
+        if current_key and current_val_parts:
+            _set_predicate(forbid_when, current_key, " ".join(current_val_parts))
+        if forbid_when:
+            rules.append({"id": rule_id, "forbid_when": forbid_when})
+    return rules
+
+
+def _set_predicate(dst: dict[str, Any], key: str, raw: str) -> None:
+    if key == "tool_name_in":
+        dst[key] = [v.strip() for v in raw.split(",") if v.strip()]
+    else:
+        dst[key] = raw.rstrip(",")
 
 
 def _normalize_key(value: str) -> str:

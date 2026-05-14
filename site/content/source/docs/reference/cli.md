@@ -30,7 +30,7 @@ The CLI splits into two groups:
   `claude-code-hook`, `claude-code-report`. Used by the local Ardur Personal
   product shape.
 
-Source: [`python/vibap/cli.py`](https://github.com/gnanirahulnutakki/ardur/blob/__ARDUR_SOURCE_REF__/python/vibap/cli.py).
+Source: [`python/vibap/cli.py`](https://github.com/ArdurAI/ardur/blob/__ARDUR_SOURCE_REF__/python/vibap/cli.py).
 
 ## Protocol Path
 

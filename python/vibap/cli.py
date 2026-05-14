@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shlex
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from typing import Sequence
 
 from . import __version__
-from .ardur_profile import PROFILE_TEMPLATES, load_ardur_profile, write_profile_template
+from .ardur_profile import PROFILE_TEMPLATES, ArdurProfile, load_ardur_profile, write_profile_template
 from .ardur_personal_native_host import (
     build_native_host_manifest,
     handle_native_host_message,
@@ -75,6 +77,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         port=args.port,
         initial_session_id=initial_session_id,
         require_auth=args.require_auth,
+        tls_cert=args.tls_cert,
+        tls_key=args.tls_key,
+        no_tls=args.no_tls,
     )
     return 0
 
@@ -158,8 +163,44 @@ def cmd_claude_code_report(args: argparse.Namespace) -> int:
 
 
 def cmd_hub(args: argparse.Namespace) -> int:
-    serve_hub(host=args.host, port=args.port, home=args.home)
+    serve_hub(
+        host=args.host,
+        port=args.port,
+        home=args.home,
+        tls_cert=args.tls_cert,
+        tls_key=args.tls_key,
+        no_tls=args.no_tls,
+    )
     return 0
+
+
+def cmd_kill_switch(args: argparse.Namespace) -> int:
+    import ssl
+    import urllib.request as urlreq
+
+    proxy_url = (
+        args.proxy_url
+        or os.environ.get("ARDUR_PROXY_URL")
+        or "https://127.0.0.1:8443"
+    )
+    api_token = args.api_token or os.environ.get("ARDUR_API_TOKEN", "")
+    payload = json.dumps({"deactivate": args.deactivate}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_token}",
+    }
+    req = urlreq.Request(f"{proxy_url.rstrip('/')}/admin/kill-switch", data=payload, headers=headers)
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE  # localhost self-signed cert
+    try:
+        with urlreq.urlopen(req, timeout=5, context=ctx) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            _print_json(result)
+            return 0
+    except Exception as exc:
+        _print_json({"ok": False, "error": str(exc)})
+        return 1
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
@@ -342,6 +383,66 @@ def claude_code_doctor(plugin_dir: Path | None = None, home: Path | None = None)
     return {"ok": all(bool(check["ok"]) for check in checks), "checks": checks}
 
 
+def _resolve_protect_policies(
+    args: argparse.Namespace,
+    profile: ArdurProfile | None,
+    home: Path,
+) -> list[dict[str, object]]:
+    """Build additional_policies from CLI flags + profile."""
+    policies: list[dict[str, object]] = []
+
+    # CLI flags (highest priority)
+    if getattr(args, "forbid_rules", None) is not None:
+        rules = json.loads(Path(args.forbid_rules).read_text("utf-8"))
+        if not isinstance(rules, list):
+            rules = [rules]
+        policies.append({
+            "backend": "forbid_rules",
+            "label": "cli-forbid-rules",
+            "policy_inline": "",
+            "policy_sha256": hashlib.sha256(
+                json.dumps(rules, sort_keys=True).encode()
+            ).hexdigest(),
+            "data_inline": rules,
+        })
+    if getattr(args, "cedar_policy", None) is not None:
+        policy_src = Path(args.cedar_policy).read_text("utf-8")
+        entities: list[dict[str, object]] = []
+        if getattr(args, "cedar_entities", None) is not None:
+            entities = json.loads(Path(args.cedar_entities).read_text("utf-8"))
+        policies.append({
+            "backend": "cedar",
+            "label": "cli-cedar-policy",
+            "policy_inline": policy_src,
+            "policy_sha256": hashlib.sha256(policy_src.encode()).hexdigest(),
+            "data_inline": entities,
+        })
+
+    # Profile policies
+    if profile and profile.forbid_rules:
+        policies.append({
+            "backend": "forbid_rules",
+            "label": "profile-forbid-rules",
+            "policy_inline": "",
+            "policy_sha256": hashlib.sha256(
+                json.dumps(profile.forbid_rules, sort_keys=True).encode()
+            ).hexdigest(),
+            "data_inline": profile.forbid_rules,
+        })
+    if profile and profile.cedar_policy:
+        policies.append({
+            "backend": "cedar",
+            "label": "profile-cedar-policy",
+            "policy_inline": profile.cedar_policy,
+            "policy_sha256": hashlib.sha256(
+                profile.cedar_policy.encode()
+            ).hexdigest(),
+            "data_inline": [],
+        })
+
+    return policies
+
+
 def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
     profile = load_ardur_profile(args.profile) if args.profile else None
     mode_name = _normalize_protect_mode(args.mode or (profile.mode if profile and profile.mode else "safe-coding"))
@@ -386,6 +487,14 @@ def protect_claude_code(args: argparse.Namespace) -> dict[str, object]:
         max_duration_s=max_duration_s,
     )
     token = issue_passport(mission, private_key, ttl_s=args.ttl_s or max_duration_s)
+    # Seed additional policies (Cedar / forbid_rules) into the persistent
+    # store so the proxy picks them up at session-start time. Policies are
+    # resolved from CLI flags first, then from the profile.
+    additional_policies = _resolve_protect_policies(args, profile, home)
+    if additional_policies:
+        from vibap.backed_policy_store import FileBackedPolicyStore
+        store = FileBackedPolicyStore(home)
+        store.put_policies(mission_id=args.agent_id, policies=additional_policies)
     claims = verify_passport(token, public_key)
     active_passport = home / "active_mission.jwt"
     _write_private_text(active_passport, token + "\n")
@@ -468,6 +577,9 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--keys-dir", type=Path, help="directory containing VIBAP signing keys")
     start.add_argument("--state-dir", type=Path, help="directory for persisted sessions")
     start.add_argument("--log-path", type=Path, help="JSONL audit log path")
+    start.add_argument("--tls-cert", type=Path, help="TLS certificate PEM file")
+    start.add_argument("--tls-key", type=Path, help="TLS private key PEM file")
+    start.add_argument("--no-tls", action="store_true", help="disable TLS (plain HTTP only)")
     auth_group = start.add_mutually_exclusive_group()
     auth_group.add_argument(
         "--require-auth",
@@ -544,6 +656,9 @@ def build_parser() -> argparse.ArgumentParser:
     hub.add_argument("--host", default=DEFAULT_HUB_HOST, help="bind address")
     hub.add_argument("--port", type=int, default=DEFAULT_HUB_PORT, help="listen port")
     hub.add_argument("--home", type=Path, help="Ardur Personal home directory")
+    hub.add_argument("--tls-cert", type=Path, help="TLS certificate PEM file")
+    hub.add_argument("--tls-key", type=Path, help="TLS private key PEM file")
+    hub.add_argument("--no-tls", action="store_true", help="disable TLS (plain HTTP only)")
     hub.set_defaults(func=cmd_hub)
 
     setup = subparsers.add_parser("setup", help="configure Ardur Personal on this Mac")
@@ -579,6 +694,12 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_cc.add_argument("--home", type=Path, help="Ardur home containing active_mission.jwt")
     doctor_cc.add_argument("--plugin-dir", type=Path, default=_default_claude_plugin_dir(), help="Claude Code plugin directory")
     doctor_cc.set_defaults(func=cmd_doctor_claude_code)
+
+    kill_switch = subparsers.add_parser("kill-switch", help="activate/deactivate the emergency kill switch")
+    kill_switch.add_argument("--deactivate", action="store_true", help="deactivate the kill switch")
+    kill_switch.add_argument("--proxy-url", default=None, help="proxy base URL (defaults to ARDUR_PROXY_URL env or https://127.0.0.1:8443)")
+    kill_switch.add_argument("--api-token", default=None, help="proxy bearer token (defaults to ARDUR_API_TOKEN env)")
+    kill_switch.set_defaults(func=cmd_kill_switch)
 
     uninstall = subparsers.add_parser("uninstall", help="remove Ardur Personal launch files")
     uninstall.add_argument("--home", type=Path, help="Ardur Personal home directory")
@@ -685,6 +806,18 @@ def build_parser() -> argparse.ArgumentParser:
     protect_cc.add_argument("--max-tool-calls", type=int, default=250, help="maximum governed tool calls")
     protect_cc.add_argument("--max-duration-s", type=int, default=86400, help="mission duration budget in seconds")
     protect_cc.add_argument("--ttl-s", type=int, help="override token TTL in seconds")
+    protect_cc.add_argument(
+        "--forbid-rules", type=Path,
+        help="JSON file containing forbid_rules policy specifications",
+    )
+    protect_cc.add_argument(
+        "--cedar-policy", type=Path,
+        help="Cedar policy file (.cedar)",
+    )
+    protect_cc.add_argument(
+        "--cedar-entities", type=Path,
+        help="Cedar entities JSON file (used with --cedar-policy)",
+    )
     protect_cc.set_defaults(func=cmd_protect_claude_code)
 
     return parser

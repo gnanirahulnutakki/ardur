@@ -36,6 +36,9 @@ from cryptography.hazmat.primitives import serialization
 from . import __version__
 from .passport import DEFAULT_HOME, MissionPassport, generate_keypair, issue_passport
 from .proxy import Decision, GovernanceProxy
+from .metrics import metrics as ardur_metrics
+from .rate_limiter import RateLimiter
+from .tls import create_ssl_context, resolve_tls_paths
 
 HUB_SCHEMA_VERSION = "ardur.personal.hub.v0.1"
 EVENT_SCHEMA_VERSION = "ardur.personal.event.v0.1"
@@ -706,6 +709,8 @@ class _HubRequestHandler(BaseHTTPRequestHandler):
         if path in {"/health", "/healthz"}:
             self._send_json(self.hub.health())
             return
+        if not self._check_rate_limit():
+            return
         if not self._is_authorized(allow_query_token=path in {"/", "/dashboard"}):
             self._send_auth_required()
             return
@@ -718,9 +723,17 @@ class _HubRequestHandler(BaseHTTPRequestHandler):
         if path == "/v1/export":
             self._send_json(self.hub.export())
             return
+        if path == "/v1/metrics":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(ardur_metrics.render().encode("utf-8"))
+            return
         self._send_json({"ok": False, "error": "not found"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._check_rate_limit():
+            return
         if not self._is_authorized():
             self._send_auth_required()
             return
@@ -749,6 +762,16 @@ class _HubRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         message = _redact_url_tokens(fmt % args)
         print(f"ardur-hub: {self.address_string()} - {message}", file=sys.stderr)
+
+    def _check_rate_limit(self) -> bool:
+        limiter = getattr(self.server, "rate_limiter", None)
+        if limiter is None:
+            return True
+        client_ip = self.client_address[0] if self.client_address else "unknown"
+        if not limiter.allow(client_ip):
+            self._send_json({"ok": False, "error": "rate limit exceeded"}, status=429)
+            return False
+        return True
 
     def _request_path(self) -> str:
         return urlparse.urlparse(self.path).path
@@ -866,10 +889,33 @@ class _HubRequestHandler(BaseHTTPRequestHandler):
 </html>"""
 
 
-def serve_hub(*, host: str = DEFAULT_HUB_HOST, port: int = DEFAULT_HUB_PORT, home: str | Path | None = None) -> None:
+def serve_hub(
+    *,
+    host: str = DEFAULT_HUB_HOST,
+    port: int = DEFAULT_HUB_PORT,
+    home: str | Path | None = None,
+    tls_cert: str | Path | None = None,
+    tls_key: str | Path | None = None,
+    no_tls: bool = False,
+) -> None:
     server = ThreadingHTTPServer((host, port), _HubRequestHandler)
-    server.hub = PersonalHub(home, hub_url=f"http://{host}:{port}")  # type: ignore[attr-defined]
-    print(f"Ardur Personal Hub listening on http://{host}:{port}", file=sys.stderr)
+    server.rate_limiter = RateLimiter()  # type: ignore[attr-defined]
+
+    tls_active = False
+    if not no_tls:
+        tls_result = resolve_tls_paths(tls_cert, tls_key, home=Path(home) if home else None, hostname=host)
+        if tls_result:
+            cert_path, key_path, cert_fingerprint = tls_result
+            ssl_ctx = create_ssl_context(cert_path, key_path)
+            server.socket = ssl_ctx.wrap_socket(server.socket, server_side=True)
+            tls_active = True
+            print(f"[tls] cert fingerprint: {cert_fingerprint}", file=sys.stderr)
+    if no_tls:
+        print("[tls] WARNING: TLS disabled — plain HTTP only", file=sys.stderr)
+
+    scheme = "https" if tls_active else "http"
+    server.hub = PersonalHub(home, hub_url=f"{scheme}://{host}:{port}")  # type: ignore[attr-defined]
+    print(f"Ardur Personal Hub listening on {scheme}://{host}:{port}", file=sys.stderr)
     server.serve_forever()
 
 

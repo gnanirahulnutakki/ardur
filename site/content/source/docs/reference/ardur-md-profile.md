@@ -22,7 +22,7 @@ the same Mission Passport the protocol path uses. It is the friendly layer
 for non-technical users; nothing about a Markdown profile is missing from
 the underlying capability set.
 
-Source: [`python/vibap/ardur_profile.py`](https://github.com/gnanirahulnutakki/ardur/blob/__ARDUR_SOURCE_REF__/python/vibap/ardur_profile.py).
+Source: [`python/vibap/ardur_profile.py`](https://github.com/ArdurAI/ardur/blob/__ARDUR_SOURCE_REF__/python/vibap/ardur_profile.py).
 
 ## Why Markdown
 
@@ -128,7 +128,7 @@ Passport:
   folder; block shell commands.
 
 Template source is in
-[`python/vibap/ardur_profile.py`](https://github.com/gnanirahulnutakki/ardur/blob/__ARDUR_SOURCE_REF__/python/vibap/ardur_profile.py)
+[`python/vibap/ardur_profile.py`](https://github.com/ArdurAI/ardur/blob/__ARDUR_SOURCE_REF__/python/vibap/ardur_profile.py)
 under `PROFILE_TEMPLATES`.
 
 ## Where the Compiled Passport Lives

@@ -85,6 +85,31 @@ make reproduce
 - **`test_biscuit_passport.py`**: requires `biscuit-python==0.4.0`. ABI breaks on 0.5+ and on Python 3.14.
 - **Live LLM tests**: tests under the semantic-judge / behavioral-fingerprint lanes need API access. Default test runs use test doubles; live runs require explicit env vars (`ARDUR_SEMANTIC_JUDGE=anthropic` + `ANTHROPIC_API_KEY`).
 
+## Go AAT Test Suite
+
+The `go/pkg/aat` package has 49 tests covering the full AAT specification:
+
+```bash
+cd go && go test ./pkg/aat/... -v
+```
+
+Covers: all 13 constraint Check/Subsumes functions, IssueRoot validation,
+DeriveChild depth/TTL/capability enforcement, BuildPoPJWT/VerifyPoPJWT
+round-trips, full §7 chain verification scenarios, and Registry operations.
+
+## Cloud Model Governance Tests
+
+Real-world integration tests proving governance proxy enforcement with live
+LLMs. Results are in `python/tests/test-results/`.
+
+```bash
+ARDUR_OLLAMA_API_KEY="<key>" python tests/run_cloud_model_test.py <model_name>
+```
+
+These are **not** CI-gated tests (they require live API access) but serve as
+integration proof that the proxy evaluates every tool call correctly with
+production models.
+
 ## Ardur Personal And Claude Code RC
 
 When touching the Hub, browser adapter, Claude Code hook, or `ARDUR.md`

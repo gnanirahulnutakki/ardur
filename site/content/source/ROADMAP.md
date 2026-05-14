@@ -2,7 +2,7 @@
 title: "Roadmap"
 description: "Already present:"
 source_path: "ROADMAP.md"
-source_sha256: "8c891aad518d94a040cec36f4203638622c8c8d655c939d317ae2484130459ea"
+source_sha256: "480b234f0ebf6c1e0b260b6595d4a56c5c9a40eb4faeacd9955c89b0fdcd65a6"
 weight: 100
 maturity: ["in-progress"]
 claim_types: ["roadmap"]
@@ -38,6 +38,8 @@ Already present:
 - technical reference pages for the CLI, Personal Hub HTTP API, and `ARDUR.md`
 - selected archival walkthrough recordings as starter media
 - `Ardur` as the public-facing product name with explicit naming boundaries for `VIBAP`, `MCEP`, and related protocol surfaces (see `docs/protocol-roots.md`)
+- complete Go AAT package — 13 constraint types, issuance, derivation, PoP binding, full §7 chain verification (49 tests)
+- cloud model governance tests proving real-world proxy enforcement with live LLMs
 
 ## Runtime Verification
 

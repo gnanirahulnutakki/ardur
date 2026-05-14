@@ -68,6 +68,7 @@ def _build_server_thread(proxy: GovernanceProxy, private_key, port: int):
                 host="127.0.0.1",
                 port=port,
                 require_auth=False,
+                no_tls=True,
             )
         finally:
             stop_event.set()
@@ -1125,6 +1126,7 @@ def _build_authenticated_server_thread(
             port=port,
             require_auth=True,
             api_token=api_token,
+            no_tls=True,
         )
 
     thread = threading.Thread(target=run, daemon=True)

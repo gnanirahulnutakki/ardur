@@ -20,4 +20,3 @@ This section lists hosted documentation and mirrored artifacts generated from `g
 ## Child Sections
 
 - [`pkg/`](/__ardur_internal__/source/go/pkg/)
-- [`spec/`](/__ardur_internal__/source/go/spec/)

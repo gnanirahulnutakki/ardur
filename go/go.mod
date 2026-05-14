@@ -1,4 +1,4 @@
-module github.com/gnanirahulnutakki/ardur/go
+module github.com/ArdurAI/ardur/go
 
 go 1.25.9
 

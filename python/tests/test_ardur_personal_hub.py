@@ -294,3 +294,85 @@ def _post_json(base_url, path, payload, *, token=None):
     )
     with urlrequest.urlopen(request, timeout=5) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+# ---------------------------------------------------------------------------
+# HTTP integration tests — Hub running as an actual HTTP server
+# ---------------------------------------------------------------------------
+
+
+class TestPersonalHubHTTPIntegration:
+    """End-to-end HTTP integration tests against a running Personal Hub server."""
+
+    def test_status_endpoint_returns_session_count(self, tmp_path):
+        with _running_hub(tmp_path) as (hub, base_url):
+            status = _get_json(base_url, "/v1/status", token=hub.hub_token)
+            assert "sessions" in status
+            assert status["sessions"] == 0
+
+            # After an observation, session count increments
+            _post_json(base_url, "/v1/events/observe", _browser_payload(), token=hub.hub_token)
+            status2 = _get_json(base_url, "/v1/status", token=hub.hub_token)
+            assert status2["sessions"] >= 1
+
+    def test_multiple_sessions_coexist(self, tmp_path):
+        with _running_hub(tmp_path) as (hub, base_url):
+            chatgpt = _browser_payload("ChatGPT observation")
+            claude = _browser_payload("Claude observation")
+            claude["source"]["app"] = "Claude"
+            claude["session"]["id"] = "https://claude.ai:test-tab"
+
+            r1 = _post_json(base_url, "/v1/events/observe", chatgpt, token=hub.hub_token)
+            r2 = _post_json(base_url, "/v1/events/observe", claude, token=hub.hub_token)
+            assert r1["ok"] and r2["ok"]
+
+            status = _get_json(base_url, "/v1/status", token=hub.hub_token)
+            assert status["sessions"] >= 2
+
+            exported = _get_json(base_url, "/v1/export", token=hub.hub_token)
+            providers = {r["provider"] for r in exported["session_reviews"]}
+            assert "ChatGPT" in providers
+            assert "Claude" in providers
+
+    def test_rate_limiting_returns_429(self, tmp_path):
+        # Create a hub with a tight rate limiter
+        from vibap.rate_limiter import RateLimiter
+        from vibap.personal_hub import _HubRequestHandler
+        from http.server import ThreadingHTTPServer
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _HubRequestHandler)
+        host, port = server.server_address
+        hub = PersonalHub(tmp_path, hub_url=f"http://{host}:{port}")
+        server.hub = hub  # type: ignore[attr-defined]
+        server.rate_limiter = RateLimiter(rate=5, burst=5)  # type: ignore[attr-defined]
+
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base_url = f"http://{host}:{port}"
+
+        try:
+            # Health endpoint bypasses rate limiter
+            assert _get_json(base_url, "/healthz")["ok"] is True
+
+            # Flood the status endpoint (which IS rate-limited)
+            rate_limited = False
+            for _ in range(20):
+                req = urlrequest.Request(
+                    base_url + "/v1/status",
+                    headers={"X-Ardur-Hub-Token": hub.hub_token},
+                )
+                try:
+                    with urlrequest.urlopen(req, timeout=5) as resp:
+                        if resp.status == 429:
+                            rate_limited = True
+                            break
+                except urlerror.HTTPError as exc:
+                    if exc.code == 429:
+                        rate_limited = True
+                        break
+
+            assert rate_limited, "Expected 429 after exceeding rate limit"
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)

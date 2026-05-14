@@ -2,7 +2,7 @@
 title: "Public Import Plan"
 description: "This plan converts the private source tree into the public Ardur repo without"
 source_path: "docs/public-import-plan.md"
-source_sha256: "aeb82a733703627ecd26f753c6d87910da9cb5a77c1317ccfe207b24f54cf252"
+source_sha256: "f0e2d071dcaf65b3032c575285bafb2aebd4180138dafc336b4374f1acf46aa7"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -62,7 +62,7 @@ ardur/
 | selected demos | `examples/` | curated copy | SDK agents, live governance, hardening foundation, and delegation examples. |
 | selected integrations | `python/integrations/` | curated copy | Include only framework surfaces claimed in docs. |
 | `VIBAP/pkg/credential/` | `go/pkg/credential/` | copy | Credential issuance and verification. |
-| `VIBAP/pkg/governance/` | `go/pkg/governance/` | copy | Core Go governance engine. |
+| `VIBAP/pkg/governance/` | `go/pkg/aat/` | copy | Go AAT credential-attenuation engine (constraints, derivation, PoP, chain verification). |
 | `VIBAP/pkg/policy/` | `go/pkg/policy/` | copy | Policy evaluation surface. |
 | `VIBAP/pkg/spiffe/` | `go/pkg/spiffe/` | copy | SPIFFE/SPIRE identity path. |
 | selected `VIBAP/pkg/*` | `go/pkg/*` | curated copy | Provenance, issuer, AAT, trust, transparency, API if referenced by retained code. |
@@ -107,11 +107,10 @@ ardur/
    missions remain runnable. Deferred adapter specs: OpenAI Agents SDK,
    Google ADK.
 
-5. **Go runtime and protocol schemas — done with caveats.**
+5. **Go runtime and protocol schemas — done.**
    `go/` is a coherent module covering credential, governance, policy, SPIFFE,
-   AAT (skeleton, fail-closed by design), provenance, issuer, trust,
-   transparency, and CLI surfaces. The `pkg/aat` skeleton is documented in
-   `go/README.md` and remains an explicit non-claim.
+   AAT (constraint engine, derivation, PoP, chain verification — 49 tests),
+   provenance, issuer, trust, transparency, and CLI surfaces.
 
 6. **Deployment material — partly done.**
    SPIRE/Kubernetes material is present under `deploy/k8s/spire/` with an

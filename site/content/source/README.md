@@ -2,7 +2,7 @@
 title: "Ardur"
 description: "Ardur is the runtime governance and evidence layer for AI agents."
 source_path: "README.md"
-source_sha256: "ff10291f978f7b275194c21f2991c21902ae3427a4eaa6a69f33a1f8b9f2a2ff"
+source_sha256: "8a4256daaa213ec22e398b902fb582341fed2073ec509cafa8d45629996ad557"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["orientation", "runtime-boundary"]
@@ -19,19 +19,50 @@ This page is generated from the public repository source file. Edit the source f
 
 Ardur is the runtime governance and evidence layer for AI agents.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/gnanirahulnutakki/ardur/blob/__ARDUR_SOURCE_REF__/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ArdurAI/ardur/blob/__ARDUR_SOURCE_REF__/LICENSE)
 [![Status](https://img.shields.io/badge/status-pre--release-blue)](/__ardur_internal__/source/status/)
-[![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/gnanirahulnutakki/ardur/discussions)
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/ArdurAI/ardur/discussions)
 
 This public repo is opening in phases. It now contains the product intent,
-research-informed positioning, public specs, curated Python and Go runtime
-imports, mission examples, runnable framework adapters (LangChain, LangGraph,
+research-informed positioning, public specs, the Python governance runtime,
+Go packages for eBPF kernel capture and Kubernetes control-plane components, mission examples, runnable framework adapters (LangChain, LangGraph,
 AutoGen), the Ardur Personal Hub service, the Claude Code plugin and hook,
 and the public Hugo evidence site. Re-runnable proof media, full packaging,
 and production deployment material are still being tightened before they are
 presented as release-ready.
 
 [Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
+
+## Verified with real models
+
+Ardur was tested by asking cloud and local models to build an entire web application — every single tool call flowed through the governance proxy first.
+
+| Model | Tool Calls | Files Built | Denials | Overhead |
+|-------|------------|-------------|---------|----------|
+| **Cloud Model (1T)** | 35 | 18 of 20 | **0** | ~4ms/call |
+| **Local Model (8B)** | 4 | 4 of 20 | **0** | ~4ms/call |
+
+**39 tool calls across 2 models. Zero unauthorized actions. Zero false denials.**
+
+[Full test results →](/__ardur_internal__/source/python/tests/test-results/readme/) · [Proof & evidence site →](/__ardur_internal__/source/site/readme/)
+
+## Evaluator Quickstart
+
+One command to a working governance demo:
+
+```bash
+git clone https://github.com/ArdurAI/ardur.git && cd ardur
+make demo
+```
+
+Then run the automated verification harness:
+
+```bash
+./scripts/verify-mvp.sh
+```
+
+Full walkthrough with architecture diagrams, session lifecycle, receipt chain
+explanation, and known gaps: [`docs/mvp-evaluator-guide.md`](/__ardur_internal__/source/docs/mvp-evaluator-guide/).
 
 ## Fastest MVP Path: Claude Code
 
@@ -86,7 +117,7 @@ This repo currently includes:
 - a short research-informed positioning summary
 - current status and what is still being resolved
 - public v0.1 specs for mission declarations, execution receipts, verifier contracts, conformance profiles, and related protocol surfaces
-- curated Python and Go runtime imports under `python/` and `go/`
+- Python governance runtime under `python/`; Go eBPF/K8s packages and a complete AAT credential-attenuation engine under `go/`
 - the Ardur Personal Hub service and CLI under `python/vibap/` (`ardur hub`, `ardur setup`, `ardur status`, `ardur protect claude-code`, `ardur profile init`, `ardur doctor-claude-code`)
 - the Claude Code plugin under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks emitting signed receipts
 - runnable framework adapters under `examples/`: LangChain, LangGraph, AutoGen, browser extension, desktop-observe, and native-host. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories remain deferred adapter specs
@@ -117,11 +148,11 @@ Ardur sits between an AI agent and the tools it calls — so the integration sto
 |----------------------|-------------|---------------------------------|
 | **Agent framework**  | JSON mission examples; Claude Code plugin; runnable LangChain, LangGraph, AutoGen, browser, desktop-observe, and native-host examples; deferred README-only OpenAI Agents SDK and Google ADK directories | more runnable framework adapters |
 | **Model provider**   | provider-agnostic tool boundary in the runtime design | local Ollama quickstarts and live-provider examples |
-| **Policy engine**    | native checks, forbid-rules, Cedar-facing surfaces | OPA and broader Biscuit datalog examples |
+| **Policy engine**    | native checks, forbid-rules, Cedar bridge, AAT constraint engine (13 types) | OPA and broader Biscuit datalog examples |
 | **Identity**         | SPIFFE / SPIRE-oriented code and docs | full cluster deployment walkthrough |
 | **Receipts sink**    | local JSON / stdout-oriented receipt surfaces | OTel emitters and durable storage examples |
 
-If you'd use an integration that isn't listed, file an [integration request](https://github.com/gnanirahulnutakki/ardur/issues/new?template=integration_request.yml) — it's the strongest signal we have for prioritisation.
+If you'd use an integration that isn't listed, file an [integration request](https://github.com/ArdurAI/ardur/issues/new?template=integration_request.yml) — it's the strongest signal we have for prioritisation.
 
 ## Naming Note
 

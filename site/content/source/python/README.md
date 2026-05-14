@@ -113,4 +113,4 @@ One more honest caveat: the package imports cleanly and the AST parses, but I ha
 
 ## License
 
-MIT — see [LICENSE](https://github.com/gnanirahulnutakki/ardur/blob/__ARDUR_SOURCE_REF__/LICENSE).
+MIT — see [LICENSE](https://github.com/ArdurAI/ardur/blob/__ARDUR_SOURCE_REF__/LICENSE).

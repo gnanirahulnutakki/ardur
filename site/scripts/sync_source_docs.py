@@ -17,12 +17,13 @@ CONTENT_SOURCE_ROOT = SITE_ROOT / "content" / "source"
 STATIC_ARTIFACT_ROOT = SITE_ROOT / "static" / "repo"
 CAPABILITIES_OUTPUT = SITE_ROOT / "data" / "capabilities.json"
 SOURCE_ROUTES_OUTPUT = SITE_ROOT / "data" / "source_routes.json"
-REPO_URL = "https://github.com/gnanirahulnutakki/ardur"
+REPO_URL = "https://github.com/ArdurAI/ardur"
 SOURCE_REF_PLACEHOLDER = "__ARDUR_SOURCE_REF__"
 INTERNAL_URL_PREFIX = "/__ardur_internal__/"
 
 PUBLIC_MARKDOWN_EXCLUDED_PREFIXES = (
     ".context/",
+    "_internal/",
     "logs/",
     "site/content/",
     "site/public/",

@@ -33,21 +33,14 @@ workdone-so-far.md
 *.egg-info/
 python/build/
 
-# Local real-world-test evidence bundles are generated during QA/review.
-# Keep them out of the public tree; copy only redacted summaries into docs.
-reports/evidence/
+# Internal planning, engineering reports, and dev tooling — moved to _internal/
+# so the public tree stays clean for the open-source community.
+_internal/
+reports/
 
 # Go build artifacts when binaries land in the repo root rather than $GOBIN.
-go/authority
-go/governor
 go/operator
 go/webhook
-go/cli
-go/benchmark_live
-go/benchmark_sparse
-go/cedar-benchmark-wrapper
-go/specvalidate
-go/benchcheck
 
 # Hugo site build output.
 site/public/

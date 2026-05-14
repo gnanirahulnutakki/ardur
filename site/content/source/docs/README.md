@@ -2,7 +2,7 @@
 title: "Docs"
 description: "This repo is opening in phases."
 source_path: "docs/README.md"
-source_sha256: "5dba5c5fea03d1a4aad61a5a109f1f0ea95d57353482224dc26847b2f8632cf2"
+source_sha256: "da3ebadd6698845e8ca62a1dd2738e010270d997b1c2f6c3391e59d31e124559"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -35,7 +35,6 @@ readiness and broader host coverage remain in follow-on phases.
 - [Public Import Plan](/__ardur_internal__/source/docs/public-import-plan/)
 - [Testing](/__ardur_internal__/source/docs/testing/)
 - [Ardur Personal Hub](/__ardur_internal__/source/docs/guides/ardur-personal-hub/)
-- [Conductor Bootstrap](/__ardur_internal__/source/docs/conductor-bootstrap/)
 - [Agent Instructions](/__ardur_internal__/source/docs/agent-instructions/readme/)
 - [Engineering Standards](/__ardur_internal__/source/docs/engineering-standards/)
 - [Architecture Decision Records](/__ardur_internal__/source/docs/decisions/readme/)

@@ -2,7 +2,7 @@
 title: "How Ardur evaluates an action it hasn't seen yet"
 description: "A reviewer raised a sharp point about the protocol's pre-action evaluation hook: **\"In practice, LLM-driven calls are often not deterministically known at pre-action time, which ma"
 source_path: "docs/comparisons/hook-evaluation-model.md"
-source_sha256: "39f5634fd196f96c4fb7ecb0aa748afbd3e5491e786fc35cd4242538d7c864c0"
+source_sha256: "f83bf5c355c79f3b4a697a4998e312546ff00b2f0ee1deb9e2bcc6c881c4d7cf"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["comparison"]
@@ -97,4 +97,4 @@ The runnable framework quickstarts under `examples/*-quickstart/` (LangChain, La
 
 We don't claim this hook model handles every case perfectly. The boundary case we're least sure about is **streaming tool calls** — agent calls where the result arrives as a stream of partial outputs over time, and the mission has post-conditions that span the stream. The current design says you emit one post-action attestation when the stream closes. But missions that say "fail the call early if PII appears in the first 10 KB" need the verifier to evaluate continuously. We've prototyped this with `evaluate_streaming` callbacks but haven't shipped them publicly. Phase 7 publishes the streaming benchmark suite alongside the main matrix and the gap closes there.
 
-This is a real reviewer question, not a marketing question. If you have a streaming use case that breaks our model, that's exactly the kind of feedback the [GitHub Discussions](https://github.com/gnanirahulnutakki/ardur/discussions) Q&A category exists for. The reviewer who raised the original concern is doing us a favour by surfacing it; the answer is "we have one, here it is, let's stress-test it."
+This is a real reviewer question, not a marketing question. If you have a streaming use case that breaks our model, that's exactly the kind of feedback the [GitHub Discussions](https://github.com/ArdurAI/ardur/discussions) Q&A category exists for. The reviewer who raised the original concern is doing us a favour by surfacing it; the answer is "we have one, here it is, let's stress-test it."

@@ -18,7 +18,6 @@ readiness and broader host coverage remain in follow-on phases.
 - [Public Import Plan](public-import-plan.md)
 - [Testing](TESTING.md)
 - [Ardur Personal Hub](guides/ardur-personal-hub.md)
-- [Conductor Bootstrap](conductor-bootstrap.md)
 - [Agent Instructions](agent-instructions/README.md)
 - [Engineering Standards](engineering-standards.md)
 - [Architecture Decision Records](decisions/README.md)

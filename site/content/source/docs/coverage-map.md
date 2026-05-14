@@ -2,7 +2,7 @@
 title: "Ardur Coverage Map"
 description: "**The single source of truth for what Ardur captures and what it does not.**"
 source_path: "docs/coverage-map.md"
-source_sha256: "a142701860fe889b62edaa42581b4e910d4242dcf70488151f30d89e7f693299"
+source_sha256: "6c9ae7e2e4299012e9400c3c03bf3aed9a31e6ce1643b9d42396a7796e6df503"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -23,7 +23,7 @@ This page is the canonical reference linked from the README, `STATUS.md`,
 plugin documentation, and every example. When the capture surface changes,
 this page changes; everywhere else just links to it.
 
-Last updated: 2026-05-07. Current shipping version: v0.1 (tool-call boundary).
+Last updated: 2026-05-14. Current shipping version: v0.1 (tool-call boundary).
 
 ## What Ardur captures today (v0.1)
 

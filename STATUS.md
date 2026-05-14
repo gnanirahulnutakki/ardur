@@ -33,7 +33,7 @@ caveat list, and [`ROADMAP.md`](ROADMAP.md) for the phase plan.
 - curated Python runtime files and tests are present under `python/`, including the Ardur Personal Hub service (`personal_hub.py`), Claude Code hook (`claude_code_hook.py`), telemetry (`claude_code_telemetry.py`), reporting (`claude_code_report.py`), native-messaging host (`ardur_personal_native_host.py`), and `ARDUR.md` profile compiler (`ardur_profile.py`)
 - the `ardur` CLI ships subcommands for the protocol path (`issue`, `verify`, `attest`, `start`) and the Personal path (`hub`, `setup`, `status`, `doctor`, `doctor-claude-code`, `uninstall`, `run`, `desktop-observe`, `personal-native-host`, `personal-native-manifest`, `profile init`, `protect claude-code`, `claude-code-hook`, `claude-code-report`)
 - the Claude Code plugin is present under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks plus a smoke script
-- curated Go runtime, governance, and operator files are present under `go/` (the AAT package remains a fail-closed skeleton by design and is documented as such in `go/README.md`)
+- curated Go runtime, governance, and operator files are present under `go/`, including a complete AAT credential-attenuation engine with constraint checks, subsumption, JWT issuance/derivation, PoP binding, and full §7 chain verification (49 tests)
 - runnable framework examples are present under `examples/`: LangChain, LangGraph, and AutoGen quickstarts; the Ardur Personal browser extension; the Ardur Personal desktop-observe adapter; the Ardur Personal native-messaging host; and the Claude Code plugin pointer. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories are deferred adapter specs
 - dedicated Python (3.10 + 3.13) and Go CI workflows run on every push and PR (`.github/workflows/tests.yml`), alongside CodeQL, link-check, secret-scan, format validation, and the Hugo site build
 - the Hugo public evidence-site source tree is present under `site/`, with start-here / build / evidence sections that link each public claim back to the source file backing it
@@ -42,6 +42,7 @@ caveat list, and [`ROADMAP.md`](ROADMAP.md) for the phase plan.
 - new technical reference pages live under `docs/reference/` (CLI, Personal Hub HTTP API, `ARDUR.md` profile format)
 - selected archival walkthrough recordings are public starter media; a re-runnable proof path lands with the next media drop — see `MEDIA.md`
 - a public audit trail is maintained under `docs/audit/`, mirroring the GitHub Code Scanning dismissal record
+- cloud model governance tests (`python/tests/test-results/`) prove real-world proxy enforcement with live LLMs (cloud + local models) — every tool call evaluated through the governance proxy with zero denials across all models
 - the journey-log article series (`docs/articles/`) ships Article 05 (Proof Media That Actually Means Something) and Article 06 (Public Import Discipline) as first-wave entries
 
 ## In Progress

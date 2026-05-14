@@ -6,7 +6,7 @@ This page is the canonical reference linked from the README, `STATUS.md`,
 plugin documentation, and every example. When the capture surface changes,
 this page changes; everywhere else just links to it.
 
-Last updated: 2026-05-07. Current shipping version: v0.1 (tool-call boundary).
+Last updated: 2026-05-14. Current shipping version: v0.1 (tool-call boundary).
 
 ## What Ardur captures today (v0.1)
 
