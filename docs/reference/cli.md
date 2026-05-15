@@ -39,10 +39,11 @@ ardur issue --agent-id ID --mission TEXT
             [--resource-scope PATTERN ...]
             [--max-tool-calls N] [--max-duration-s N]
             [--delegation-allowed] [--max-delegation-depth N]
-            [--ttl-s N] [--keys-dir DIR]
+            [--ttl-s N] [--token-only] [--keys-dir DIR]
 ```
 
-Prints `{"token": "...", "claims": {...}}` to stdout.
+Default output is `{"token": "...", "claims": {...}}`.
+With `--token-only`, prints only the raw JWT for shell capture.
 
 ### `ardur verify`
 

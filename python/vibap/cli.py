@@ -92,6 +92,9 @@ def cmd_issue(args: argparse.Namespace) -> int:
         max_delegation_depth=args.max_delegation_depth,
     )
     token = issue_passport(mission, private_key, ttl_s=args.ttl_s)
+    if args.token_only:
+        print(token)
+        return 0
     claims = verify_passport(token, public_key)
     _print_json({"token": token, "claims": claims})
     return 0
@@ -485,6 +488,11 @@ def build_parser() -> argparse.ArgumentParser:
     issue.add_argument("--delegation-allowed", action="store_true", help="allow one-step delegation")
     issue.add_argument("--max-delegation-depth", type=int, default=0, help="delegation depth budget")
     issue.add_argument("--ttl-s", type=int, help="override token TTL in seconds")
+    issue.add_argument(
+        "--token-only",
+        action="store_true",
+        help="print only the JWT string (for shell scripting)",
+    )
     issue.add_argument("--keys-dir", type=Path, help="directory containing VIBAP signing keys")
     issue.set_defaults(func=cmd_issue)
 

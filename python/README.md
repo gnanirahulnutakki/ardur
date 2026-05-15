@@ -11,15 +11,16 @@ A note on names: the eventual PyPI package is `ardur`, but the internal Python m
 cd python
 pip install -e .
 
-# Issue a passport for a mission
-ardur issue \
+# Issue a passport for a mission (clean token capture, no jq/python -c)
+TOKEN="$(ardur issue \
   --agent-id alice \
   --mission "summarize sales from sales/q1.csv into reports/" \
-  --allowed-tools read_file,write_report \
-  --resource-scope 'sales/*,reports/*'
+  --allowed-tools read_file write_report \
+  --resource-scope 'sales/*' 'reports/*' \
+  --token-only)"
 
-# Verify a passport
-ardur verify <token-from-issue-output>
+# Verify the passport
+ardur verify --token "$TOKEN"
 ```
 
 That walks through key generation, mission compilation, ES256-signed passport issuance, and verification — all local, no LLM calls.
