@@ -1823,6 +1823,8 @@ class GovernanceProxy:
         self._receipts_log_lock = threading.Lock()
         self._lineage_parent_cache_lock = threading.Lock()
         self._lineage_parent_cache: OrderedDict[str, str | None] = OrderedDict()
+        self._last_seen_receipts_lock = threading.Lock()
+        self._last_seen_receipts: dict[str, str] = {}
         self._replay_cache_sentinel: str | None = None
         self._revoked_sentinel: str | None = None
         self._lineage_hashes_sentinel: str | None = None
@@ -2271,6 +2273,87 @@ class GovernanceProxy:
             )
         verifier_key = self.public_key
         store.read(record_id, verifier_key)
+
+    def _apply_mic_conformance_checks(
+        self,
+        session: GovernanceSession,
+        tool_name: str,
+        arguments: dict[str, Any],
+        policy_claims: dict[str, Any],
+    ) -> tuple[Decision, str, DenialReason | None] | None:
+        """Apply MIC-State / MIC-Evidence conformance checks.
+
+        Returns ``None`` when all checks pass or the profile is
+        Delegation-Core (which applies no extra checks).  Otherwise
+        returns ``(decision, reason, denial_reason)`` for the first
+        failing check.
+        """
+        profile = policy_claims.get("conformance_profile") or "Delegation-Core"
+        if profile == "Delegation-Core":
+            return None
+
+        # -- Check 1: Manifest Digest (MIC-State, MIC-Evidence) --------------
+        expected_digest = policy_claims.get("tool_manifest_digest")
+        if expected_digest:  # only when a digest is pinned in the passport
+            observed = arguments.get("observed_manifest_digest")
+            if not observed or not isinstance(observed, str):
+                return (
+                    Decision.VIOLATION,
+                    "manifest_drift:missing",
+                    DenialReason.MANIFEST_DRIFT,
+                )
+            if observed.strip() != expected_digest.strip():
+                return (
+                    Decision.VIOLATION,
+                    f"manifest_drift:expected={expected_digest} observed={observed.strip()}",
+                    DenialReason.MANIFEST_DRIFT,
+                )
+
+        # -- Check 2: Envelope Signature (MIC-State, MIC-Evidence) -----------
+        env_sig = arguments.get("envelope_signature_valid")
+        if env_sig is not True:  # strict boolean check - rejects truthy strings
+            return (
+                Decision.VIOLATION,
+                "envelope_tampered",
+                DenialReason.ENVELOPE_TAMPERED,
+            )
+
+        # -- Check 3: Visibility (MIC-State, MIC-Evidence) -------------------
+        visibility = arguments.get("visibility")
+        if not isinstance(visibility, str) or visibility.strip().lower() != "full":
+            label = visibility if isinstance(visibility, str) else type(visibility).__name__
+            return (
+                Decision.INSUFFICIENT_EVIDENCE,
+                f"visibility_insufficient:{label}",
+                DenialReason.TELEMETRY_MISSING,
+            )
+
+        if profile != "MIC-Evidence":
+            return None
+
+        # -- Check 4: Hidden-Hop Detection (MIC-Evidence only) ----------------
+        parent_jti = session.passport_claims.get("parent_jti")
+        if parent_jti:
+            with self._last_seen_receipts_lock:
+                if parent_jti not in self._last_seen_receipts:
+                    return (
+                        Decision.INSUFFICIENT_EVIDENCE,
+                        f"missing_parent_receipt:{parent_jti}",
+                        DenialReason.TELEMETRY_MISSING,
+                    )
+
+            chain = session.passport_claims.get("delegation_chain") or []
+            with self._last_seen_receipts_lock:
+                for entry in chain:
+                    entry_jti = entry.get("jti") if isinstance(entry, dict) else None
+                    if entry_jti and entry_jti not in self._last_seen_receipts:
+                        return (
+                            Decision.INSUFFICIENT_EVIDENCE,
+                            f"delegation_chain_receipt_gap:{entry_jti}",
+                            DenialReason.TELEMETRY_MISSING,
+                        )
+
+        return None
 
     def _apply_memory_post_permit(
         self,
@@ -2982,41 +3065,38 @@ class GovernanceProxy:
                         self._persist_session(target)
                     else:
                         receipt_policy_claims = dict(policy_claims)
-                        ts = time.time()
-                        ap = policy_claims.get("approval_policy")
-                        need_rate = (
-                            isinstance(ap, dict)
-                            and ap.get("max_approvals_per_hour_per_operator") is not None
+                        mic_result = self._apply_mic_conformance_checks(
+                            target, tool_name, arguments_snapshot, receipt_policy_claims
                         )
-                        if need_rate:
-                            try:
-                                max_ap = int(ap["max_approvals_per_hour_per_operator"])
-                                window_s = float(ap.get("window_s", 3600.0))
-                                tracker = self._approval_tracker(max_ap, window_s)
-                            except (TypeError, ValueError):
-                                decision, reason = (
-                                    Decision.INSUFFICIENT_EVIDENCE,
-                                    "approval_policy_invalid",
-                                )
-                                self._record_tool_policy_event(
-                                    target,
-                                    tool_name,
-                                    arguments_snapshot,
-                                    decision,
-                                    reason,
-                                    DenialReason.TELEMETRY_MISSING,
-                                    verifier_id=self.verifier_id,
-                                )
-                                event = target.events[-1]
-                                self._persist_session(target)
-                            else:
-                                operator_id = self._approval_operator_id(
-                                    policy_claims, arguments_snapshot
-                                )
-                                if operator_id is None:
+                        if mic_result is not None:
+                            decision, reason, denial_reason = mic_result
+                            self._record_tool_policy_event(
+                                target,
+                                tool_name,
+                                arguments_snapshot,
+                                decision,
+                                reason,
+                                denial_reason,
+                                verifier_id=self.verifier_id,
+                            )
+                            event = target.events[-1]
+                            self._persist_session(target)
+                        else:
+                            ts = time.time()
+                            ap = policy_claims.get("approval_policy")
+                            need_rate = (
+                                isinstance(ap, dict)
+                                and ap.get("max_approvals_per_hour_per_operator") is not None
+                            )
+                            if need_rate:
+                                try:
+                                    max_ap = int(ap["max_approvals_per_hour_per_operator"])
+                                    window_s = float(ap.get("window_s", 3600.0))
+                                    tracker = self._approval_tracker(max_ap, window_s)
+                                except (TypeError, ValueError):
                                     decision, reason = (
                                         Decision.INSUFFICIENT_EVIDENCE,
-                                        "approval_operator_unavailable",
+                                        "approval_policy_invalid",
                                     )
                                     self._record_tool_policy_event(
                                         target,
@@ -3024,55 +3104,75 @@ class GovernanceProxy:
                                         arguments_snapshot,
                                         decision,
                                         reason,
-                                        DenialReason.APPROVAL_OPERATOR_UNAVAILABLE,
-                                        verifier_id=self.verifier_id,
-                                    )
-                                    event = target.events[-1]
-                                    self._persist_session(target)
-                                elif not tracker.check(operator_id, ts):
-                                    decision, reason = (
-                                        Decision.INSUFFICIENT_EVIDENCE,
-                                        "approval_fatigue_threshold",
-                                    )
-                                    self._record_tool_policy_event(
-                                        target,
-                                        tool_name,
-                                        arguments_snapshot,
-                                        decision,
-                                        reason,
-                                        DenialReason.APPROVAL_FATIGUE_THRESHOLD,
+                                        DenialReason.TELEMETRY_MISSING,
                                         verifier_id=self.verifier_id,
                                     )
                                     event = target.events[-1]
                                     self._persist_session(target)
                                 else:
-                                    decision, reason, _event = target.check_and_record(
-                                        tool_name,
-                                        arguments_snapshot,
-                                        policy_claims=policy_claims,
-                                        verifier_id=self.verifier_id,
+                                    operator_id = self._approval_operator_id(
+                                        policy_claims, arguments_snapshot
                                     )
-                                    if decision == Decision.PERMIT:
-                                        decision, reason = self._apply_memory_post_permit(
-                                            target, tool_name, arguments_snapshot
+                                    if operator_id is None:
+                                        decision, reason = (
+                                            Decision.INSUFFICIENT_EVIDENCE,
+                                            "approval_operator_unavailable",
                                         )
-                                    if decision == Decision.PERMIT:
-                                        tracker.record_approval(operator_id, ts)
-                                    event = target.events[-1]
-                                    self._persist_session(target)
-                        else:
-                            decision, reason, _event = target.check_and_record(
-                                tool_name,
-                                arguments_snapshot,
-                                policy_claims=policy_claims,
-                                verifier_id=self.verifier_id,
-                            )
-                            if decision == Decision.PERMIT:
-                                decision, reason = self._apply_memory_post_permit(
-                                    target, tool_name, arguments_snapshot
+                                        self._record_tool_policy_event(
+                                            target,
+                                            tool_name,
+                                            arguments_snapshot,
+                                            decision,
+                                            reason,
+                                            DenialReason.APPROVAL_OPERATOR_UNAVAILABLE,
+                                            verifier_id=self.verifier_id,
+                                        )
+                                        event = target.events[-1]
+                                        self._persist_session(target)
+                                    elif not tracker.check(operator_id, ts):
+                                        decision, reason = (
+                                            Decision.INSUFFICIENT_EVIDENCE,
+                                            "approval_fatigue_threshold",
+                                        )
+                                        self._record_tool_policy_event(
+                                            target,
+                                            tool_name,
+                                            arguments_snapshot,
+                                            decision,
+                                            reason,
+                                            DenialReason.APPROVAL_FATIGUE_THRESHOLD,
+                                            verifier_id=self.verifier_id,
+                                        )
+                                        event = target.events[-1]
+                                        self._persist_session(target)
+                                    else:
+                                        decision, reason, _event = target.check_and_record(
+                                            tool_name,
+                                            arguments_snapshot,
+                                            policy_claims=policy_claims,
+                                            verifier_id=self.verifier_id,
+                                        )
+                                        if decision == Decision.PERMIT:
+                                            decision, reason = self._apply_memory_post_permit(
+                                                target, tool_name, arguments_snapshot
+                                            )
+                                        if decision == Decision.PERMIT:
+                                            tracker.record_approval(operator_id, ts)
+                                        event = target.events[-1]
+                                        self._persist_session(target)
+                            else:
+                                decision, reason, _event = target.check_and_record(
+                                    tool_name,
+                                    arguments_snapshot,
+                                    policy_claims=policy_claims,
+                                    verifier_id=self.verifier_id,
                                 )
-                            event = target.events[-1]
-                            self._persist_session(target)
+                                if decision == Decision.PERMIT:
+                                    decision, reason = self._apply_memory_post_permit(
+                                        target, tool_name, arguments_snapshot
+                                    )
+                                event = target.events[-1]
+                                self._persist_session(target)
                 receipt_entry = self._build_receipt_log_entry(
                     target,
                     event,
@@ -4651,6 +4751,11 @@ class GovernanceProxy:
         with self._receipts_log_lock:
             with self.receipts_log_path.open("a", encoding="utf-8") as handle:
                 handle.write(line)
+        grant_id = entry.get("grant_id")
+        receipt_id = entry.get("receipt_id")
+        if grant_id and receipt_id:
+            with self._last_seen_receipts_lock:
+                self._last_seen_receipts[grant_id] = receipt_id
 
 
 PUBLIC_PATHS = frozenset({"/health", "/healthz", "/.well-known/jwks.json"})
