@@ -16,10 +16,12 @@ The MCEP acronym was expanded as "Mission-bound Cryptographic Evidence Protocol"
 | [Mission Declaration (MD)](./mission-declaration-v0.1.md) | **migrated** | Public-import annotated; clean-break protocol rename applied (`application/ardur.md+jwt`, `https://ardur.dev/...`) |
 | [Execution Receipt (ER)](./execution-receipt-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied (`application/ardur.er+jwt`) |
 | [Execution Receipt EAT/CWT Profile](./execution-receipt-eat-profile-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied |
+| [Execution Receipt Kernel-effect Extension (proposed)](./execution-receipt-kernel-effect-extension-v0.1.md) | **proposed** | Docs/spec/schema proposal only; no privileged capture implementation claim |
 | [IDM Extension Profile](./idm-extension-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied (`application/ardur.idm+jwt`) |
 | [Revocation Model](./revocation-v0.1.md) | **migrated** | Public-import annotated; clean-break rename applied |
 | [Mission Declaration schema](./mission-declaration-v0.1.schema.json) | **migrated** | JSON Schema; `$id` rebased to ardur.dev |
 | [Execution Receipt schema](./execution-receipt-v0.1.schema.json) | **migrated** | JSON Schema; `$id` rebased to ardur.dev |
+| [Execution Receipt kernel-effect extension schema (proposed)](./execution-receipt-kernel-effect-extension-v0.1.schema.json) | **proposed** | Overlay schema for kernel-effect claims; meant to be merged with base ER schema |
 
 ## Protocol identifier rename (clean break, applied 2026-04-27)
 
@@ -40,10 +42,11 @@ The clean-break rationale: there are no v0.1 receipts, passports, or attestation
 2. [Delegation Grant (DG) Profile](./delegation-grant-profile-v0.1.md) — how child agents get strictly narrower authority
 3. [Execution Receipt (ER)](./execution-receipt-v0.1.md) — the signed per-tool-call decision record
 4. [Execution Receipt EAT/CWT Profile](./execution-receipt-eat-profile-v0.1.md) — RFC 9711 binding for ER carriage
-5. [Verifier Contract](./verifier-contract-v0.1.md) — what a conforming verifier must do
-6. [Conformance Profiles](./conformance-profiles-v0.1.md) — tiered conformance matrix (Delegation-Core, MIC-State, MIC-Evidence, IDM Extension)
-7. [Revocation Model](./revocation-v0.1.md) — layered revocation across delegation, session, credential, and transparency-log layers
-8. [IDM Extension Profile](./idm-extension-v0.1.md) — Intent-Declaration-Manifest experimental profile
+5. [Execution Receipt Kernel-effect Extension (proposed)](./execution-receipt-kernel-effect-extension-v0.1.md) — proposed kernel-observed effect claims and honesty constraints
+6. [Verifier Contract](./verifier-contract-v0.1.md) — what a conforming verifier must do
+7. [Conformance Profiles](./conformance-profiles-v0.1.md) — tiered conformance matrix (Delegation-Core, MIC-State, MIC-Evidence, IDM Extension)
+8. [Revocation Model](./revocation-v0.1.md) — layered revocation across delegation, session, credential, and transparency-log layers
+9. [IDM Extension Profile](./idm-extension-v0.1.md) — Intent-Declaration-Manifest experimental profile
 
 ## Relationship to adjacent standards
 

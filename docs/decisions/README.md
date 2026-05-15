@@ -17,6 +17,7 @@ ADRs are migrated from the private research repo with the two-pass cleanup appli
 | 019 | [Parent-token anchors against trusted lineage](./ADR-019-parent-token-anchors-against-trusted-lineage.md) | Proposed | 2026-04-21 |
 | 020 | [Persisted-session reverification on load](./ADR-020-persisted-session-reverification-on-load.md) | Proposed | 2026-04-21 |
 | 021 | [KB-JWT server-challenged nonce](./ADR-021-kb-jwt-server-challenged-nonce.md) | Proposed | 2026-04-21 |
+| 022 | [Kernel-effect Execution Receipt extension v0.1](./ADR-022-kernel-effect-receipt-extension-v01.md) | Proposed | 2026-05-07 |
 
 ## Conventions
 

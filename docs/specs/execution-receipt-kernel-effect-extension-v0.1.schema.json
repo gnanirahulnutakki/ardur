@@ -1,0 +1,625 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ardur.dev/vibap/spec/execution-receipt-kernel-effect-extension-v0.1.schema.json",
+  "title": "Execution Receipt Kernel-effect Extension v0.1 (proposed)",
+  "description": "Overlay claims for kernel-observed effects in Ardur Execution Receipts. This schema is designed to be merged with execution-receipt-v0.1.schema.json; by itself it only validates extension semantics.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "event_class": {
+      "type": "string",
+      "const": "kernel_effect"
+    },
+    "capture_backend": {
+      "type": "string",
+      "enum": [
+        "linux_ebpf",
+        "macos_esf",
+        "windows_etw",
+        "unknown"
+      ]
+    },
+    "capture_backend_version": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "linux",
+        "macos",
+        "windows",
+        "unknown"
+      ]
+    },
+    "kernel_event_type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9_./:-]+$"
+    },
+    "observed_at_monotonic_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "observed_at_wall_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ppid": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cgroup_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        }
+      ]
+    },
+    "kernel_target": {
+      "$ref": "#/$defs/kernelTarget"
+    },
+    "kernel_args_digest": {
+      "$ref": "#/$defs/digestObject"
+    },
+    "caused_by_receipt_id": {
+      "$ref": "#/$defs/idString"
+    },
+    "caused_by_receipt_hash": {
+      "$ref": "#/$defs/sha256HexString"
+    },
+    "correlation_method": {
+      "type": "string",
+      "enum": [
+        "explicit_pid",
+        "span_marker",
+        "pid_ancestry",
+        "cgroup_time_window",
+        "ambiguous"
+      ]
+    },
+    "correlation_confidence": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "ambiguous"
+      ]
+    },
+    "coverage_status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "degraded",
+        "dropped",
+        "unknown"
+      ]
+    },
+    "coverage_gaps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "capture_loss": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ringbuf_dropped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "daemon_queue_dropped": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "compliant",
+        "violation",
+        "insufficient_evidence"
+      ]
+    },
+    "public_denial_reason": {
+      "type": "string",
+      "enum": [
+        "policy_denied",
+        "budget_exhausted",
+        "insufficient_evidence",
+        "revoked",
+        "chain_invalid"
+      ]
+    },
+    "internal_denial_code": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "required": [
+              "capture_backend"
+            ]
+          },
+          {
+            "required": [
+              "capture_backend_version"
+            ]
+          },
+          {
+            "required": [
+              "platform"
+            ]
+          },
+          {
+            "required": [
+              "kernel_event_type"
+            ]
+          },
+          {
+            "required": [
+              "observed_at_monotonic_ns"
+            ]
+          },
+          {
+            "required": [
+              "observed_at_wall_time"
+            ]
+          },
+          {
+            "required": [
+              "pid"
+            ]
+          },
+          {
+            "required": [
+              "tid"
+            ]
+          },
+          {
+            "required": [
+              "ppid"
+            ]
+          },
+          {
+            "required": [
+              "cgroup_id"
+            ]
+          },
+          {
+            "required": [
+              "kernel_target"
+            ]
+          },
+          {
+            "required": [
+              "kernel_args_digest"
+            ]
+          },
+          {
+            "required": [
+              "caused_by_receipt_id"
+            ]
+          },
+          {
+            "required": [
+              "caused_by_receipt_hash"
+            ]
+          },
+          {
+            "required": [
+              "correlation_method"
+            ]
+          },
+          {
+            "required": [
+              "correlation_confidence"
+            ]
+          },
+          {
+            "required": [
+              "coverage_status"
+            ]
+          },
+          {
+            "required": [
+              "coverage_gaps"
+            ]
+          },
+          {
+            "required": [
+              "capture_loss"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "event_class": {
+            "const": "kernel_effect"
+          }
+        },
+        "required": [
+          "event_class"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_class": {
+            "const": "kernel_effect"
+          }
+        },
+        "required": [
+          "event_class"
+        ]
+      },
+      "then": {
+        "required": [
+          "event_class",
+          "capture_backend",
+          "platform",
+          "kernel_event_type",
+          "coverage_status",
+          "correlation_method",
+          "correlation_confidence",
+          "caused_by_receipt_id"
+        ],
+        "properties": {
+          "tool": {
+            "type": "string",
+            "pattern": "^kernel\\.[A-Za-z0-9._:-]+$"
+          },
+          "action_class": {
+            "type": "string",
+            "const": "observe"
+          },
+          "resource_family": {
+            "type": "string",
+            "enum": [
+              "process",
+              "filesystem",
+              "network",
+              "privilege",
+              "runtime"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "event_class": {
+                "const": "kernel_effect"
+              }
+            },
+            "required": [
+              "event_class"
+            ]
+          },
+          {
+            "properties": {
+              "correlation_method": {
+                "const": "ambiguous"
+              }
+            },
+            "required": [
+              "correlation_method"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "const": "insufficient_evidence"
+          },
+          "public_denial_reason": {
+            "const": "insufficient_evidence"
+          }
+        },
+        "required": [
+          "verdict",
+          "public_denial_reason",
+          "internal_denial_code"
+        ]
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "event_class": {
+                "const": "kernel_effect"
+              }
+            },
+            "required": [
+              "event_class"
+            ]
+          },
+          {
+            "properties": {
+              "correlation_confidence": {
+                "enum": [
+                  "low",
+                  "ambiguous"
+                ]
+              }
+            },
+            "required": [
+              "correlation_confidence"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "const": "insufficient_evidence"
+          },
+          "public_denial_reason": {
+            "const": "insufficient_evidence"
+          }
+        },
+        "required": [
+          "verdict",
+          "public_denial_reason",
+          "internal_denial_code"
+        ]
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "event_class": {
+                "const": "kernel_effect"
+              }
+            },
+            "required": [
+              "event_class"
+            ]
+          },
+          {
+            "properties": {
+              "coverage_status": {
+                "enum": [
+                  "degraded",
+                  "dropped",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "coverage_status"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "const": "insufficient_evidence"
+          },
+          "public_denial_reason": {
+            "const": "insufficient_evidence"
+          }
+        },
+        "required": [
+          "verdict",
+          "public_denial_reason",
+          "internal_denial_code"
+        ]
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "event_class": {
+                "const": "kernel_effect"
+              }
+            },
+            "required": [
+              "event_class"
+            ]
+          },
+          {
+            "required": [
+              "capture_loss"
+            ],
+            "properties": {
+              "capture_loss": {
+                "type": "object",
+                "anyOf": [
+                  {
+                    "required": [
+                      "ringbuf_dropped"
+                    ],
+                    "properties": {
+                      "ringbuf_dropped": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "daemon_queue_dropped"
+                    ],
+                    "properties": {
+                      "daemon_queue_dropped": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "coverage_status": {
+            "enum": [
+              "degraded",
+              "dropped"
+            ]
+          },
+          "verdict": {
+            "const": "insufficient_evidence"
+          },
+          "public_denial_reason": {
+            "const": "insufficient_evidence"
+          }
+        },
+        "required": [
+          "coverage_status",
+          "verdict",
+          "public_denial_reason",
+          "internal_denial_code"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "idString": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "sha256HexString": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "digestObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alg",
+        "value"
+      ],
+      "properties": {
+        "alg": {
+          "type": "string",
+          "enum": [
+            "sha-256",
+            "sha-384",
+            "sha-512"
+          ]
+        },
+        "canonicalization": {
+          "type": "string",
+          "enum": [
+            "jcs-rfc8785",
+            "none"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "normalized_input",
+            "result",
+            "measurement",
+            "custom"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      }
+    },
+    "kernelTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "file",
+            "socket",
+            "process",
+            "privilege",
+            "unknown"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "path_digest": {
+          "$ref": "#/$defs/sha256HexString"
+        },
+        "socket_family": {
+          "type": "string",
+          "enum": [
+            "AF_INET",
+            "AF_INET6",
+            "AF_UNIX"
+          ]
+        },
+        "remote_addr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "remote_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "signal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        }
+      }
+    }
+  }
+}
