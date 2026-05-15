@@ -246,6 +246,15 @@ _WINDOWS_UNC_RE = re.compile(r"^\\\\[^\\]+\\")
 # ``\`` has its own dedicated handling (Windows shape + bare-backslash).
 _SLASH_LIKE_CODEPOINTS = frozenset({"/", "\uFF0F", "\u2044", "\u29F8", "\u2215"})
 
+# Phase-3.2 C-5: Unicode dot-like codepoints that render visually as "." but
+# escape the literal ".." segment checks and posixpath.normpath's traversal
+# collapsing. Folding them to ASCII "." is surgical \u2014 same rationale as
+# _SLASH_LIKE_CODEPOINTS. NFC preserves these codepoints as-is.
+_DOT_LIKE_CODEPOINTS = frozenset({
+    "\u2024",  # ONE DOT LEADER (\u2024)  \u2014 visually indistinguishable from "."
+    "\uFF0E",  # FULLWIDTH FULL STOP (\uFF0E) \u2014 wide "."
+})
+
 
 def _contains_slash_like(s: str) -> bool:
     """True if ``s`` contains any codepoint that renders as ``/`` — ASCII
@@ -417,6 +426,13 @@ def _sanitize_value(value: str) -> tuple[str, str | None]:
             continue  # identity fold; skip to save an O(n) replace
         if _sol in value:
             value = value.replace(_sol, "/")
+
+    # 2b. Phase-3.2 C-5: fold Unicode dot-like variants to ASCII "." so the
+    #     literal ".." checks in steps 3 and 7 catch traversal segments
+    #     written with confusable dots (e.g. ONE DOT LEADER U+2024).
+    for _dot in _DOT_LIKE_CODEPOINTS:
+        if _dot in value:
+            value = value.replace(_dot, ".")
 
     # 3. Pre-normalization '..' segment check (B7 — lateral escape).
     #    Split on both '/' and '\\' so a Windows-shaped traversal is caught
