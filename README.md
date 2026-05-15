@@ -6,13 +6,13 @@ Ardur is the runtime governance and evidence layer for AI agents.
 [![Status](https://img.shields.io/badge/status-pre--release-blue)](STATUS.md)
 [![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/ArdurAI/ardur/discussions)
 
-This public repo is opening in phases. It now contains the product intent,
-research-informed positioning, public specs, the Python governance runtime,
-Go packages for eBPF kernel capture and Kubernetes control-plane components, mission examples, runnable framework adapters (LangChain, LangGraph,
-AutoGen), the Ardur Personal Hub service, the Claude Code plugin and hook,
-and the public Hugo evidence site. Re-runnable proof media, full packaging,
-and production deployment material are still being tightened before they are
-presented as release-ready.
+This public repo contains the product intent, research-informed positioning,
+public specs, the Python governance runtime, Go packages for eBPF kernel
+capture and Kubernetes control-plane components, mission examples, runnable
+framework adapters (LangChain, LangGraph, AutoGen), the Ardur Personal Hub
+service, the Claude Code plugin and hook, and the public Hugo evidence site.
+Re-runnable proof media, full packaging, and production deployment material
+are still being tightened before they are presented as release-ready.
 
 [Research](RESEARCH.md) · [Status](STATUS.md) · [Coverage Map](docs/coverage-map.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Evidence Site Source](site/README.md)
 
@@ -151,9 +151,10 @@ It gives two bounded paths:
 - a **live Claude Code demo** for users who already have the `claude` binary
   installed and authenticated.
 
-That guide also separates **Works now**, **Not claimed**, and **Coming soon** so
-Ardur stays honest about package-manager release status, provider-hidden
-behavior, and subprocess/kernel/network side-effect gaps.
+That guide also separates **Works now**, **Not claimed**, and **Coming soon**
+to clearly mark the boundary between shipped, deferred, and in-progress
+capabilities — package-manager release status, provider-hidden behavior,
+and subprocess/kernel/network side-effect gaps.
 
 > **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
 > invocation. Side effects below the tool boundary — subprocess trees,
@@ -181,7 +182,7 @@ Concretely — these are the design principles the repo is being built to meet, 
 - **Composable with what already exists.** Designed around SPIFFE for workload identity, Biscuit for first-party-attenuation credentials, Cedar for policy, and on the AAT and EAT IETF drafts for token semantics. We didn't reinvent the substrate.
 - **Cryptographically bound by design.** Mission credentials are designed to be signed by an issuer key, holder-bound to a SPIFFE SVID, and produce signed receipts chain-hashed to the previous one. The design is documented in the [ADRs](docs/decisions/README.md); the public code that implements it is being curated in phases.
 - **Delegation that narrows, never widens.** Child sessions get strictly narrower authority than their parent — fewer tools, smaller resource scope, smaller budget. The narrowing discipline is formalised in [ADR-017](docs/decisions/ADR-017-biscuit-attenuation-narrowing-semantics.md).
-- **Honest about what it doesn't do.** Scope-level governance can't catch semantic misuse — if an allowed tool is used on an allowed resource for the wrong reason, that's a different layer's job. We say so out loud.
+- **Explicit about what it doesn't do.** Scope-level governance can't catch semantic misuse — if an allowed tool is used on an allowed resource for the wrong reason, that's a different layer's job.
 - **MIT licensed.** The research foundation (the Silence Theorem, the protocol formalism, the benchmark methodology) will be linked from this repo when the paper's public identifier is assigned. Articles in this repo paraphrase the research in original prose; they do not reproduce paper content.
 
 ## What Is Public Today
@@ -237,10 +238,9 @@ Some implementation and protocol surfaces still use `VIBAP`, `MCEP`, and
 related protocol names. Those names are part of the technical lineage and are
 kept where they describe actual artifacts, specifications, or protocol roots.
 
-## Honest Note
+## Scope and Status
 
-This is not yet the full Ardur product repo.
-
-We are publishing the public surface in phases so the repo starts clear,
-credible, and truthful instead of dumping a private monorepo or making claims
-ahead of the exported code.
+This repo is published progressively — each surface lands when it is
+backed by runnable code, verifiable artifacts, or documented limitations.
+See `STATUS.md` for what is public today and `ROADMAP.md` for what is
+coming next.

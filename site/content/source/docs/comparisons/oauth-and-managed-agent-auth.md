@@ -2,7 +2,7 @@
 title: "Ardur vs OAuth (and the managed-agent-auth direction)"
 description: "**Status:** Working comparison. Will gain links and quantitative numbers as Phase 7 benchmark data lands. The technical claims here should hold without those numbers; the numbers a"
 source_path: "docs/comparisons/oauth-and-managed-agent-auth.md"
-source_sha256: "d3d1c5bcf8024bd0473bbe10621449f6282adbbf0bbc3fad93274f2f2449b97e"
+source_sha256: "474c43fe9b325f0a3c7cc7d55ca37166b1c412745664b0e3997afe3d6e8a8aea"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["comparison"]
@@ -21,7 +21,7 @@ This page is generated from the public repository source file. Edit the source f
 
 A reviewer pushed back recently with the question every credibility-conscious project gets asked: **"OAuth is already deployed everywhere and being extended for agents. Why isn't OAuth-plus-extensions enough?"** Cloudflare's [managed OAuth for Access](https://blog.cloudflare.com/managed-oauth-for-access/) is the canonical example of where the OAuth-extension direction is going for agents.
 
-This document is the honest answer. Short version: **Ardur and OAuth solve adjacent, complementary problems. Ardur composes with OAuth; it doesn't replace it. The space between them is where mission-level governance lives.**
+This document is the direct answer. Short version: **Ardur and OAuth solve adjacent, complementary problems. Ardur composes with OAuth; it doesn't replace it. The space between them is where mission-level governance lives.**
 
 ## The boundary in one paragraph
 
@@ -86,7 +86,7 @@ If you already use OAuth, none of this requires changing your OAuth setup. The M
 
 ## How a fair comparison would settle the debate
 
-The reviewer is right that "we should explain why" is necessary but not sufficient. The honest version of this comparison needs three concrete claims, each with evidence:
+The reviewer is right that "we should explain why" is necessary but not sufficient. A fair version of this comparison needs three concrete claims, each with evidence:
 
 **Claim 1 — Cumulative-budget enforcement is a property OAuth-only cannot deliver without extra state.**
 *Evidence:* a benchmark scenario where the same mission runs under (a) plain OAuth + scoped tokens, and (b) Ardur. The mission says "at most 3 emails." OAuth-only relies on the email service knowing the agent's session state — which means either configuring shared state across resource servers (defeats decoupling) or accepting that one mission can send 3 × N emails through N resource servers. Ardur's verifier holds the budget in one place. We'll publish the numbers when Phase 7's `tamas` benchmark suite lands publicly.

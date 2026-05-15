@@ -1,11 +1,9 @@
 # Docs
 
-This repo is opening in phases.
-
 These docs describe the public product direction and the engineering boundaries
-that are already stable enough to say out loud. Runnable code and proof paths
-are present for the current Claude Code MVP path; package-manager release
-readiness and broader host coverage remain in follow-on phases.
+that are stable enough to document. Runnable code and proof paths are present
+for the Claude Code MVP path; package-manager release readiness and broader host
+coverage are in active development.
 
 ## Available now
 

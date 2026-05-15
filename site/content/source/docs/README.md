@@ -1,8 +1,8 @@
 ---
 title: "Docs"
-description: "This repo is opening in phases."
+description: "These docs describe the public product direction and the engineering boundaries"
 source_path: "docs/README.md"
-source_sha256: "da3ebadd6698845e8ca62a1dd2738e010270d997b1c2f6c3391e59d31e124559"
+source_sha256: "0741f5d84b0f370cbe60db61526ba7d1934c0b5419ed10e2e18d6dea42206fde"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -17,12 +17,10 @@ evidence_levels: ["code-and-doc"]
 This page is generated from the public repository source file. Edit the source file, then run `python3 site/scripts/sync_source_docs.py` to refresh the Hugo mirror.
 {{< /proof-status >}}
 
-This repo is opening in phases.
-
 These docs describe the public product direction and the engineering boundaries
-that are already stable enough to say out loud. Runnable code and proof paths
-are present for the current Claude Code MVP path; package-manager release
-readiness and broader host coverage remain in follow-on phases.
+that are stable enough to document. Runnable code and proof paths are present
+for the Claude Code MVP path; package-manager release readiness and broader host
+coverage are in active development.
 
 ## Available now
 

@@ -2,7 +2,7 @@
 title: "Ardur Coverage Map"
 description: "**The single source of truth for what Ardur captures and what it does not.**"
 source_path: "docs/coverage-map.md"
-source_sha256: "6c9ae7e2e4299012e9400c3c03bf3aed9a31e6ce1643b9d42396a7796e6df503"
+source_sha256: "e34e2a1db0fc55c4359ae2d8f27f2ebbff6fb9eeab4601ef57b80995bf057900"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -95,9 +95,9 @@ Each receipt carries an `evidence_level` field. The values:
 | `attested` | Ardur signed an observation; the action's intent is captured |
 | `observed` | A local adapter saw browser/desktop/CLI state |
 | `self_signed` | Ardur signed its own observation (default for tool calls) |
-| `insufficient_evidence` | The relevant provider-side or kernel-level activity was not locally visible — labeled honestly rather than implied |
+| `insufficient_evidence` | The relevant provider-side or kernel-level activity was not locally visible — labeled explicitly rather than implied |
 
-The `insufficient_evidence` label is how we keep claims honest at the receipt level. If something happened that Ardur couldn't verify, the receipt says so.
+The `insufficient_evidence` label is how we keep claims precise at the receipt level. If something happened that Ardur couldn't verify, the receipt says so.
 
 ## What v0.5 / v1.0 will add
 

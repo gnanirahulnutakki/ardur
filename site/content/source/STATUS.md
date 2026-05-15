@@ -2,7 +2,7 @@
 title: "Status"
 description: "Today, Ardur captures every Claude Code tool-call invocation — file reads"
 source_path: "STATUS.md"
-source_sha256: "5a914de9babccda888b158752720167404ef0961c65580eb3861e67dd4c38311"
+source_sha256: "eba7a390e6ddb743860527e9215e1fdb8edc11268f2d4bc245de90e77dfa0df3"
 weight: 100
 maturity: ["in-progress", "public-now"]
 claim_types: ["status"]
@@ -89,9 +89,9 @@ caveat list, and [`ROADMAP.md`](/__ardur_internal__/source/roadmap/) for the pha
 - internal planning, lane, and session artifacts
 - Trusted Execution Environment (TEE) attestation as a general hardware-rooted production claim — see `docs/known-limitations.md`
 
-## Honest Launch Rule
+## Current Posture
 
-Until every imported v0.1 spec has its companion fixtures and the Personal
-release candidate has a tagged, packaged installer, the repo continues to say
-"opening in phases" rather than implying a complete production distribution is
-already present.
+The repo is published progressively: v0.1.0 is tagged with runnable code and
+tests, while packaging (PyPI, Homebrew) and companion fixtures remain in active
+development. Each surface declares its readiness level rather than implying a
+complete production distribution is already present.

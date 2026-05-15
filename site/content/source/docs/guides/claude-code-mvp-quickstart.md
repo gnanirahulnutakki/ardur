@@ -2,7 +2,7 @@
 title: "Claude Code MVP Quickstart"
 description: "This is the shortest product-facing path through Ardur today from a source"
 source_path: "docs/guides/claude-code-mvp-quickstart.md"
-source_sha256: "873d3b3d33f16e8dc02741b48e183e8d71ef0638e3606ea084a0eeff4b66e448"
+source_sha256: "b56b84bb181096fa6b9f540ac8303d4ff1e5cb612dd455717f16d98be5d39601"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -74,7 +74,7 @@ Expected result for a clean source checkout:
 - `RWT-1` is `PASS` for install/profile/protect/doctor
 - `RWT-2` is `PASS` for actual hook CLI fixture allow/deny receipts
 - `RWT-3` is `PASS`, `SKIP_GATED`, or `SKIP_UNSUPPORTED` depending on whether
-  a logged-in `claude` binary is available; a skip is the honest no-key result,
+  a logged-in `claude` binary is available; a skip is the explicit no-key result,
   not a hidden failure
 - `secret_scan_hits` is `0`
 - `raw_secret_values_copied` is `false`

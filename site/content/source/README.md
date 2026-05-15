@@ -2,7 +2,7 @@
 title: "Ardur"
 description: "Ardur is the runtime governance and evidence layer for AI agents."
 source_path: "README.md"
-source_sha256: "f0df2d8244d4cdbddca4f121b7167ae645bd6830e3e23ceff645b3b39fc4fb44"
+source_sha256: "cb3ec22528dff7270d2c3c8a67a374e9ed1fd1857bcc41d71cf8ba2f5350bf31"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["orientation", "runtime-boundary"]
@@ -23,13 +23,13 @@ Ardur is the runtime governance and evidence layer for AI agents.
 [![Status](https://img.shields.io/badge/status-pre--release-blue)](/__ardur_internal__/source/status/)
 [![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/ArdurAI/ardur/discussions)
 
-This public repo is opening in phases. It now contains the product intent,
-research-informed positioning, public specs, the Python governance runtime,
-Go packages for eBPF kernel capture and Kubernetes control-plane components, mission examples, runnable framework adapters (LangChain, LangGraph,
-AutoGen), the Ardur Personal Hub service, the Claude Code plugin and hook,
-and the public Hugo evidence site. Re-runnable proof media, full packaging,
-and production deployment material are still being tightened before they are
-presented as release-ready.
+This public repo contains the product intent, research-informed positioning,
+public specs, the Python governance runtime, Go packages for eBPF kernel
+capture and Kubernetes control-plane components, mission examples, runnable
+framework adapters (LangChain, LangGraph, AutoGen), the Ardur Personal Hub
+service, the Claude Code plugin and hook, and the public Hugo evidence site.
+Re-runnable proof media, full packaging, and production deployment material
+are still being tightened before they are presented as release-ready.
 
 [Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
 
@@ -168,9 +168,10 @@ It gives two bounded paths:
 - a **live Claude Code demo** for users who already have the `claude` binary
   installed and authenticated.
 
-That guide also separates **Works now**, **Not claimed**, and **Coming soon** so
-Ardur stays honest about package-manager release status, provider-hidden
-behavior, and subprocess/kernel/network side-effect gaps.
+That guide also separates **Works now**, **Not claimed**, and **Coming soon**
+to clearly mark the boundary between shipped, deferred, and in-progress
+capabilities — package-manager release status, provider-hidden behavior,
+and subprocess/kernel/network side-effect gaps.
 
 > **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
 > invocation. Side effects below the tool boundary — subprocess trees,
@@ -198,7 +199,7 @@ Concretely — these are the design principles the repo is being built to meet, 
 - **Composable with what already exists.** Designed around SPIFFE for workload identity, Biscuit for first-party-attenuation credentials, Cedar for policy, and on the AAT and EAT IETF drafts for token semantics. We didn't reinvent the substrate.
 - **Cryptographically bound by design.** Mission credentials are designed to be signed by an issuer key, holder-bound to a SPIFFE SVID, and produce signed receipts chain-hashed to the previous one. The design is documented in the [ADRs](/__ardur_internal__/source/docs/decisions/readme/); the public code that implements it is being curated in phases.
 - **Delegation that narrows, never widens.** Child sessions get strictly narrower authority than their parent — fewer tools, smaller resource scope, smaller budget. The narrowing discipline is formalised in [ADR-017](/__ardur_internal__/source/docs/decisions/adr-017-biscuit-attenuation-narrowing-semantics/).
-- **Honest about what it doesn't do.** Scope-level governance can't catch semantic misuse — if an allowed tool is used on an allowed resource for the wrong reason, that's a different layer's job. We say so out loud.
+- **Explicit about what it doesn't do.** Scope-level governance can't catch semantic misuse — if an allowed tool is used on an allowed resource for the wrong reason, that's a different layer's job.
 - **MIT licensed.** The research foundation (the Silence Theorem, the protocol formalism, the benchmark methodology) will be linked from this repo when the paper's public identifier is assigned. Articles in this repo paraphrase the research in original prose; they do not reproduce paper content.
 
 ## What Is Public Today
@@ -254,10 +255,9 @@ Some implementation and protocol surfaces still use `VIBAP`, `MCEP`, and
 related protocol names. Those names are part of the technical lineage and are
 kept where they describe actual artifacts, specifications, or protocol roots.
 
-## Honest Note
+## Scope and Status
 
-This is not yet the full Ardur product repo.
-
-We are publishing the public surface in phases so the repo starts clear,
-credible, and truthful instead of dumping a private monorepo or making claims
-ahead of the exported code.
+This repo is published progressively — each surface lands when it is
+backed by runnable code, verifiable artifacts, or documented limitations.
+See `STATUS.md` for what is public today and `ROADMAP.md` for what is
+coming next.

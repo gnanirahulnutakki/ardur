@@ -72,9 +72,9 @@ caveat list, and [`ROADMAP.md`](ROADMAP.md) for the phase plan.
 - internal planning, lane, and session artifacts
 - Trusted Execution Environment (TEE) attestation as a general hardware-rooted production claim — see `docs/known-limitations.md`
 
-## Honest Launch Rule
+## Current Posture
 
-Until every imported v0.1 spec has its companion fixtures and the Personal
-release candidate has a tagged, packaged installer, the repo continues to say
-"opening in phases" rather than implying a complete production distribution is
-already present.
+The repo is published progressively: v0.1.0 is tagged with runnable code and
+tests, while packaging (PyPI, Homebrew) and companion fixtures remain in active
+development. Each surface declares its readiness level rather than implying a
+complete production distribution is already present.

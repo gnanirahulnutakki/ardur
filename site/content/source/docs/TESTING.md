@@ -2,7 +2,7 @@
 title: "Testing"
 description: "The public tree includes curated Python and Go runtime code under `python/`"
 source_path: "docs/TESTING.md"
-source_sha256: "01e8f0c3cc2e4f631f20d0b4241848cb0cbe833c5c1e57d078ba36414c2beca2"
+source_sha256: "a0d11ce71f4cb1610869881abed5ae4583a5a1705acfbf1ccb526175a57b3a24"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -70,7 +70,7 @@ This workflow exists because a misplaced comma in a JSON schema or a stray inden
 
 ### What's Not Enforced By CI Today
 
-Honest list, so the gap is visible:
+Explicit list, so the gap is visible:
 
 - No content-fact verification (article claims, ADR cross-references) — caught only by review rounds and the cool-off re-read in the `dev → main` PR template.
 - No Markdown lint — `markdownlint` adds noise we don't want yet, and the earlier table-pipe heuristic was removed.

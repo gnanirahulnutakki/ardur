@@ -1,6 +1,6 @@
 # Known Limitations
 
-This page distinguishes honest product boundaries from implementation bugs.
+This page distinguishes documented product boundaries from implementation bugs.
 
 ## Research and foundation surfaces not yet broad runtime claims
 
@@ -47,7 +47,7 @@ are intentional, not oversights:
   that don't use approvals to carry an `operator_id`.
 - **`probing_rate_limit`** — round-2 audit flagged validate-but-don't-
   enforce theater. The runtime currently has no rate-limiter consuming
-  the value, so requiring it without downstream effect is honesty debt.
+  the value, so requiring it without downstream effect is accuracy debt.
   It returns to the always-required list once a per-mission rate-limiter
   actually consumes it.
 

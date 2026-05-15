@@ -53,7 +53,7 @@ This workflow exists because a misplaced comma in a JSON schema or a stray inden
 
 ### What's Not Enforced By CI Today
 
-Honest list, so the gap is visible:
+Explicit list, so the gap is visible:
 
 - No content-fact verification (article claims, ADR cross-references) — caught only by review rounds and the cool-off re-read in the `dev → main` PR template.
 - No Markdown lint — `markdownlint` adds noise we don't want yet, and the earlier table-pipe heuristic was removed.

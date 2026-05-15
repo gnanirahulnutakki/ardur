@@ -2,7 +2,7 @@
 title: "Security Model"
 description: "Ardur security is based on least privilege, explicit declaration, runtime"
 source_path: "docs/security-model.md"
-source_sha256: "32b173d46f52711b10ca8e0ef1aabafe2ea14f83d81acfa197e693fe329067b1"
+source_sha256: "15170a383d466c6a36568284d510f6506102b61bf00185c6612b59b8d22ce7d2"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["security-model"]
@@ -100,7 +100,7 @@ proven protections until their proof entries reach L5 for the claimed scope.
 When Ardur lacks evidence, it must deny or return `unknown` rather than
 claim safe success.
 
-## Honesty boundary
+## Enforcement boundary
 
 This document and the comparison docs under `docs/comparisons/` describe
 what the protocol guarantees and what the reference proxy enforces today.

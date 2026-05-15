@@ -83,7 +83,7 @@ proven protections until their proof entries reach L5 for the claimed scope.
 When Ardur lacks evidence, it must deny or return `unknown` rather than
 claim safe success.
 
-## Honesty boundary
+## Enforcement boundary
 
 This document and the comparison docs under `docs/comparisons/` describe
 what the protocol guarantees and what the reference proxy enforces today.

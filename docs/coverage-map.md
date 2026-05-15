@@ -78,9 +78,9 @@ Each receipt carries an `evidence_level` field. The values:
 | `attested` | Ardur signed an observation; the action's intent is captured |
 | `observed` | A local adapter saw browser/desktop/CLI state |
 | `self_signed` | Ardur signed its own observation (default for tool calls) |
-| `insufficient_evidence` | The relevant provider-side or kernel-level activity was not locally visible — labeled honestly rather than implied |
+| `insufficient_evidence` | The relevant provider-side or kernel-level activity was not locally visible — labeled explicitly rather than implied |
 
-The `insufficient_evidence` label is how we keep claims honest at the receipt level. If something happened that Ardur couldn't verify, the receipt says so.
+The `insufficient_evidence` label is how we keep claims precise at the receipt level. If something happened that Ardur couldn't verify, the receipt says so.
 
 ## What v0.5 / v1.0 will add
 

@@ -57,7 +57,7 @@ Expected result for a clean source checkout:
 - `RWT-1` is `PASS` for install/profile/protect/doctor
 - `RWT-2` is `PASS` for actual hook CLI fixture allow/deny receipts
 - `RWT-3` is `PASS`, `SKIP_GATED`, or `SKIP_UNSUPPORTED` depending on whether
-  a logged-in `claude` binary is available; a skip is the honest no-key result,
+  a logged-in `claude` binary is available; a skip is the explicit no-key result,
   not a hidden failure
 - `secret_scan_hits` is `0`
 - `raw_secret_values_copied` is `false`
