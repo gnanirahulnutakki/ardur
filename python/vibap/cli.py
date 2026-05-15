@@ -40,6 +40,12 @@ from .gemini_cli_hook import (
     build_shareable_report as build_gemini_shareable_report,
     main as gemini_cli_hook_main,
 )
+from .codex_app_server_fixture import (
+    build_local_fixture as build_codex_local_fixture,
+    build_shareable_context as build_codex_shareable_context,
+    build_shareable_report as build_codex_shareable_report,
+    handle_host_event as handle_codex_host_event,
+)
 from .posture_index import build_posture_index, format_posture_report
 from .claude_code_daemon import install_native_pre_tool_use_command, resolve_native_pre_tool_use_command_path
 from .proxy import GovernanceProxy, serve_proxy
@@ -194,6 +200,44 @@ def cmd_gemini_cli_report(args: argparse.Namespace) -> int:
         _print_json(report)
         return 0
     print(f"Ardur Gemini CLI receipt report: {report['receipt_count']} receipts across {report['chain_count']} chains")
+    print(f"Chains: {report['chain_dir']}")
+    print(f"Verdicts: {report['policy_verdict_counts']}")
+    print(f"Coverage gaps: {report['coverage_gaps']}")
+    return 0
+
+
+def cmd_codex_app_server_event(args: argparse.Namespace) -> int:
+    raw = sys.stdin.read()
+    payload = json.loads(raw) if raw.strip() else {}
+    if not isinstance(payload, dict):
+        raise ValueError("Codex app-server host-event payload must be a JSON object")
+    output = handle_codex_host_event(payload, keys_dir=args.keys_dir)
+    _print_json(output)
+    return 2 if output.get("block") else 0
+
+
+def cmd_codex_app_server_fixture(args: argparse.Namespace) -> int:
+    fixture = build_codex_local_fixture(
+        home=args.home,
+        project_dir=args.project_dir,
+        chain_dir=args.chain_dir,
+        keys_dir=args.keys_dir,
+    )
+    _print_json(build_codex_shareable_context(fixture))
+    return 0
+
+
+def cmd_codex_app_server_report(args: argparse.Namespace) -> int:
+    report = build_codex_shareable_report(
+        home=args.home,
+        chain_dir=args.chain_dir,
+        keys_dir=args.keys_dir,
+        verify_expiry=args.verify_expiry,
+    )
+    if args.json:
+        _print_json(report)
+        return 0
+    print(f"Ardur Codex app-server receipt report: {report['receipt_count']} receipts across {report['chain_count']} chains")
     print(f"Chains: {report['chain_dir']}")
     print(f"Verdicts: {report['policy_verdict_counts']}")
     print(f"Coverage gaps: {report['coverage_gaps']}")
@@ -644,6 +688,42 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gemini_report.add_argument("--json", action="store_true", help="print machine-readable report")
     gemini_report.set_defaults(func=cmd_gemini_cli_report)
+
+    codex_event = subparsers.add_parser(
+        "codex-app-server-event",
+        help="ingest a local Codex app-server/host-event JSON payload and emit an Ardur receipt",
+    )
+    codex_event.add_argument("--keys-dir", type=Path, help="signing keys directory")
+    codex_event.set_defaults(func=cmd_codex_app_server_event)
+
+    codex_fixture = subparsers.add_parser(
+        "codex-app-server-fixture",
+        help="write a local Codex app-server config/schema fixture and print redacted context",
+    )
+    codex_fixture.add_argument(
+        "--home",
+        type=Path,
+        help="explicit Codex home/config directory to populate; defaults to isolated Ardur local fixture state",
+    )
+    codex_fixture.add_argument("--project-dir", type=Path, help="project directory that receives CODEX.md")
+    codex_fixture.add_argument("--chain-dir", type=Path, help="Ardur Codex receipt chain directory")
+    codex_fixture.add_argument("--keys-dir", type=Path, help="signing keys directory")
+    codex_fixture.set_defaults(func=cmd_codex_app_server_fixture)
+
+    codex_report = subparsers.add_parser(
+        "codex-app-server-report",
+        help="verify Codex app-server receipt chains and summarize local-only observability",
+    )
+    codex_report.add_argument("--home", type=Path, help="Codex/Ardur home used for redaction context")
+    codex_report.add_argument("--chain-dir", type=Path, help="explicit Codex app-server receipt chain directory")
+    codex_report.add_argument("--keys-dir", type=Path, help="signing public-key directory")
+    codex_report.add_argument(
+        "--verify-expiry",
+        action="store_true",
+        help="also enforce short receipt expiry windows while verifying",
+    )
+    codex_report.add_argument("--json", action="store_true", help="print machine-readable report")
+    codex_report.set_defaults(func=cmd_codex_app_server_report)
 
     posture = subparsers.add_parser(
         "posture",

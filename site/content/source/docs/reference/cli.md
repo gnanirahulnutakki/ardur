@@ -2,7 +2,7 @@
 title: "ardur` CLI Reference"
 description: "The `ardur` console entry point ships with the Python package. After"
 source_path: "docs/reference/cli.md"
-source_sha256: "867b3e8c08e8bb83e81a8216ec950e81da06aea4b63f8b53eab98ea114723907"
+source_sha256: "394592e723b217e4709cedf3c9c38744f35ecb237a6681f53fef9ebd2c50ea5c"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["documentation"]
@@ -28,8 +28,9 @@ The CLI splits into two groups:
   `uninstall`, `run`, `desktop-observe`, `personal-native-host`,
   `personal-native-manifest`, `profile init`, `protect claude-code`,
   `claude-code-hook`, `claude-code-report`, `gemini-cli-hook`,
-  `gemini-cli-fixture`, `gemini-cli-report`, `posture scan`, `posture report`.
-  Used by the local Ardur Personal product shape.
+  `gemini-cli-fixture`, `gemini-cli-report`, `codex-app-server-event`,
+  `codex-app-server-fixture`, `codex-app-server-report`, `posture scan`,
+  `posture report`. Used by the local Ardur Personal product shape.
 
 Source: [`python/vibap/cli.py`](https://github.com/gnanirahulnutakki/ardur/blob/__ARDUR_SOURCE_REF__/python/vibap/cli.py).
 
@@ -294,6 +295,51 @@ and the explicit non-claims for provider-hidden reasoning/server-side tool calls
 ```text
 ardur gemini-cli-report [--home DIR] [--chain-dir DIR] [--keys-dir DIR]
                         [--verify-expiry] [--json]
+```
+
+### `ardur codex-app-server-fixture`
+
+Write a local-only Codex app-server config/schema/context fixture and print a
+redacted shareable context document with digests for the generated files.
+
+```text
+ardur codex-app-server-fixture [--home DIR] [--project-dir DIR]
+                               [--chain-dir DIR] [--keys-dir DIR]
+```
+
+By default the fixture writes under isolated Ardur local state, not the caller's
+real `~/.codex`. It writes `config.json`, `ardur-host-event.schema.json`, and
+`CODEX.md` under the selected local directories. This is an adoption/proof
+harness for visible local Codex app-server or host-event-style fields only.
+
+### `ardur codex-app-server-event`
+
+Read one representative Codex app-server/host-event JSON object from stdin,
+evaluate the active Mission Passport from `ARDUR_MISSION_PASSPORT`, append a
+signed receipt under `ARDUR_CODEX_APP_SERVER_DIR` (or the default Ardur home),
+and print a JSON result.
+
+```text
+ardur codex-app-server-event [--keys-dir DIR]
+```
+
+`status=allow` means Ardur recorded local evidence and left Codex/user
+permission flow authoritative. `status=deny` and `status=unknown` return a
+blocking result for wrappers that fail closed. Unknown results are used for
+unmapped Codex host-event schemas or other coverage gaps instead of treating
+insufficient evidence as safe success.
+
+### `ardur codex-app-server-report`
+
+Verify Codex app-server receipt chains and emit a redacted local observability
+report with allow/deny/unknown counts, chain verification status, coverage gaps,
+and the explicit non-claims for live Codex cloud enforcement, provider-hidden
+reasoning, sandbox isolation, universal CLI/eBPF/kernel capture, or production
+enforcement.
+
+```text
+ardur codex-app-server-report [--home DIR] [--chain-dir DIR] [--keys-dir DIR]
+                              [--verify-expiry] [--json]
 ```
 
 ### `ardur posture scan`

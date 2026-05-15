@@ -2,7 +2,7 @@
 title: "Status"
 description: "Today, Ardur captures every Claude Code tool-call invocation — file reads"
 source_path: "STATUS.md"
-source_sha256: "6bc09686100da34476dbde752db7933fbfea62d80da9345c567ef9f074392226"
+source_sha256: "78dbedadc169d0b73b2aea36f79a6bb5e22b7dcdd8e15c4ed4ee6858d6240636"
 weight: 100
 maturity: ["in-progress", "public-now"]
 claim_types: ["status"]
@@ -47,8 +47,8 @@ caveat list, and [`ROADMAP.md`](/__ardur_internal__/source/roadmap/) for the pha
 - the main repo wedge is narrowed to runtime governance plus verifiable evidence
 - the public-facing brand has moved to `Ardur`
 - public v0.1 specs are present under `docs/specs/` (Mission Declaration, Delegation Grant, Execution Receipt and EAT profile, Verifier Contract, Conformance Profiles, IDM extension, Revocation)
-- curated Python runtime files and tests are present under `python/`, including the Ardur Personal Hub service (`personal_hub.py`), Claude Code hook (`claude_code_hook.py`), Claude telemetry/reporting (`claude_code_telemetry.py`, `claude_code_report.py`), Gemini CLI local-only hook fixture/reporting (`gemini_cli_hook.py`), native-messaging host (`ardur_personal_native_host.py`), and `ARDUR.md` profile compiler (`ardur_profile.py`)
-- the `ardur` CLI ships subcommands for the protocol path (`issue`, `verify`, `attest`, `start`) and the Personal path (`hub`, `setup`, `status`, `doctor`, `doctor-claude-code`, `uninstall`, `run`, `desktop-observe`, `personal-native-host`, `personal-native-manifest`, `profile init`, `protect claude-code`, `claude-code-hook`, `claude-code-report`, `gemini-cli-fixture`, `gemini-cli-hook`, `gemini-cli-report`)
+- curated Python runtime files and tests are present under `python/`, including the Ardur Personal Hub service (`personal_hub.py`), Claude Code hook (`claude_code_hook.py`), Claude telemetry/reporting (`claude_code_telemetry.py`, `claude_code_report.py`), Gemini CLI local-only hook fixture/reporting (`gemini_cli_hook.py`), Codex app-server local host-event fixture/reporting (`codex_app_server_fixture.py`), native-messaging host (`ardur_personal_native_host.py`), and `ARDUR.md` profile compiler (`ardur_profile.py`)
+- the `ardur` CLI ships subcommands for the protocol path (`issue`, `verify`, `attest`, `start`) and the Personal path (`hub`, `setup`, `status`, `doctor`, `doctor-claude-code`, `uninstall`, `run`, `desktop-observe`, `personal-native-host`, `personal-native-manifest`, `profile init`, `protect claude-code`, `claude-code-hook`, `claude-code-report`, `gemini-cli-fixture`, `gemini-cli-hook`, `gemini-cli-report`, `codex-app-server-fixture`, `codex-app-server-event`, `codex-app-server-report`)
 - the Claude Code plugin is present under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks plus a smoke script
 - curated Go runtime, governance, and operator files are present under `go/` (the AAT package remains a fail-closed skeleton by design and is documented as such in `go/README.md`)
 - runnable framework examples are present under `examples/`: LangChain, LangGraph, and AutoGen quickstarts; the Ardur Personal browser extension; the Ardur Personal desktop-observe adapter; the Ardur Personal native-messaging host; and the Claude Code plugin pointer. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories are deferred adapter specs
@@ -68,7 +68,7 @@ caveat list, and [`ROADMAP.md`](/__ardur_internal__/source/roadmap/) for the pha
 ## In Progress
 
 - runnable OpenAI Agents SDK and Google ADK adapter lifts to replace the current deferred-spec READMEs
-- Codex hooks and Claude Desktop MCP packaging as separate next-cycle integrations
+- live Codex hooks/cloud integration, Claude Desktop MCP packaging, and other non-fixture host integrations as separate next-cycle work
 - re-runnable public proof media — recordings made against the public runtime
   with stable verifier commands and artifact paths; this is separate from the
   current no-key JSON evidence harness
