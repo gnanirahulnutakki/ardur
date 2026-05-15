@@ -44,7 +44,7 @@ Ardur was tested by asking cloud and local models to build an entire web applica
 
 **39 tool calls across 2 models. Zero unauthorized actions. Zero false denials.**
 
-[Full test results →](/__ardur_internal__/source/python/tests/test-results/readme/) · [Proof & evidence site →](/__ardur_internal__/source/site/readme/)
+[Full test results →](https://github.com/ArdurAI/ardur/tree/__ARDUR_SOURCE_REF__/python/tests/test-results) · [Proof & evidence site →](/__ardur_internal__/source/site/readme/)
 
 ## Evaluator Quickstart
 
