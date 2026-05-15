@@ -2,7 +2,7 @@
 title: "Ardur"
 description: "Ardur is the runtime governance and evidence layer for AI agents."
 source_path: "README.md"
-source_sha256: "cb3ec22528dff7270d2c3c8a67a374e9ed1fd1857bcc41d71cf8ba2f5350bf31"
+source_sha256: "16b38390f0fcebfa04c40d07d92ebda829e30b869e70d31e9dfe9cbe9d0f6007"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["orientation", "runtime-boundary"]
@@ -31,7 +31,7 @@ service, the Claude Code plugin and hook, and the public Hugo evidence site.
 Re-runnable proof media, full packaging, and production deployment material
 are still being tightened before they are presented as release-ready.
 
-[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
+[Research](/__ardur_internal__/source/research/) · [Status](/__ardur_internal__/source/status/) · [Coverage Map](/__ardur_internal__/source/docs/coverage-map/) · [Roadmap](/__ardur_internal__/source/roadmap/) · [Media](/__ardur_internal__/source/media-notes/) · [Articles](/__ardur_internal__/source/docs/articles/readme/) · [Docs](/__ardur_internal__/source/docs/readme/) · [Reference](/__ardur_internal__/source/docs/reference/readme/) · [Phase 1 Demo Packet](/__ardur_internal__/source/docs/guides/phase1-demo-packet/) · [Read the Phase 1 Evidence Bundle](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/) · [Evidence Site Source](/__ardur_internal__/source/site/readme/)
 
 ## Test Results
 
@@ -173,6 +173,11 @@ to clearly mark the boundary between shipped, deferred, and in-progress
 capabilities — package-manager release status, provider-hidden behavior,
 and subprocess/kernel/network side-effect gaps.
 
+After a run, use the
+[`Phase 1 Demo Packet`](/__ardur_internal__/source/docs/guides/phase1-demo-packet/) to assemble a bounded
+handoff: tested commit, `bundle.redacted.json`, optional live-Claude report, and
+the exact claims the artifacts do and do not support.
+
 > **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
 > invocation. Side effects below the tool boundary — subprocess trees,
 > kernel events, network connections initiated by tool-spawned processes —
@@ -214,12 +219,15 @@ This repo currently includes:
 - the Ardur Personal Hub service and CLI under `python/vibap/` (`ardur hub`, `ardur setup`, `ardur status`, `ardur protect claude-code`, `ardur profile init`, `ardur doctor-claude-code`)
 - the Claude Code plugin under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks emitting signed receipts
 - runnable framework adapters under `examples/`: LangChain, LangGraph, AutoGen, browser extension, desktop-observe, and native-host. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories remain deferred adapter specs
-- dedicated Python (3.10 + 3.13) and Go CI under `.github/workflows/tests.yml`, plus CodeQL, link-check, secret-scan, format validation, and the Hugo build
+- dedicated Python (3.10 + 3.13) and Go CI under `.github/workflows/tests.yml`, including the offline examples-smoke regression in `python/tests/test_examples_smoke.py`, plus CodeQL, link-check, secret-scan, format validation, and the Hugo build
 - the Hugo public evidence site source under `site/`, with each public claim linkable to its backing source file
 - bootstrap and verification scripts under `scripts/` (`conductor-bootstrap.sh`, `setup-dev.sh`, `check-local.sh`)
 - agent-specific public guides under [`docs/agent-instructions/`](/__ardur_internal__/source/docs/agent-instructions/readme/) (Conductor, Codex, Claude)
 - new technical reference pages under [`docs/reference/`](/__ardur_internal__/source/docs/reference/readme/) — CLI, Personal Hub HTTP API, and the `ARDUR.md` profile format
-- selected archival terminal recordings (the rerunnable proof path lands with the next public drop — see [MEDIA.md](/__ardur_internal__/source/media-notes/))
+- selected archival terminal recordings, plus a separate re-runnable no-key
+  Phase 1 evidence harness for the Claude Code MVP path — see
+  [MEDIA.md](/__ardur_internal__/source/media-notes/) and the
+  [evidence-bundle guide](/__ardur_internal__/source/docs/guides/read-phase1-evidence-bundle/)
 - a journey-log [article series](/__ardur_internal__/source/docs/articles/readme/) — Article 06 (Public Import Discipline) and Article 05 (Proof Media That Actually Means Something) are the first-wave shippers
 - a public audit trail at [`docs/audit/`](/__ardur_internal__/source/docs/audit/) mirroring the GitHub Code Scanning dismissal record so triage decisions are auditable from the repo tree without GitHub credentials
 

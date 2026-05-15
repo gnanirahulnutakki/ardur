@@ -14,7 +14,7 @@ service, the Claude Code plugin and hook, and the public Hugo evidence site.
 Re-runnable proof media, full packaging, and production deployment material
 are still being tightened before they are presented as release-ready.
 
-[Research](RESEARCH.md) · [Status](STATUS.md) · [Coverage Map](docs/coverage-map.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Evidence Site Source](site/README.md)
+[Research](RESEARCH.md) · [Status](STATUS.md) · [Coverage Map](docs/coverage-map.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Phase 1 Demo Packet](docs/guides/phase1-demo-packet.md) · [Read the Phase 1 Evidence Bundle](docs/guides/read-phase1-evidence-bundle.md) · [Evidence Site Source](site/README.md)
 
 ## Test Results
 
@@ -156,6 +156,11 @@ to clearly mark the boundary between shipped, deferred, and in-progress
 capabilities — package-manager release status, provider-hidden behavior,
 and subprocess/kernel/network side-effect gaps.
 
+After a run, use the
+[`Phase 1 Demo Packet`](docs/guides/phase1-demo-packet.md) to assemble a bounded
+handoff: tested commit, `bundle.redacted.json`, optional live-Claude report, and
+the exact claims the artifacts do and do not support.
+
 > **Capture boundary today (v0.1):** Ardur signs every Claude Code tool-call
 > invocation. Side effects below the tool boundary — subprocess trees,
 > kernel events, network connections initiated by tool-spawned processes —
@@ -197,12 +202,15 @@ This repo currently includes:
 - the Ardur Personal Hub service and CLI under `python/vibap/` (`ardur hub`, `ardur setup`, `ardur status`, `ardur protect claude-code`, `ardur profile init`, `ardur doctor-claude-code`)
 - the Claude Code plugin under `plugins/claude-code/` with `PreToolUse`, `PostToolUse`, `SubagentStart`, and `SubagentStop` hooks emitting signed receipts
 - runnable framework adapters under `examples/`: LangChain, LangGraph, AutoGen, browser extension, desktop-observe, and native-host. JSON mission examples remain in `examples/missions/`. OpenAI Agents SDK and Google ADK directories remain deferred adapter specs
-- dedicated Python (3.10 + 3.13) and Go CI under `.github/workflows/tests.yml`, plus CodeQL, link-check, secret-scan, format validation, and the Hugo build
+- dedicated Python (3.10 + 3.13) and Go CI under `.github/workflows/tests.yml`, including the offline examples-smoke regression in `python/tests/test_examples_smoke.py`, plus CodeQL, link-check, secret-scan, format validation, and the Hugo build
 - the Hugo public evidence site source under `site/`, with each public claim linkable to its backing source file
 - bootstrap and verification scripts under `scripts/` (`conductor-bootstrap.sh`, `setup-dev.sh`, `check-local.sh`)
 - agent-specific public guides under [`docs/agent-instructions/`](docs/agent-instructions/) (Conductor, Codex, Claude)
 - new technical reference pages under [`docs/reference/`](docs/reference/) — CLI, Personal Hub HTTP API, and the `ARDUR.md` profile format
-- selected archival terminal recordings (the rerunnable proof path lands with the next public drop — see [MEDIA.md](MEDIA.md))
+- selected archival terminal recordings, plus a separate re-runnable no-key
+  Phase 1 evidence harness for the Claude Code MVP path — see
+  [MEDIA.md](MEDIA.md) and the
+  [evidence-bundle guide](docs/guides/read-phase1-evidence-bundle.md)
 - a journey-log [article series](docs/articles/README.md) — Article 06 (Public Import Discipline) and Article 05 (Proof Media That Actually Means Something) are the first-wave shippers
 - a public audit trail at [`docs/audit/`](docs/audit/) mirroring the GitHub Code Scanning dismissal record so triage decisions are auditable from the repo tree without GitHub credentials
 

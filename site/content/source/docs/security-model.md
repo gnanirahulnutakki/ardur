@@ -2,7 +2,7 @@
 title: "Security Model"
 description: "Ardur security is based on least privilege, explicit declaration, runtime"
 source_path: "docs/security-model.md"
-source_sha256: "15170a383d466c6a36568284d510f6506102b61bf00185c6612b59b8d22ce7d2"
+source_sha256: "2524eda0f4ce52811c0a39500cc42d2a3405c18f041887e68a3e7b029eebec27"
 weight: 100
 maturity: ["public-now"]
 claim_types: ["security-model"]
@@ -20,13 +20,15 @@ This page is generated from the public repository source file. Edit the source f
 Ardur security is based on least privilege, explicit declaration, runtime
 enforcement, and verifiable evidence.
 
-> **Conformance scope (updated 2026-05-14):** This page describes the
+> **Conformance scope (2026-04-28 narrowing):** This page describes the
 > *design intent* of the protocol. The reference proxy in `python/vibap/`
-> implements all three conformance profiles — **Delegation-Core**,
-> **MIC-State**, and **MIC-Evidence** — as of the 2026-05-14 hardening
-> round. All four design-only gaps identified in the 2026-04-28 audit
-> are closed. See `docs/specs/verifier-contract-v0.1.md` Section 13
-> ("Reference Implementation Conformance Notes") for the current map.
+> implements the **Delegation-Core** profile of `verifier-contract-v0.1`,
+> not yet the **MIC-State** or **MIC-Evidence** profiles. When closing
+> these gaps, update both this document and [`known-limitations.md`](/__ardur_internal__/source/docs/known-limitations/)
+> in the same PR. See `docs/specs/verifier-contract-v0.1.md` Section 13
+> ("Reference Implementation Conformance Notes") for the precise gap.
+> Deployments needing the stronger profiles MUST add layers beyond the
+> reference proxy or wait for the hardening rounds that close 13.2.
 
 ## Core security gates (enforced by the reference proxy)
 
@@ -42,18 +44,16 @@ enforcement, and verifiable evidence.
 - approval-rate-limit when the Mission Declaration declares an approval
   policy
 
-## Additional conformance gates (enforced as of 2026-05-14)
+## Design-only gates (NOT yet enforced by the reference proxy)
 
-These checks are active under MIC-State and MIC-Evidence profiles:
+These appear in `verifier-contract-v0.1.md` as `MUST` clauses but the
+reference Python proxy does not yet enforce them. Deployments that need
+them MUST layer additional verifiers:
 
-- visibility check (`visibility != "full"` → `insufficient_evidence`)
-- envelope-signature verification (fail-closed: absent or non-True → violation)
 - runtime-observed `observed_manifest_digest == MD.tool_manifest_digest`
-- per-grant `last_seen_receipts` tracking
-- MIC-Evidence hidden-hop detection and missing-parent-receipt detection
-
-See `docs/specs/verifier-contract-v0.1.md` Section 13 for the full conformance
-map and `python/tests/test_mic_conformance.py` for the 29-test validation suite.
+- per-grant `last_seen_receipts` tracking and MIC-Evidence hidden-hop
+  detection
+- explicit invocation-envelope signature beyond the credential JWT
 
 ## Threats in scope
 
