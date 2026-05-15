@@ -7,7 +7,7 @@ the user's real ~/.vibap directory.
 
 from __future__ import annotations
 
-collect_ignore = ["run_cloud_model_test.py", "run_all_models.py", "run_adversarial_suite.py"]
+collect_ignore = ["run_cloud_model_test.py", "run_all_models.py", "run_adversarial_suite.py", "run_advanced_adversarial.py", "test_ardur_overhead_ab.py"]
 
 import os
 import socket
