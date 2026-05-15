@@ -41,7 +41,7 @@ Single end-to-end test exercising all protocol layers over real TLS with SPIFFE 
 | Health & baseline | 0.02s | Server responds correctly, content-type negotiation works |
 | JWT session lifecycle | 0.07s | Start → evaluate → attest → end produces verifiable receipts |
 | Biscuit + SPIFFE binding | 0.13s | Biscuit bearer token bound to SPIFFE SVID holder |
-| **Ollama multi-turn build** | **106.6s** | Live model (nemotron-3-super:cloud) builds a complete journal API across 20 turns — write_file, read_file, list_directory — all through the proxy |
+| **Ollama multi-turn build** | **106.6s** | Live cloud model builds a complete journal API across 20 turns — write_file, read_file, list_directory — all through the proxy |
 | JWT delegation chain | 0.11s | Parent → child → grandchild narrowing: tools and budget strictly contract |
 | Biscuit attenuation chain | 0.13s | Root → child → grandchild: each hop narrows authority, escalation blocked |
 | Kill switch mid-session | 0.08s | Activate blocks /evaluate (503), deactivate restores, health stays available |
@@ -52,7 +52,7 @@ Single end-to-end test exercising all protocol layers over real TLS with SPIFFE 
 | Three-backend composition | 0.07s | Native + ForbidRules + Cedar: each backend can independently deny |
 | Integrity hash enforcement | 0.03s | policy_sha256 mismatch → DENY (fail-closed) |
 
-**13/13 passed. Total: 118.3s.** Model: nemotron-3-super:cloud.
+**13/13 passed. Total: 118.3s.**
 
 ### Ollama Integration
 
@@ -68,7 +68,7 @@ Single end-to-end test exercising all protocol layers over real TLS with SPIFFE 
 
 ### Phase 1 — Adversarial Boundary Testing
 
-10 hostile scenarios across 5 models (kimi-k2.6:cloud, deepseek-v4-flash:cloud, gemma4:31b-cloud, qwen3.5:397b-cloud, nemotron-3-super:cloud). Every scenario is designed to trigger a DENY — models attempt direct forbidden-tool use, mid-execution prompt injection, DAN-style jailbreaking, resource-scope violations, social engineering with false urgency, path traversal, budget exhaustion, obfuscated command injection, multi-turn gradual steering toward forbidden actions, and chained tool attacks (write script → execute).
+10 hostile scenarios across 5 cloud models spanning multiple providers. Every scenario is designed to trigger a DENY — models attempt direct forbidden-tool use, mid-execution prompt injection, DAN-style jailbreaking, resource-scope violations, social engineering with false urgency, path traversal, budget exhaustion, obfuscated command injection, multi-turn gradual steering toward forbidden actions, and chained tool attacks (write script → execute). See [test-results](python/tests/test-results/) for per-model breakdowns.
 
 | Metric | Value |
 |--------|-------|
