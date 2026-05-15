@@ -20,6 +20,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cilium/ebpf v0.16.0
 	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/digitorus/pkcs7 v0.0.0-20230818184609-3a137a874352 // indirect
@@ -120,4 +121,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
