@@ -18,6 +18,7 @@ func TestAuthorizeDaemonProtocolPeerBindsObservedCredentialsToRequest(t *testing
 		Method:          DaemonProtocolMethodRegisterSession,
 		RegisterSession: &DaemonRegisterSessionRequest{
 			SessionID:    "session-1",
+			RootPID:      1234,
 			EventClasses: []string{DaemonProtocolEventProcessLifecycle},
 			TTLSeconds:   60,
 		},
@@ -128,6 +129,7 @@ func TestAuthorizeDaemonProtocolPeerFailsClosed(t *testing.T) {
 		Method:          DaemonProtocolMethodRegisterSession,
 		RegisterSession: &DaemonRegisterSessionRequest{
 			SessionID:    "session-1",
+			RootPID:      1234,
 			EventClasses: []string{DaemonProtocolEventProcessLifecycle},
 			TTLSeconds:   60,
 		},

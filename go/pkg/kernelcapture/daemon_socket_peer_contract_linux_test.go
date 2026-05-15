@@ -21,6 +21,7 @@ func TestAuthorizeDaemonProtocolPeerFromAcceptedUnixConnection(t *testing.T) {
 		Method:          DaemonProtocolMethodRegisterSession,
 		RegisterSession: &DaemonRegisterSessionRequest{
 			SessionID:    "session-1",
+			RootPID:      123,
 			EventClasses: []string{DaemonProtocolEventProcessLifecycle},
 			TTLSeconds:   60,
 		},
@@ -70,6 +71,7 @@ func TestAuthorizeDaemonProtocolPeerFromAcceptedUnixConnectionFailsClosedForInva
 		Method:          DaemonProtocolMethodRegisterSession,
 		RegisterSession: &DaemonRegisterSessionRequest{
 			SessionID:    "session-1",
+			RootPID:      123,
 			EventClasses: []string{DaemonProtocolEventProcessLifecycle},
 			TTLSeconds:   60,
 		},
