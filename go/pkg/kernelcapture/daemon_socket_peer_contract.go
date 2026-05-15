@@ -87,13 +87,13 @@ func AuthorizeDaemonProtocolPeer(req DaemonProtocolRequest, observation DaemonSo
 		ClaimBoundary: []string{
 			"protocol request is joined to daemon-observed local peer credentials before handling",
 			"peer identity must come from an OS credential source such as linux SO_PEERCRED, never client JSON",
-			"validated against dry-run daemon custody plan only; no socket is opened, bound, listened on, or accepted",
+			"peer authorization is validated against the daemon custody plan and explicit UID/GID policy before handling",
 		},
 		NotClaimed: []string{
-			"socket server/listener implementation",
-			"daemon accept-loop wiring around SO_PEERCRED observations",
 			"production daemon readiness",
 			"daemon install/start or privileged filesystem mutation",
+			"privileged eBPF loading, map pinning, or kernel capture",
+			"daemon-managed cgroups or session lifecycle enforcement",
 		},
 	}, nil
 }
@@ -119,23 +119,39 @@ func AuthorizeDaemonProtocolPeerFromAcceptedUnixConnection(conn *net.UnixConn, p
 }
 
 func readDaemonProtocolRequestFromAcceptedUnixConnection(conn *net.UnixConn) (DaemonProtocolRequest, error) {
-	if err := conn.SetReadDeadline(time.Now().Add(daemonUnixSocketReadDeadline)); err != nil {
+	return readDaemonProtocolRequestFromAcceptedUnixConnectionWithLimits(conn, maxDaemonProtocolLineSize, daemonUnixSocketReadDeadline)
+}
+
+func readDaemonProtocolRequestFromAcceptedUnixConnectionWithLimits(conn *net.UnixConn, maxBytes int64, readTimeout time.Duration) (DaemonProtocolRequest, error) {
+	if conn == nil {
+		return DaemonProtocolRequest{}, fmt.Errorf("%w: accepted unix connection is required", ErrDaemonProtocol)
+	}
+	if maxBytes <= 0 {
+		return DaemonProtocolRequest{}, fmt.Errorf("%w: max request bytes must be positive", ErrDaemonProtocol)
+	}
+	if readTimeout <= 0 {
+		return DaemonProtocolRequest{}, fmt.Errorf("%w: read timeout must be positive", ErrDaemonProtocol)
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
 		return DaemonProtocolRequest{}, fmt.Errorf("%w: set read deadline: %v", ErrDaemonProtocol, err)
 	}
-	raw, err := readUnixSocketLine(conn)
+	raw, err := readUnixSocketLine(conn, maxBytes)
 	if err != nil {
 		return DaemonProtocolRequest{}, err
 	}
 	return DecodeDaemonProtocolRequest(raw)
 }
 
-func readUnixSocketLine(conn *net.UnixConn) ([]byte, error) {
+func readUnixSocketLine(conn *net.UnixConn, maxBytes int64) ([]byte, error) {
 	if conn == nil {
 		return nil, fmt.Errorf("%w: accepted unix connection is required", ErrDaemonProtocol)
 	}
-	limited := io.LimitReader(conn, maxDaemonProtocolLineSize)
+	limited := io.LimitReader(conn, maxBytes+1)
 	reader := bufio.NewReader(limited)
 	data, err := reader.ReadString('\n')
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("%w: protocol request exceeds %d bytes", ErrDaemonProtocol, maxBytes)
+	}
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			if strings.TrimSpace(data) == "" {

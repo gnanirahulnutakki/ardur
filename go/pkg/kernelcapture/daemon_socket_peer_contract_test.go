@@ -49,11 +49,11 @@ func TestAuthorizeDaemonProtocolPeerBindsObservedCredentialsToRequest(t *testing
 	if handshake.Authorization.Verdict != DaemonPeerAuthorizationVerdictAllow {
 		t.Fatalf("authorization verdict = %q, want allow", handshake.Authorization.Verdict)
 	}
-	if !containsText(handshake.ClaimBoundary, "no socket is opened, bound, listened on, or accepted") {
-		t.Fatalf("claim boundary missing no-socket guardrail: %#v", handshake.ClaimBoundary)
+	if !containsText(handshake.ClaimBoundary, "explicit UID/GID policy before handling") {
+		t.Fatalf("claim boundary missing peer-policy guardrail: %#v", handshake.ClaimBoundary)
 	}
-	if !containsText(handshake.NotClaimed, "daemon accept-loop wiring around SO_PEERCRED observations") {
-		t.Fatalf("not-claimed list missing accept-loop boundary: %#v", handshake.NotClaimed)
+	if !containsText(handshake.NotClaimed, "production daemon readiness") {
+		t.Fatalf("not-claimed list missing production daemon boundary: %#v", handshake.NotClaimed)
 	}
 }
 
