@@ -6,15 +6,56 @@ Ardur is the runtime governance and evidence layer for AI agents.
 [![Status](https://img.shields.io/badge/status-pre--release-blue)](STATUS.md)
 [![Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?logo=github)](https://github.com/gnanirahulnutakki/ardur/discussions)
 
-This public repo is opening in phases. It now contains the product intent,
-research-informed positioning, public specs, curated Python and Go runtime
-imports, mission examples, runnable framework adapters (LangChain, LangGraph,
-AutoGen), the Ardur Personal Hub service, the Claude Code plugin and hook,
-and the public Hugo evidence site. Re-runnable proof media, full packaging,
-and production deployment material are still being tightened before they are
-presented as release-ready.
+Ardur sits between an agent and the tools it wants to call. A session gets a
+signed mission passport describing mission intent, tool permissions, resource
+scope, budget, and delegation limits. The runtime enforces those boundaries at
+execution time and emits signed receipts so reviewers can verify what was
+allowed, denied, or left unknown.
+
+This public repo is pre-release and opening in phases. It includes public
+specs, curated Python and Go reference runtime code, tests, examples, selected
+deployment material, and a claim/evidence/limitation posture. It is not yet a
+production-ready distribution, and full public replay media is still being
+tightened.
 
 [Research](RESEARCH.md) · [Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Media](MEDIA.md) · [Articles](docs/articles/README.md) · [Docs](docs/README.md) · [Reference](docs/reference/README.md) · [Evidence Site Source](site/README.md)
+
+## Try the no-key passport proof
+
+This path does not call an LLM or require provider credentials.
+
+```bash
+# from the repo root (Python 3.10+)
+cd python
+python3 -m pip install -e .
+
+TOKEN="$(
+  ardur issue \
+    --agent-id example-agent \
+    --mission "read sales data and write a summary" \
+    --allowed-tools read_file write_report \
+    --resource-scope 'sales/*' 'reports/*' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])'
+)"
+
+ardur verify --token "$TOKEN"
+```
+
+Expected result: `"valid": true`, with mission, tool, resource-scope, and
+budget claims visible in the decoded passport.
+
+This is a narrow local proof: passport issue/verify works. It is not yet a full
+public replay proof for every runtime session.
+
+## What you can verify today
+
+| Claim | How to check | Limit |
+|---|---|---|
+| Python mission-passport issue/verify works locally | Run the no-key block above and `python/tests/test_passport.py` | Narrow proof, not full runtime replay |
+| Python and Go runtime surfaces are present in this repo | `python/vibap/`, `go/pkg/`, `go/cmd/` | Pre-release APIs may still change |
+| CI and hygiene gates are defined | `.github/workflows/tests.yml`, `docs/TESTING.md` | A defined workflow is not the same as a linked green run |
+| Runnable framework quickstarts are present | `examples/langchain-quickstart/`, `examples/langgraph-quickstart/`, `examples/autogen-quickstart/` | Optional dependencies and provider setup are still needed for full live demos |
+| Conformance boundaries are explicit | `STATUS.md` (`In Progress`), `docs/specs/verifier-contract-v0.1.md` | Conformance test vectors are not fully imported yet |
 
 ## Why Ardur
 
@@ -80,7 +121,7 @@ Ardur sits between an AI agent and the tools it calls — so the integration sto
 | **Identity**         | SPIFFE / SPIRE-oriented code and docs | full cluster deployment walkthrough |
 | **Receipts sink**    | local JSON / stdout-oriented receipt surfaces | OTel emitters and durable storage examples |
 
-If you'd use an integration that isn't listed, file an [integration request](https://github.com/gnanirahulnutakki/ardur/issues/new?template=integration_request.yml) — it's the strongest signal we have for prioritisation.
+If you care about agent accountability, star the repo and run the no-key proof above. If you'd use an integration that isn't listed, file an [integration request](https://github.com/gnanirahulnutakki/ardur/issues/new?template=integration_request.yml) so we can prioritize the right adapter work.
 
 ## Naming Note
 
